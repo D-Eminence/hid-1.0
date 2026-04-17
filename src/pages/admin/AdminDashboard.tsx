@@ -200,6 +200,10 @@ function statusBadgeColor(status: string) {
   return 'gray'
 }
 
+function readinessTone(ready: boolean) {
+  return ready ? 'green' : 'amber'
+}
+
 export default function AdminDashboard() {
   const [viewerEmail, setViewerEmail] = useState<string | null>(null)
   const [windowKey, setWindowKey] = useState<AdminOverviewWindow>('7d')
@@ -266,6 +270,25 @@ export default function AdminDashboard() {
 
   const notificationsCount = filteredAlerts.filter(alert => alert.level !== 'info').length
   const verifiedRate = data?.users.totalUsers ? (data.users.verifiedUsers / data.users.totalUsers) * 100 : null
+  const sentryConfigured = Boolean(data?.sentry.configured)
+  const posthogConfigured = Boolean(data?.posthog.configured)
+  const deploymentReadinessCards = [
+    { label: 'Frontend Hosting', value: 'Vercel production deployment is active.', ready: true },
+    { label: 'Domain & CDN', value: 'Custom domain is serving through Vercel and Cloudflare.', ready: true },
+    { label: 'Backend', value: 'Supabase remains the only backend for admin, patient, and hospital flows.', ready: true },
+  ]
+  const observabilityCards = [
+    {
+      label: 'Sentry',
+      ready: sentryConfigured,
+      value: sentryConfigured ? `Connected to ${data?.sentry.projectLabel ?? 'configured project'}.` : (data?.sentry.message ?? 'Sentry is not configured yet.'),
+    },
+    {
+      label: 'PostHog',
+      ready: posthogConfigured,
+      value: posthogConfigured ? `Connected to ${data?.posthog.projectLabel ?? 'configured project'}.` : (data?.posthog.message ?? 'PostHog is not configured yet.'),
+    },
+  ]
 
   const metricGridStyle: React.CSSProperties = {
     display: 'grid',
@@ -543,7 +566,9 @@ export default function AdminDashboard() {
             <AdminSeriesChart points={data?.sentry.trend ?? []} type="line" tone="#5b8def" />
             <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginTop: 12 }}>
               {filteredIssues.length === 0 ? (
-                <div style={{ fontSize: 11.5, color: 'var(--admin-muted)' }}>No matching Sentry issues.</div>
+                <div style={{ fontSize: 11.5, color: 'var(--admin-muted)' }}>
+                  {sentryConfigured ? 'No actionable Sentry issues in this range.' : 'Sentry is not configured for this environment.'}
+                </div>
               ) : (
                 filteredIssues.slice(0, 5).map(issue => (
                   <div key={issue.id} style={{ border: '1px solid var(--admin-border)', borderRadius: 10, padding: '10px 12px' }}>
@@ -613,25 +638,28 @@ export default function AdminDashboard() {
           {sectionTitle('Deploy Readiness')}
           <div style={{ display: 'grid', gridTemplateColumns: viewportWidth < 1180 ? '1fr' : 'minmax(0, 1fr) minmax(0, 1fr)', gap: 12 }}>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-              {[
-                ['Frontend Hosting', 'Vercel static build ready'],
-                ['Domain & CDN', 'Hostinger domain can point through Cloudflare to Vercel'],
-                ['Backend', 'Supabase remains the only backend for admin, patient, and hospital flows'],
-              ].map(item => (
-                <div key={item[0]} style={{ border: '1px solid var(--admin-border)', borderRadius: 10, padding: '10px 12px', background: '#fbfdff' }}>
-                  <div style={{ fontSize: 10.5, color: 'var(--admin-muted)', textTransform: 'uppercase', letterSpacing: '0.04em' }}>{item[0]}</div>
-                  <div style={{ fontSize: 12.5, fontWeight: 700, marginTop: 4 }}>{item[1]}</div>
+              {deploymentReadinessCards.map(card => (
+                <div key={card.label} style={{ border: '1px solid var(--admin-border)', borderRadius: 10, padding: '10px 12px', background: '#fbfdff' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10 }}>
+                    <div style={{ fontSize: 10.5, color: 'var(--admin-muted)', textTransform: 'uppercase', letterSpacing: '0.04em' }}>{card.label}</div>
+                    <Badge color={readinessTone(card.ready)}>{card.ready ? 'ready' : 'attention'}</Badge>
+                  </div>
+                  <div style={{ fontSize: 12.5, fontWeight: 700, marginTop: 4 }}>{card.value}</div>
                 </div>
               ))}
             </div>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-              {['SENTRY_AUTH_TOKEN', 'SENTRY_ORG_SLUG', 'SENTRY_PROJECT_SLUG', 'POSTHOG_PERSONAL_API_KEY', 'POSTHOG_PROJECT_ID'].map(secret => (
-                <div key={secret} style={{ border: '1px dashed var(--admin-border)', borderRadius: 10, padding: '10px 12px', background: '#fbfdff', fontFamily: 'monospace', fontSize: 11 }}>
-                  {secret}
+              {observabilityCards.map(card => (
+                <div key={card.label} style={{ border: '1px solid var(--admin-border)', borderRadius: 10, padding: '10px 12px', background: '#fbfdff' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10 }}>
+                    <div style={{ fontSize: 10.5, color: 'var(--admin-muted)', textTransform: 'uppercase', letterSpacing: '0.04em' }}>{card.label}</div>
+                    <Badge color={readinessTone(card.ready)}>{card.ready ? 'connected' : 'needs setup'}</Badge>
+                  </div>
+                  <div style={{ fontSize: 12.5, fontWeight: 700, marginTop: 4 }}>{card.value}</div>
                 </div>
               ))}
               <div style={{ fontSize: 11, color: 'var(--admin-muted)', lineHeight: 1.7 }}>
-                The admin dashboard works now, but the observability panels stay in setup mode until these secrets are added to Supabase.
+                The admin dashboard uses live Supabase data, and the observability panels reflect the current Sentry and PostHog connection state.
               </div>
             </div>
           </div>

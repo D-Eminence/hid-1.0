@@ -21,6 +21,24 @@ type SentryIssue = {
   permalink: string | null
 }
 
+function normalizeIssueText(...values: Array<string | null | undefined>) {
+  return values
+    .map(value => (value ?? '').trim().toLowerCase())
+    .filter(Boolean)
+    .join(' ')
+}
+
+function isIgnoredSentryIssue(issue: SentryIssue) {
+  const text = normalizeIssueText(issue.title, issue.culprit, issue.status, issue.level)
+
+  return (
+    text.includes('invalid login credentials') ||
+    text.includes('lock was stolen by another request') ||
+    text.includes('typeerror: load failed') ||
+    text.includes('failed to fetch dynamically imported module')
+  )
+}
+
 const WINDOW_MAP: Record<OverviewWindow, {
   bucket: 'hour' | 'day'
   posthogInterval: string
@@ -232,18 +250,18 @@ async function loadSentryOverview(windowKey: OverviewWindow) {
 
     const combinedIssues = results.flatMap(result => result.issues)
       .sort((left, right) => new Date(right.lastSeen ?? 0).getTime() - new Date(left.lastSeen ?? 0).getTime())
-      .slice(0, 8)
+    const actionableIssues = combinedIssues.filter(issue => !isIgnoredSentryIssue(issue)).slice(0, 8)
 
     return {
-      affectedUsers: combinedIssues.reduce((sum, issue) => sum + issue.users, 0),
+      affectedUsers: actionableIssues.reduce((sum, issue) => sum + issue.users, 0),
       configured: true,
       externalUrl: `${baseUrl}/organizations/${encodeURIComponent(orgSlug)}/issues/`,
-      issueEvents: combinedIssues.reduce((sum, issue) => sum + issue.count, 0),
+      issueEvents: actionableIssues.reduce((sum, issue) => sum + issue.count, 0),
       message: null,
       projectLabel: projectList.join(', '),
-      recentIssues: combinedIssues,
+      recentIssues: actionableIssues,
       trend: aggregateTrendSeries(results.map(result => result.trend)),
-      unresolvedIssues: combinedIssues.length,
+      unresolvedIssues: actionableIssues.length,
     }
   } catch (error) {
     return {
@@ -399,8 +417,14 @@ Deno.serve(req => withErrorHandling(req, async () => {
 
   const authUsersPromise = listAllAuthUsers(adminClient)
 
-  const responseTimerStartedAt = Date.now()
-  const responseTimeProbe = adminClient.from('hid_user_profiles').select('id', { count: 'exact', head: true }).limit(1)
+  const responseTimeProbe = (async () => {
+    const startedAt = Date.now()
+    const result = await adminClient.from('hid_user_profiles').select('id', { count: 'exact', head: true }).limit(1)
+    return {
+      durationMs: Date.now() - startedAt,
+      result,
+    }
+  })()
 
   const [
     authUsers,
@@ -453,9 +477,9 @@ Deno.serve(req => withErrorHandling(req, async () => {
   if (mfaFailuresResponse.error) throw new HttpError(400, mfaFailuresResponse.error.message, mfaFailuresResponse.error)
   if (authChallengesResponse.error) throw new HttpError(400, authChallengesResponse.error.message, authChallengesResponse.error)
   if (breakGlassEventsResponse.error) throw new HttpError(400, breakGlassEventsResponse.error.message, breakGlassEventsResponse.error)
-  if (responseTimeProbeResult.error) throw new HttpError(400, responseTimeProbeResult.error.message, responseTimeProbeResult.error)
+  if (responseTimeProbeResult.result.error) throw new HttpError(400, responseTimeProbeResult.result.error.message, responseTimeProbeResult.result.error)
 
-  const apiResponseTimeMs = Date.now() - responseTimerStartedAt
+  const apiResponseTimeMs = responseTimeProbeResult.durationMs
   const totalUsers = authUsers.length
   const verifiedUsers = authUsers.filter(user => Boolean(user.email_confirmed_at ?? user.phone_confirmed_at)).length
   const unverifiedUsers = Math.max(totalUsers - verifiedUsers, 0)
