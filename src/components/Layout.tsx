@@ -20,10 +20,10 @@ export function Layout({ children, title, subtitle }: {
 }) {
   const navigate = useNavigate()
   const { pathname } = useLocation()
-  const [isCompact, setIsCompact] = useState(() => (typeof window !== 'undefined' ? window.innerWidth < 980 : false))
+  const [isCompact, setIsCompact] = useState(() => (typeof window !== 'undefined' ? window.innerWidth < 820 : false))
 
   useEffect(() => {
-    const handleResize = () => setIsCompact(window.innerWidth < 980)
+    const handleResize = () => setIsCompact(window.innerWidth < 820)
     handleResize()
     window.addEventListener('resize', handleResize)
     return () => window.removeEventListener('resize', handleResize)

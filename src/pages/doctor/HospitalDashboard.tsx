@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Badge, Button, Card, PageLoader, showToast } from '../../components/ui'
+import { Badge, Button, Card, Input, Modal, PageLoader, showToast } from '../../components/ui'
 import { HospitalLayout } from '../../components/HospitalLayout'
 import { getStaffSession, signOutAndClearSessions } from '../../lib/auth'
 import {
@@ -10,7 +10,7 @@ import {
   HOSPITAL_HISTORY_PATH,
   getHospitalPatientRecordsPath,
 } from '../../lib/hospitalRoutes'
-import { fetchStaffDashboard } from '../../lib/hidApi'
+import { deleteMyAccount, fetchStaffDashboard } from '../../lib/hidApi'
 import { formatDateTime } from '../../lib/utils'
 import type { HidStaffDashboardResponse } from '../../types/hid'
 
@@ -33,6 +33,9 @@ export default function HospitalDashboard() {
   const session = useMemo(() => getStaffSession(), [])
   const [dashboard, setDashboard] = useState<HidStaffDashboardResponse | null>(null)
   const [loading, setLoading] = useState(true)
+  const [deleteModalOpen, setDeleteModalOpen] = useState(false)
+  const [deleteConfirmText, setDeleteConfirmText] = useState('')
+  const [deletingAccount, setDeletingAccount] = useState(false)
 
   useEffect(() => {
     if (!session) {
@@ -58,6 +61,25 @@ export default function HospitalDashboard() {
   async function logout() {
     await signOutAndClearSessions()
     navigate(HOSPITAL_AUTH_PATH)
+  }
+
+  async function confirmPermanentDelete() {
+    if (deleteConfirmText.trim().toUpperCase() !== 'DELETE') {
+      showToast('Type DELETE to confirm permanent account removal.', 'error')
+      return
+    }
+
+    setDeletingAccount(true)
+    try {
+      await deleteMyAccount()
+      showToast('Your hospital account has been permanently deleted.', 'success')
+      navigate(HOSPITAL_AUTH_PATH, { replace: true })
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Unable to delete this hospital account right now.'
+      showToast(message, 'error')
+    } finally {
+      setDeletingAccount(false)
+    }
   }
 
   const requests = dashboard?.requests ?? []
@@ -257,7 +279,47 @@ export default function HospitalDashboard() {
             </div>
           )}
         </Card>
+
+        <Card style={{ border: '1px solid #fecaca', background: '#fff7f7' }}>
+          <div style={{ fontSize: 15, fontWeight: 700, color: '#991b1b' }}>Danger Zone</div>
+          <div style={{ color: '#7f1d1d', fontSize: 12, marginTop: 6, lineHeight: 1.7 }}>
+            Permanently deleting this hospital account removes its access history, dashboard data, and medical records created by this account.
+          </div>
+          <Button
+            variant="danger"
+            style={{ marginTop: 14 }}
+            onClick={() => {
+              setDeleteConfirmText('')
+              setDeleteModalOpen(true)
+            }}
+          >
+            Delete account permanently
+          </Button>
+        </Card>
       </div>
+
+      <Modal open={deleteModalOpen} onClose={() => { if (!deletingAccount) setDeleteModalOpen(false) }} title="Delete hospital account permanently" width={520}>
+        <div style={{ display: 'grid', gap: 16 }}>
+          <div style={{ color: '#4b5563', fontSize: 13, lineHeight: 1.7 }}>
+            This permanently removes the hospital account, ends its access, and deletes the records created by this account. This action cannot be undone.
+          </div>
+          <Input
+            label='Type "DELETE" to confirm'
+            value={deleteConfirmText}
+            onChange={event => setDeleteConfirmText(event.target.value)}
+            placeholder="DELETE"
+            autoComplete="off"
+          />
+          <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10, flexWrap: 'wrap' }}>
+            <Button variant="outline" onClick={() => setDeleteModalOpen(false)} disabled={deletingAccount}>
+              Cancel
+            </Button>
+            <Button variant="danger" loading={deletingAccount} onClick={() => void confirmPermanentDelete()}>
+              Delete permanently
+            </Button>
+          </div>
+        </div>
+      </Modal>
     </HospitalLayout>
   )
 }

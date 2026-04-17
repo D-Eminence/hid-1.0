@@ -25,9 +25,6 @@ import {
   ADMIN_LOGIN_PATH,
   ADMIN_OVERVIEW_PATH,
   ADMIN_ROOT_PATH,
-  LEGACY_ADMIN_LOGIN_PATH,
-  LEGACY_ADMIN_OVERVIEW_PATH,
-  LEGACY_ADMIN_ROOT_PATH,
 } from './lib/adminRoutes'
 import { isConfigured } from './lib/supabase'
 import {
@@ -150,9 +147,6 @@ export default function App() {
             <Route path={ADMIN_ROOT_PATH} element={<Navigate to={ADMIN_LOGIN_PATH} replace />} />
             <Route path={ADMIN_LOGIN_PATH} element={<AdminLoginPage />} />
             <Route path={ADMIN_OVERVIEW_PATH} element={<AdminDashboardPage />} />
-            <Route path={LEGACY_ADMIN_ROOT_PATH} element={<Navigate to={ADMIN_LOGIN_PATH} replace />} />
-            <Route path={LEGACY_ADMIN_LOGIN_PATH} element={<Navigate to={ADMIN_LOGIN_PATH} replace />} />
-            <Route path={LEGACY_ADMIN_OVERVIEW_PATH} element={<Navigate to={ADMIN_OVERVIEW_PATH} replace />} />
             <Route path={HOSPITAL_ROOT_PATH} element={<Navigate to={HOSPITAL_AUTH_PATH} replace />} />
             <Route path={HOSPITAL_AUTH_PATH} element={<DoctorAuthPage />} />
             <Route path={HOSPITAL_DASHBOARD_PATH} element={<DoctorDashboardPage />} />

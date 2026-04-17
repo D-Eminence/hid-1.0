@@ -306,6 +306,7 @@ async function resetAuthState() {
     // Best effort only.
   }
   clearAllPortalSessions()
+  viewCache.clear()
 }
 
 async function edgeRequest<T>(functionName: string, options: EdgeRequestOptions = {}): Promise<T> {
@@ -1226,6 +1227,14 @@ export async function updateCurrentUserPassword(password: string) {
   if (error) {
     throw new HidApiError(400, error.message, error)
   }
+}
+
+export async function deleteMyAccount() {
+  await edgeRequest<{ deleted: true }>('delete-my-account', {
+    method: 'POST',
+  })
+
+  await resetAuthState()
 }
 
 export async function fetchMyStaffAccount() {

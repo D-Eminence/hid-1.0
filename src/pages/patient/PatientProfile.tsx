@@ -2,9 +2,9 @@ import React, { useEffect, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { PatientNotificationWatcher } from '../../components/PatientNotificationWatcher'
 import { PortalShell } from '../../components/PortalShell'
-import { Button, Card, Input, PageLoader, Select, Textarea, showToast } from '../../components/ui'
+import { Button, Card, Input, Modal, PageLoader, Select, Textarea, showToast } from '../../components/ui'
 import { getPatientSession, setPatientSession, signOutAndClearSessions } from '../../lib/auth'
-import { fetchMyPatient, setMyPatientAccessPin, updateMyPatientProfile } from '../../lib/hidApi'
+import { deleteMyAccount, fetchMyPatient, setMyPatientAccessPin, updateMyPatientProfile } from '../../lib/hidApi'
 import {
   BLOOD_GROUPS,
   COUNTRIES,
@@ -37,6 +37,9 @@ export default function PatientProfile() {
   const [uploadingPhoto, setUploadingPhoto] = useState(false)
   const [profileConfirmed, setProfileConfirmed] = useState(false)
   const [accessPinDraft, setAccessPinDraft] = useState('')
+  const [deleteConfirmText, setDeleteConfirmText] = useState('')
+  const [deleteModalOpen, setDeleteModalOpen] = useState(false)
+  const [deletingAccount, setDeletingAccount] = useState(false)
   const [dobInput, setDobInput] = useState('')
   const [openSections, setOpenSections] = useState({
     about: true,
@@ -155,6 +158,25 @@ export default function PatientProfile() {
       showToast(message, 'error')
     } finally {
       setSaving(false)
+    }
+  }
+
+  async function confirmPermanentDelete() {
+    if (deleteConfirmText.trim().toUpperCase() !== 'DELETE') {
+      showToast('Type DELETE to confirm permanent account removal.', 'error')
+      return
+    }
+
+    setDeletingAccount(true)
+    try {
+      await deleteMyAccount()
+      showToast('Your account has been permanently deleted.', 'success')
+      navigate('/patient', { replace: true })
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Unable to delete your account right now.'
+      showToast(message, 'error')
+    } finally {
+      setDeletingAccount(false)
     }
   }
 
@@ -391,9 +413,49 @@ export default function PatientProfile() {
               <input type="checkbox" checked={profileConfirmed} onChange={e => setProfileConfirmed(e.target.checked)} style={{ marginTop: 2 }} />
               <span>I confirm the information provided is correct.</span>
             </label>
+
+            <div style={{ marginTop: 28, borderTop: '1px solid #fee2e2', paddingTop: 20 }}>
+              <div style={{ fontSize: 15, fontWeight: 700, color: '#991b1b' }}>Danger Zone</div>
+              <div style={{ color: '#7f1d1d', fontSize: 12, marginTop: 6, lineHeight: 1.7 }}>
+                Permanently deleting your patient account removes your HID profile, records, access history, notifications, and uploaded files.
+              </div>
+              <Button
+                variant="danger"
+                style={{ marginTop: 14 }}
+                onClick={() => {
+                  setDeleteConfirmText('')
+                  setDeleteModalOpen(true)
+                }}
+              >
+                Delete account permanently
+              </Button>
+            </div>
           </Card>
         </div>
       </div>
+
+      <Modal open={deleteModalOpen} onClose={() => { if (!deletingAccount) setDeleteModalOpen(false) }} title="Delete patient account permanently" width={520}>
+        <div style={{ display: 'grid', gap: 16 }}>
+          <div style={{ color: '#4b5563', fontSize: 13, lineHeight: 1.7 }}>
+            This permanently removes your HID patient account and all patient data tied to it. This action cannot be undone.
+          </div>
+          <Input
+            label='Type "DELETE" to confirm'
+            value={deleteConfirmText}
+            onChange={event => setDeleteConfirmText(event.target.value)}
+            placeholder="DELETE"
+            autoComplete="off"
+          />
+          <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10, flexWrap: 'wrap' }}>
+            <Button variant="outline" onClick={() => setDeleteModalOpen(false)} disabled={deletingAccount}>
+              Cancel
+            </Button>
+            <Button variant="danger" loading={deletingAccount} onClick={() => void confirmPermanentDelete()}>
+              Delete permanently
+            </Button>
+          </div>
+        </div>
+      </Modal>
     </PortalShell>
   )
 }
