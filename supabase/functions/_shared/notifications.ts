@@ -1,0 +1,152 @@
+import { sendTransactionalEmail } from './email.ts'
+import { HttpError } from './http.ts'
+
+export type DeliveryReceipt = {
+  channel: 'email'
+  maskedTarget: string
+  provider: 'brevo'
+}
+
+type PasswordResetDeliveryInput = {
+  code: string
+  email: string | null
+  expiresInMinutes: number
+  hidCode: string
+  patientName: string
+}
+
+type PasswordResetConfirmationInput = {
+  email: string | null
+  hidCode: string
+  patientName: string
+}
+
+function maskEmailAddress(value: string | null) {
+  if (!value) return null
+  const trimmed = value.trim().toLowerCase()
+  const [localPart, domainPart] = trimmed.split('@')
+  if (!localPart || !domainPart) return trimmed
+  if (localPart.length <= 2) return `${localPart[0] ?? '*'}***@${domainPart}`
+  return `${localPart.slice(0, 2)}***@${domainPart}`
+}
+
+function renderPasswordResetEmail({
+  code,
+  expiresInMinutes,
+  hidCode,
+  patientName,
+}: {
+  code: string
+  expiresInMinutes: number
+  hidCode: string
+  patientName: string
+}) {
+  return `
+    <div style="font-family:Arial,sans-serif;background:#f5f7fb;padding:24px;color:#111827">
+      <div style="max-width:560px;margin:0 auto;background:#ffffff;border:1px solid #e5e7eb;border-radius:16px;overflow:hidden">
+        <div style="padding:24px 28px;background:#1a6fd4;color:#ffffff">
+          <div style="font-size:24px;font-weight:700">HID Security</div>
+          <div style="font-size:12px;opacity:0.85;margin-top:4px">Health Identity Directory</div>
+        </div>
+        <div style="padding:28px">
+          <p style="margin:0 0 12px;font-size:14px">Hello ${patientName || 'there'},</p>
+          <p style="margin:0 0 18px;font-size:14px;line-height:1.7">
+            A password reset was requested for your HID account ${hidCode}. Use the code below to continue.
+          </p>
+          <div style="margin:0 0 18px;padding:18px;border:1px dashed #93c5fd;border-radius:12px;background:#eff6ff;text-align:center">
+            <div style="font-size:12px;color:#6b7280;letter-spacing:0.08em;text-transform:uppercase;margin-bottom:8px">Verification Code</div>
+            <div style="font-size:30px;font-weight:700;letter-spacing:0.24em;color:#1a6fd4">${code}</div>
+          </div>
+          <p style="margin:0 0 10px;font-size:14px;line-height:1.7">
+            This code expires in ${expiresInMinutes} minutes. If you did not request this reset, ignore this message and consider changing your password after you sign in.
+          </p>
+        </div>
+      </div>
+    </div>
+  `
+}
+
+function renderPasswordResetConfirmationEmail({
+  hidCode,
+  patientName,
+}: {
+  hidCode: string
+  patientName: string
+}) {
+  return `
+    <div style="font-family:Arial,sans-serif;background:#f5f7fb;padding:24px;color:#111827">
+      <div style="max-width:560px;margin:0 auto;background:#ffffff;border:1px solid #e5e7eb;border-radius:16px;overflow:hidden">
+        <div style="padding:24px 28px;background:#0f766e;color:#ffffff">
+          <div style="font-size:24px;font-weight:700">Password Updated</div>
+          <div style="font-size:12px;opacity:0.85;margin-top:4px">Health Identity Directory</div>
+        </div>
+        <div style="padding:28px">
+          <p style="margin:0 0 12px;font-size:14px">Hello ${patientName || 'there'},</p>
+          <p style="margin:0 0 12px;font-size:14px;line-height:1.7">
+            The password for HID account ${hidCode} was changed successfully.
+          </p>
+          <p style="margin:0;font-size:14px;line-height:1.7">
+            If this was not you, contact support immediately and secure your phone and email accounts.
+          </p>
+        </div>
+      </div>
+    </div>
+  `
+}
+
+export async function sendPatientPasswordResetCode(input: PasswordResetDeliveryInput) {
+  if (!input.email) {
+    throw new HttpError(400, 'This account does not have an email address for password reset.')
+  }
+
+  try {
+    await sendTransactionalEmail(
+      input.email,
+      'Your HID password reset code',
+      renderPasswordResetEmail({
+        code: input.code,
+        expiresInMinutes: input.expiresInMinutes,
+        hidCode: input.hidCode,
+        patientName: input.patientName,
+      })
+    )
+  } catch (error) {
+    const message = error instanceof Error ? error.message : 'Unable to send the email verification code.'
+    console.error('password reset email delivery failed', message)
+    throw new HttpError(502, message)
+  }
+
+  return {
+    receipts: [
+      {
+        channel: 'email' as const,
+        maskedTarget: maskEmailAddress(input.email) ?? input.email,
+        provider: 'brevo' as const,
+      },
+    ],
+    errors: [],
+  }
+}
+
+export async function sendPatientPasswordResetConfirmation(input: PasswordResetConfirmationInput) {
+  const errors: string[] = []
+
+  if (input.email) {
+    try {
+      await sendTransactionalEmail(
+        input.email,
+        'Your HID password was updated',
+        renderPasswordResetConfirmationEmail({
+          hidCode: input.hidCode,
+          patientName: input.patientName,
+        })
+      )
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Unable to send the email confirmation.'
+      errors.push(message)
+      console.error('password reset confirmation email failed', message)
+    }
+  }
+
+  return errors
+}

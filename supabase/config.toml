@@ -1,0 +1,136 @@
+project_id = "hid-unified"
+
+[api]
+enabled = true
+schemas = ["public", "storage", "graphql_public"]
+extra_search_path = ["public", "extensions"]
+max_rows = 1000
+
+[auth]
+site_url = "https://healthidentitydirectory.com"
+additional_redirect_urls = [
+  "https://healthidentitydirectory.com",
+  "https://healthidentitydirectory.com/patient",
+  "https://healthidentitydirectory.com/hospital",
+  "https://healthidentitydirectory.com/hospital/auth",
+  "https://www.healthidentitydirectory.com",
+  "https://www.healthidentitydirectory.com/patient",
+  "https://www.healthidentitydirectory.com/hospital",
+  "https://www.healthidentitydirectory.com/hospital/auth",
+  "http://localhost:3000",
+  "http://localhost:3000/*",
+  "http://127.0.0.1:3000",
+  "http://127.0.0.1:3000/*",
+]
+jwt_expiry = 900
+
+[auth.email]
+enable_signup = true
+double_confirm_changes = true
+enable_confirmations = true
+
+[auth.rate_limit]
+email_sent = 300
+
+[auth.hook.before_user_created]
+enabled = true
+uri = "pg-functions://postgres/public/hid_before_user_created_hook"
+
+[auth.hook.custom_access_token]
+enabled = true
+uri = "pg-functions://postgres/public/hid_custom_access_token_hook"
+
+[auth.hook.send_email]
+enabled = true
+uri = "https://ekcuyqrwrzvwhmbnkold.supabase.co/functions/v1/send-email?hook_token=env(SEND_EMAIL_HOOK_TOKEN)"
+secrets = "env(SEND_EMAIL_HOOK_SECRET)"
+
+[auth.hook.password_verification_attempt]
+enabled = false
+
+[auth.hook.mfa_verification_attempt]
+enabled = false
+
+[functions.patient-register]
+verify_jwt = false
+
+[functions.patient-login]
+verify_jwt = false
+
+[functions.patient-reset-start]
+verify_jwt = false
+
+[functions.patient-reset-verify]
+verify_jwt = false
+
+[functions.patient-reset-complete]
+verify_jwt = false
+
+[functions.staff-invite]
+verify_jwt = false
+
+[functions.staff-complete-onboarding]
+verify_jwt = false
+
+[functions.patients-me]
+verify_jwt = false
+
+[functions.patients-records]
+verify_jwt = false
+
+[functions.records-create]
+verify_jwt = false
+
+[functions.records-version-create]
+verify_jwt = false
+
+[functions.access-request-create]
+verify_jwt = false
+
+[functions.access-request-approve]
+verify_jwt = false
+
+[functions.access-grant-revoke]
+verify_jwt = false
+
+[functions.break-glass]
+verify_jwt = false
+
+[functions.files-sign-upload]
+verify_jwt = false
+
+[functions.files-register-upload]
+verify_jwt = false
+
+[functions.files-sign-download]
+verify_jwt = false
+
+[functions.notifications-list]
+verify_jwt = false
+
+[functions.audit-list]
+verify_jwt = false
+
+[functions.patient-history-list]
+verify_jwt = false
+
+[functions.staff-dashboard]
+verify_jwt = false
+
+[functions.access-request-deny]
+verify_jwt = false
+
+[functions.access-grant-close]
+verify_jwt = false
+
+[functions.health-check]
+verify_jwt = false
+
+[functions.patient-access-pin]
+verify_jwt = false
+
+[functions.admin-dashboard-overview]
+verify_jwt = false
+
+[functions.send-email]
+verify_jwt = false

@@ -1,0 +1,21 @@
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --blue:#1a6fd4;--blue-d:#1254a8;--blue-l:#e8f1fc;--blue-m:#93c5fd;
+  --green:#16a34a;--green-l:#dcfce7;--red:#dc2626;--red-l:#fee2e2;
+  --amber:#d97706;--amber-l:#fef3c7;
+  --text:#111827;--t2:#374151;--t3:#6b7280;--t4:#9ca3af;
+  --border:#e5e7eb;--surface:#fff;--bg:#f3f4f6;--bg2:#f9fafb;
+  --shadow-sm:0 1px 3px rgba(0,0,0,.08);
+  --shadow-md:0 4px 16px rgba(0,0,0,.08);
+  --r-sm:6px;--r-md:10px;--r-lg:14px;--r-xl:20px;--r-full:9999px
+}
+html{scroll-behavior:smooth}
+body{font-family:'Inter',-apple-system,BlinkMacSystemFont,sans-serif;color:var(--text);background:var(--bg);line-height:1.6;font-size:14px;-webkit-font-smoothing:antialiased;min-width:320px;overflow-x:hidden}
+#root{min-height:100vh}
+a{text-decoration:none;color:inherit}
+button{cursor:pointer;font-family:inherit}
+input,select,textarea{font-family:inherit}
+img{display:block;max-width:100%}
+::-webkit-scrollbar{width:5px;height:5px}
+::-webkit-scrollbar-thumb{background:var(--border);border-radius:3px}
+*:focus-visible{outline:2px solid var(--blue);outline-offset:2px}

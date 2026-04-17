@@ -1,0 +1,663 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>HID — Health Identity Directory</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:ital,wght@0,400;0,500;0,600;0,700;0,800;1,400&display=swap" rel="stylesheet" />
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    :root {
+      --blue: #1a6fd4; --blue-dark: #1254a8; --blue-light: #e8f1fc; --blue-mid: #93c5fd;
+      --text: #111827; --text-2: #374151; --text-3: #6b7280; --text-4: #9ca3af;
+      --border: #e5e7eb; --surface: #ffffff; --bg: #f8f9fb;
+      --r-sm: 8px; --r-md: 12px; --r-lg: 16px; --r-xl: 24px; --r-full: 9999px;
+    }
+    html { scroll-behavior: smooth; }
+    body { font-family: 'Inter', sans-serif; color: var(--text); background: var(--surface); line-height: 1.6; }
+    a { text-decoration: none; color: inherit; }
+    button { cursor: pointer; font-family: 'Inter', sans-serif; }
+    img { display: block; max-width: 100%; }
+
+    /* ── NAVBAR ── */
+    nav {
+      position: sticky; top: 0; z-index: 100;
+      background: rgba(255,255,255,0.95); backdrop-filter: blur(10px);
+      border-bottom: 1px solid var(--border);
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 0 48px; height: 64px;
+    }
+    .nav-logo { display: flex; align-items: center; gap: 10px; }
+    .nav-logo-text { font-size: 20px; font-weight: 700; letter-spacing: -0.5px; }
+    .nav-links { display: flex; align-items: center; gap: 32px; }
+    .nav-links a { font-size: 14px; font-weight: 500; color: var(--text-3); transition: color 0.15s; }
+    .nav-links a:hover { color: var(--text); }
+    .btn-waitlist {
+      background: var(--blue); color: white; border: none;
+      border-radius: var(--r-full); padding: 9px 20px;
+      font-size: 14px; font-weight: 600; transition: background 0.15s;
+    }
+    .btn-waitlist:hover { background: var(--blue-dark); }
+
+    /* ── HERO ── */
+    .hero {
+      max-width: 960px; margin: 0 auto;
+      padding: 72px 24px 80px;
+      display: flex; flex-direction: column; align-items: center; text-align: center;
+    }
+    .hero-card {
+      background: var(--surface); border: 1px solid var(--border);
+      border-radius: var(--r-xl); padding: 48px 40px 36px;
+      width: 100%; max-width: 580px;
+      box-shadow: 0 4px 32px rgba(0,0,0,0.06);
+    }
+    .hero-eyebrow { font-size: 13px; font-weight: 500; color: var(--text-3); margin-bottom: 12px; letter-spacing: 0.3px; }
+    .hero-title {
+      font-size: 36px; font-weight: 800; line-height: 1.15;
+      letter-spacing: -0.8px; color: var(--text); margin-bottom: 14px;
+    }
+    .hero-title .accent { color: var(--blue); }
+    .hero-sub { font-size: 14px; color: var(--text-3); line-height: 1.7; margin-bottom: 28px; max-width: 360px; margin-left: auto; margin-right: auto; }
+    .btn-primary {
+      background: var(--blue); color: white; border: none;
+      border-radius: var(--r-full); padding: 12px 28px;
+      font-size: 14px; font-weight: 600; transition: background 0.15s;
+      display: inline-flex; align-items: center; gap: 8px;
+    }
+    .btn-primary:hover { background: var(--blue-dark); }
+
+    /* Hero illustration */
+    .hero-illustration {
+      margin: 32px auto 24px;
+      background: #f3f4f6; border-radius: var(--r-lg);
+      padding: 20px 24px; width: 100%;
+      display: flex; align-items: center; justify-content: center; gap: 16px;
+      position: relative; overflow: hidden;
+    }
+    .hero-badges { display: flex; gap: 20px; justify-content: center; margin-top: 4px; }
+    .hero-badge { display: flex; align-items: center; gap: 6px; font-size: 12px; color: var(--text-3); }
+    .hero-badge-icon { width: 16px; height: 16px; background: var(--blue); border-radius: 3px; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+    .hero-badge-icon svg { width: 9px; height: 9px; }
+
+    /* ── SECTION COMMONS ── */
+    section { padding: 80px 48px; }
+    .section-inner { max-width: 900px; margin: 0 auto; }
+    .section-tag { display: inline-flex; align-items: center; background: var(--blue-light); color: var(--blue); font-size: 12px; font-weight: 600; border-radius: var(--r-full); padding: 4px 12px; margin-bottom: 12px; border: 1px solid rgba(26,111,212,0.2); }
+    .section-title { font-size: 28px; font-weight: 800; letter-spacing: -0.5px; line-height: 1.2; }
+    .section-title .accent { color: var(--blue); }
+    .section-sub { font-size: 14px; color: var(--text-3); line-height: 1.7; max-width: 520px; margin-top: 10px; }
+
+    /* ── FEATURES ── */
+    #features { background: var(--surface); }
+    .features-head { text-align: center; margin-bottom: 48px; }
+    .features-head .section-sub { margin-left: auto; margin-right: auto; }
+    .feature-grid { display: flex; flex-direction: column; gap: 24px; }
+    .feature-card {
+      border: 1px solid var(--border); border-radius: var(--r-xl);
+      overflow: hidden; display: grid; grid-template-columns: 1fr 1fr;
+      min-height: 260px;
+    }
+    .feature-card.reverse { direction: rtl; }
+    .feature-card.reverse > * { direction: ltr; }
+    .feature-img {
+      background: var(--bg); display: flex; align-items: center; justify-content: center;
+      padding: 32px; min-height: 240px;
+    }
+    .feature-body { padding: 40px 36px; display: flex; flex-direction: column; justify-content: center; }
+    .feature-body .section-tag { margin-bottom: 16px; }
+    .feature-body h3 { font-size: 20px; font-weight: 700; letter-spacing: -0.3px; margin-bottom: 12px; }
+    .feature-body p { font-size: 14px; color: var(--text-3); line-height: 1.7; }
+
+    /* ── HOW IT WORKS ── */
+    #how { background: var(--bg); }
+    .how-head { text-align: center; margin-bottom: 56px; }
+    .how-steps { display: flex; flex-direction: column; gap: 0; }
+    .how-step {
+      display: grid; grid-template-columns: 1fr 1fr; gap: 0;
+      border-radius: var(--r-xl); overflow: hidden;
+      margin-bottom: 24px; background: var(--surface);
+      border: 1px solid var(--border);
+    }
+    .how-step:nth-child(even) { direction: rtl; }
+    .how-step:nth-child(even) > * { direction: ltr; }
+    .how-step-img {
+      background: var(--blue-light); display: flex; align-items: center; justify-content: center;
+      padding: 32px; min-height: 200px; position: relative;
+    }
+    .how-step-num {
+      position: absolute; top: 20px; left: 24px;
+      font-size: 48px; font-weight: 800; color: rgba(26,111,212,0.15); line-height: 1;
+    }
+    .how-step:nth-child(even) .how-step-num { left: auto; right: 24px; }
+    .how-step-body { padding: 36px 40px; display: flex; flex-direction: column; justify-content: center; }
+    .how-step-body h3 { font-size: 18px; font-weight: 700; margin-bottom: 10px; letter-spacing: -0.3px; }
+    .how-step-body p { font-size: 14px; color: var(--text-3); line-height: 1.7; }
+
+    /* ── SECURITY ── */
+    #security { background: var(--surface); }
+    .sec-head { display: flex; align-items: flex-end; justify-content: space-between; margin-bottom: 40px; flex-wrap: wrap; gap: 16px; }
+    .sec-head-left h2 { font-size: 28px; font-weight: 800; letter-spacing: -0.5px; max-width: 420px; line-height: 1.2; }
+    .sec-head-left p { font-size: 14px; color: var(--text-3); margin-top: 10px; max-width: 380px; line-height: 1.7; }
+    .sec-link { display: flex; align-items: center; gap: 6px; font-size: 13px; font-weight: 600; color: var(--blue); white-space: nowrap; }
+    .sec-link:hover { text-decoration: underline; }
+    .sec-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 20px; }
+    .sec-card {
+      border: 1px solid var(--border); border-radius: var(--r-lg);
+      padding: 28px 24px;
+    }
+    .sec-icon {
+      width: 40px; height: 40px; border-radius: var(--r-sm);
+      background: var(--blue-light); display: flex; align-items: center; justify-content: center;
+      margin-bottom: 16px; color: var(--blue);
+    }
+    .sec-card h4 { font-size: 14px; font-weight: 700; margin-bottom: 8px; }
+    .sec-card p { font-size: 13px; color: var(--text-3); line-height: 1.6; }
+    .sec-card ul { list-style: none; margin-top: 6px; }
+    .sec-card ul li { font-size: 13px; color: var(--text-3); padding: 2px 0; display: flex; align-items: center; gap: 6px; }
+    .sec-card ul li::before { content: '·'; color: var(--blue); font-size: 18px; line-height: 1; }
+
+    /* ── CTA BANNER ── */
+    .cta-banner {
+      background: linear-gradient(135deg, #1a6fd4 0%, #1254a8 100%);
+      padding: 80px 48px;
+      text-align: center;
+    }
+    .cta-banner h2 { font-size: 32px; font-weight: 800; color: white; letter-spacing: -0.6px; line-height: 1.2; margin-bottom: 16px; max-width: 560px; margin-left: auto; margin-right: auto; }
+    .cta-banner p { font-size: 14px; color: rgba(255,255,255,0.75); margin-bottom: 28px; max-width: 440px; margin-left: auto; margin-right: auto; line-height: 1.7; }
+    .btn-cta {
+      background: white; color: var(--blue); border: none;
+      border-radius: var(--r-full); padding: 12px 28px;
+      font-size: 14px; font-weight: 700; display: inline-flex; align-items: center; gap: 8px;
+      transition: opacity 0.15s;
+    }
+    .btn-cta:hover { opacity: 0.9; }
+
+    /* ── FAQ ── */
+    #faq { background: var(--surface); padding: 80px 48px; }
+    .faq-inner { max-width: 900px; margin: 0 auto; display: grid; grid-template-columns: 260px 1fr; gap: 64px; }
+    .faq-left h2 { font-size: 32px; font-weight: 800; letter-spacing: -0.5px; margin-bottom: 12px; }
+    .faq-left p { font-size: 14px; color: var(--text-3); line-height: 1.7; }
+    .faq-list { display: flex; flex-direction: column; gap: 0; }
+    .faq-item { border-bottom: 1px solid var(--border); }
+    .faq-q {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 20px 0; cursor: pointer; gap: 16px;
+      font-size: 14px; font-weight: 500; color: var(--text);
+      background: none; border: none; width: 100%; text-align: left; font-family: 'Inter', sans-serif;
+    }
+    .faq-q:hover { color: var(--blue); }
+    .faq-icon { width: 22px; height: 22px; border-radius: 50%; border: 1.5px solid var(--border); display: flex; align-items: center; justify-content: center; flex-shrink: 0; color: var(--text-3); transition: all 0.2s; }
+    .faq-item.open .faq-icon { background: var(--blue); border-color: var(--blue); color: white; transform: rotate(45deg); }
+    .faq-a { font-size: 14px; color: var(--text-3); line-height: 1.7; padding-bottom: 20px; display: none; }
+    .faq-item.open .faq-a { display: block; }
+
+    /* ── FOOTER ── */
+    footer { background: var(--bg); padding: 56px 48px 0; }
+    .footer-inner { max-width: 960px; margin: 0 auto; }
+    .footer-top { display: grid; grid-template-columns: 280px repeat(3, 1fr); gap: 48px; padding-bottom: 40px; border-bottom: 1px solid var(--border); }
+    .footer-brand p { font-size: 13px; color: var(--text-3); line-height: 1.7; margin-top: 14px; max-width: 220px; }
+    .footer-col h5 { font-size: 13px; font-weight: 600; color: var(--text); margin-bottom: 16px; }
+    .footer-col a { display: block; font-size: 13px; color: var(--text-3); margin-bottom: 10px; transition: color 0.15s; }
+    .footer-col a:hover { color: var(--text); }
+    .footer-bottom { display: flex; align-items: center; justify-content: space-between; padding: 20px 0; }
+    .social-links { display: flex; gap: 12px; }
+    .social-link { width: 32px; height: 32px; border-radius: 50%; border: 1px solid var(--border); display: flex; align-items: center; justify-content: center; color: var(--text-3); transition: all 0.15s; }
+    .social-link:hover { border-color: var(--blue); color: var(--blue); }
+    .footer-copy { font-size: 12px; color: var(--text-4); }
+    .footer-wordmark {
+      text-align: center; padding: 24px 0 32px;
+      font-size: clamp(28px, 6vw, 64px); font-weight: 800;
+      color: var(--blue); opacity: 0.12; letter-spacing: -1px;
+      user-select: none; overflow: hidden; white-space: nowrap;
+    }
+
+    /* ── Responsive ── */
+    @media (max-width: 768px) {
+      nav { padding: 0 20px; }
+      .nav-links { display: none; }
+      section { padding: 56px 20px; }
+      .feature-card, .how-step { grid-template-columns: 1fr; }
+      .feature-card.reverse, .how-step:nth-child(even) { direction: ltr; }
+      .sec-grid { grid-template-columns: 1fr; }
+      .faq-inner { grid-template-columns: 1fr; gap: 32px; }
+      .footer-top { grid-template-columns: 1fr 1fr; }
+      #faq { padding: 56px 20px; }
+      footer { padding: 40px 20px 0; }
+    }
+  </style>
+</head>
+<body>
+
+<!-- ═══════════════════════ NAVBAR ═══════════════════════ -->
+<nav>
+  <div class="nav-logo">
+    <svg width="34" height="34" viewBox="0 0 36 36" fill="none"><path d="M18 2L4 8v10c0 8.284 5.96 15.636 14 17 8.04-1.364 14-8.716 14-17V8L18 2z" fill="#1a6fd4"/><text x="18" y="24" text-anchor="middle" font-family="Inter,sans-serif" font-size="14" font-weight="700" fill="white">H</text></svg>
+    <span class="nav-logo-text">HID</span>
+  </div>
+  <div class="nav-links">
+    <a href="#how">How it Works</a>
+    <a href="#features">Features</a>
+    <a href="#hospitals">Hospitals</a>
+    <a href="#security">Community / Impact</a>
+  </div>
+  <button class="btn-waitlist" onclick="window.location.href='/signup'">Get Started</button>
+</nav>
+
+<!-- ═══════════════════════ HERO ═══════════════════════ -->
+<div class="hero">
+  <div class="hero-card">
+    <p class="hero-eyebrow">Health Identity Directory</p>
+    <h1 class="hero-title">One Patient. <span class="accent">One ID</span> 🔒<br>Your Health, Anywhere.</h1>
+    <p class="hero-sub">HID gives every patient a secure, unified health identity so your complete medical history is available at any hospital, anywhere, anytime.</p>
+    <button class="btn-primary" onclick="window.location.href='/signup'">Get Started</button>
+
+    <!-- Hero illustration -->
+    <div class="hero-illustration">
+      <svg width="340" height="160" viewBox="0 0 340 160" fill="none">
+        <!-- Folder base -->
+        <rect x="60" y="50" width="200" height="90" rx="10" fill="#e8f1fc" stroke="#bfdbfe" stroke-width="1.5"/>
+        <rect x="60" y="38" width="80" height="18" rx="6" fill="#93c5fd"/>
+        <!-- Folder lines -->
+        <rect x="80" y="70" width="120" height="8" rx="4" fill="#bfdbfe"/>
+        <rect x="80" y="84" width="90" height="8" rx="4" fill="#dbeafe"/>
+        <rect x="80" y="98" width="105" height="8" rx="4" fill="#dbeafe"/>
+        <rect x="80" y="112" width="70" height="8" rx="4" fill="#dbeafe"/>
+        <!-- Tag label -->
+        <rect x="62" y="68" width="60" height="22" rx="6" fill="white" stroke="#bfdbfe" stroke-width="1"/>
+        <text x="92" y="83" text-anchor="middle" font-family="Inter,sans-serif" font-size="8" font-weight="600" fill="#1a6fd4">HID Patient Folder</text>
+        <!-- Progress bar -->
+        <rect x="80" y="126" width="120" height="6" rx="3" fill="#e5e7eb"/>
+        <rect x="80" y="126" width="72" height="6" rx="3" fill="#1a6fd4"/>
+        <text x="207" y="132" font-family="Inter,sans-serif" font-size="8" fill="#6b7280">60%</text>
+        <!-- Shield badge -->
+        <path d="M285 55l-16 6v12c0 8 6 15 16 17 10-2 16-9 16-17V61L285 55z" fill="#1a6fd4"/>
+        <path d="M279 72l4 4 8-9" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+        <!-- Dots decoration -->
+        <circle cx="30" cy="80" r="5" fill="#bfdbfe"/>
+        <circle cx="18" cy="100" r="3" fill="#dbeafe"/>
+        <circle cx="40" cy="115" r="4" fill="#93c5fd" opacity="0.5"/>
+        <circle cx="316" cy="110" r="4" fill="#bfdbfe"/>
+        <circle cx="326" cy="95" r="2.5" fill="#dbeafe"/>
+      </svg>
+    </div>
+
+    <div class="hero-badges">
+      <div class="hero-badge">
+        <div class="hero-badge-icon"><svg viewBox="0 0 9 9" fill="none"><path d="M1.5 4.5l2 2L7.5 2" stroke="white" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
+        HIPAA + NDPR compliant
+      </div>
+      <div class="hero-badge">
+        <div class="hero-badge-icon"><svg viewBox="0 0 9 9" fill="none"><path d="M1.5 4.5l2 2L7.5 2" stroke="white" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
+        Secure OTP verification
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════════════ FEATURES ═══════════════════════ -->
+<section id="features">
+  <div class="section-inner">
+    <div class="features-head">
+      <h2 class="section-title"><span class="accent">Built With Purpose:</span> The Features Behind HID</h2>
+      <p class="section-sub">HID brings patients, hospitals, and administrators onto one secure platform—centralising records, simplifying care, and ensuring every decision is informed and connected.</p>
+    </div>
+
+    <div class="feature-grid">
+      <!-- Patient Features -->
+      <div class="feature-card">
+        <div class="feature-img">
+          <svg width="220" height="180" viewBox="0 0 220 180" fill="none">
+            <ellipse cx="110" cy="140" rx="90" ry="30" fill="#dbeafe" opacity="0.4"/>
+            <!-- Folder -->
+            <rect x="35" y="50" width="130" height="100" rx="10" fill="#e8f1fc" stroke="#bfdbfe" stroke-width="1.5"/>
+            <rect x="35" y="38" width="60" height="18" rx="6" fill="#93c5fd"/>
+            <rect x="52" y="68" width="96" height="7" rx="3.5" fill="#bfdbfe"/>
+            <rect x="52" y="81" width="76" height="7" rx="3.5" fill="#dbeafe"/>
+            <rect x="52" y="94" width="86" height="7" rx="3.5" fill="#dbeafe"/>
+            <rect x="52" y="107" width="60" height="7" rx="3.5" fill="#dbeafe"/>
+            <!-- Medical cross badge -->
+            <circle cx="158" cy="72" r="22" fill="#1a6fd4"/>
+            <path d="M150 72h16M158 64v16" stroke="white" stroke-width="3" stroke-linecap="round"/>
+            <!-- Pills -->
+            <ellipse cx="175" cy="118" rx="14" ry="7" fill="#bfdbfe" transform="rotate(-30 175 118)"/>
+            <ellipse cx="165" cy="130" rx="10" ry="5" fill="#93c5fd" opacity="0.6" transform="rotate(15 165 130)"/>
+          </svg>
+        </div>
+        <div class="feature-body">
+          <span class="section-tag">Patient Features</span>
+          <h3>Your Entire Health Story, In One Secure Place</h3>
+          <p>A simple, unified patient profile that stores your medical history, prescriptions, lab results, and emergencies—accessible anytime, anywhere with your HID number.</p>
+        </div>
+      </div>
+
+      <!-- Hospital Features -->
+      <div class="feature-card reverse" id="hospitals">
+        <div class="feature-img">
+          <svg width="220" height="180" viewBox="0 0 220 180" fill="none">
+            <!-- Building -->
+            <rect x="50" y="40" width="120" height="110" rx="4" fill="#dbeafe" stroke="#bfdbfe" stroke-width="1.5"/>
+            <rect x="60" y="28" width="100" height="20" rx="3" fill="#93c5fd"/>
+            <!-- Cross on building -->
+            <rect x="98" y="40" width="24" height="6" rx="3" fill="white"/>
+            <rect x="107" y="34" width="6" height="18" rx="3" fill="white"/>
+            <!-- Windows grid -->
+            <rect x="62" y="60" width="20" height="16" rx="2" fill="white" opacity="0.8"/>
+            <rect x="88" y="60" width="20" height="16" rx="2" fill="white" opacity="0.8"/>
+            <rect x="114" y="60" width="20" height="16" rx="2" fill="white" opacity="0.8"/>
+            <rect x="140" y="60" width="20" height="16" rx="2" fill="white" opacity="0.8"/>
+            <rect x="62" y="82" width="20" height="16" rx="2" fill="white" opacity="0.8"/>
+            <rect x="88" y="82" width="20" height="16" rx="2" fill="white" opacity="0.8"/>
+            <rect x="114" y="82" width="20" height="16" rx="2" fill="white" opacity="0.8"/>
+            <rect x="140" y="82" width="20" height="16" rx="2" fill="white" opacity="0.8"/>
+            <!-- Door -->
+            <rect x="97" y="118" width="26" height="32" rx="3" fill="white" opacity="0.9"/>
+            <!-- Patient record card floating -->
+            <rect x="130" y="95" width="72" height="52" rx="8" fill="white" stroke="#bfdbfe" stroke-width="1"/>
+            <rect x="140" y="106" width="40" height="5" rx="2.5" fill="#bfdbfe"/>
+            <rect x="140" y="116" width="30" height="5" rx="2.5" fill="#dbeafe"/>
+            <rect x="140" y="126" width="36" height="5" rx="2.5" fill="#dbeafe"/>
+            <text x="144" y="104" font-family="Inter,sans-serif" font-size="7" font-weight="600" fill="#1a6fd4">Patient Information</text>
+          </svg>
+        </div>
+        <div class="feature-body">
+          <span class="section-tag">Hospital Features</span>
+          <h3>Hospital &amp; Medical Staff Features</h3>
+          <p>Hospitals can retrieve verified patient records in seconds, update files in real-time, and deliver faster, safer care without missing details or duplicate tests.</p>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ═══════════════════════ HOW IT WORKS ═══════════════════════ -->
+<section id="how">
+  <div class="section-inner">
+    <div class="how-head">
+      <h2 class="section-title">How HID Works</h2>
+      <p class="section-sub" style="margin:10px auto 0; text-align:center;">Four (4) steps that show exactly how HID connects you and your hospital without stress or paperwork.</p>
+    </div>
+
+    <div class="how-steps">
+      <!-- Step 01 -->
+      <div class="how-step">
+        <div class="how-step-img">
+          <span class="how-step-num">01</span>
+          <svg width="200" height="130" viewBox="0 0 200 130" fill="none">
+            <rect x="30" y="10" width="140" height="110" rx="10" fill="white" stroke="#e5e7eb" stroke-width="1.5"/>
+            <rect x="46" y="28" width="60" height="8" rx="4" fill="#e5e7eb"/>
+            <text x="46" y="26" font-family="Inter,sans-serif" font-size="9" fill="#6b7280">Full Name</text>
+            <rect x="46" y="46" width="108" height="7" rx="3.5" fill="#f3f4f6"/>
+            <text x="46" y="44" font-family="Inter,sans-serif" font-size="8" fill="#9ca3af">Ibrahim Adewale</text>
+            <rect x="46" y="62" width="108" height="7" rx="3.5" fill="#f3f4f6"/>
+            <rect x="46" y="76" width="108" height="7" rx="3.5" fill="#f3f4f6"/>
+            <rect x="46" y="92" width="80" height="22" rx="11" fill="#1a6fd4"/>
+            <text x="86" y="107" text-anchor="middle" font-family="Inter,sans-serif" font-size="9" font-weight="600" fill="white">Create account</text>
+          </svg>
+        </div>
+        <div class="how-step-body">
+          <h3>Create Your HID ACCOUNT</h3>
+          <p>Patient signs up, verifies identity and links to NIN/SSN. A unique health ID is generated and secured with OTP verification.</p>
+        </div>
+      </div>
+
+      <!-- Step 02 -->
+      <div class="how-step">
+        <div class="how-step-img">
+          <span class="how-step-num">02</span>
+          <svg width="200" height="130" viewBox="0 0 200 130" fill="none">
+            <!-- Chart bars -->
+            <rect x="30" y="70" width="18" height="50" rx="4" fill="#bfdbfe"/>
+            <rect x="56" y="50" width="18" height="70" rx="4" fill="#93c5fd"/>
+            <rect x="82" y="40" width="18" height="80" rx="4" fill="#1a6fd4"/>
+            <rect x="108" y="55" width="18" height="65" rx="4" fill="#93c5fd"/>
+            <rect x="134" y="35" width="18" height="85" rx="4" fill="#1a6fd4"/>
+            <rect x="160" y="60" width="18" height="60" rx="4" fill="#bfdbfe"/>
+            <!-- Trend line -->
+            <path d="M39 65 Q65 40 91 35 Q117 30 143 25 Q165 22 169 55" stroke="#1a6fd4" stroke-width="2" fill="none" stroke-linecap="round"/>
+            <!-- Hospital icon -->
+            <rect x="145" y="5" width="40" height="32" rx="4" fill="#dbeafe" stroke="#bfdbfe" stroke-width="1"/>
+            <rect x="152" y="0" width="26" height="8" rx="2" fill="#93c5fd"/>
+            <rect x="159" y="12" width="12" height="3" rx="1.5" fill="white"/>
+            <rect x="163" y="8" width="4" height="11" rx="2" fill="white"/>
+          </svg>
+        </div>
+        <div class="how-step-body">
+          <h3>Link Your Health Records</h3>
+          <p>Hospitals upload or sync your medical history. Lab results, prescriptions, and visit notes are securely attached to your HID profile.</p>
+        </div>
+      </div>
+
+      <!-- Step 03 -->
+      <div class="how-step">
+        <div class="how-step-img">
+          <span class="how-step-num">03</span>
+          <svg width="200" height="130" viewBox="0 0 200 130" fill="none">
+            <!-- Globe-like map -->
+            <ellipse cx="100" cy="70" rx="65" ry="50" fill="#dbeafe" stroke="#bfdbfe" stroke-width="1.5"/>
+            <ellipse cx="100" cy="70" rx="65" ry="20" fill="none" stroke="#bfdbfe" stroke-width="1"/>
+            <line x1="100" y1="20" x2="100" y2="120" stroke="#bfdbfe" stroke-width="1"/>
+            <line x1="35" y1="70" x2="165" y2="70" stroke="#bfdbfe" stroke-width="1"/>
+            <!-- Location pins -->
+            <circle cx="80" cy="55" r="7" fill="#1a6fd4"/>
+            <path d="M80 62 L80 70" stroke="#1a6fd4" stroke-width="1.5"/>
+            <circle cx="125" cy="75" r="7" fill="#1a6fd4"/>
+            <path d="M125 82 L125 90" stroke="#1a6fd4" stroke-width="1.5"/>
+            <circle cx="65" cy="85" r="5" fill="#93c5fd"/>
+            <circle cx="140" cy="52" r="5" fill="#93c5fd"/>
+            <!-- HID card floating -->
+            <rect x="52" y="8" width="56" height="34" rx="6" fill="white" stroke="#bfdbfe" stroke-width="1"/>
+            <text x="80" y="22" text-anchor="middle" font-family="Inter,sans-serif" font-size="7" font-weight="700" fill="#1a6fd4">HID</text>
+            <text x="80" y="32" text-anchor="middle" font-family="Inter,sans-serif" font-size="7" fill="#6b7280">Patient Card</text>
+          </svg>
+        </div>
+        <div class="how-step-body">
+          <h3>Access Anywhere</h3>
+          <p>Patient uses HID or NIN at any hospital. Your records are instantly accessible to verified medical staff across the country.</p>
+        </div>
+      </div>
+
+      <!-- Step 04 -->
+      <div class="how-step">
+        <div class="how-step-img">
+          <span class="how-step-num">04</span>
+          <svg width="200" height="130" viewBox="0 0 200 130" fill="none">
+            <!-- Hospital building -->
+            <rect x="80" y="20" width="90" height="90" rx="4" fill="#dbeafe" stroke="#bfdbfe" stroke-width="1.5"/>
+            <rect x="88" y="10" width="74" height="16" rx="3" fill="#93c5fd"/>
+            <rect x="104" y="20" width="20" height="5" rx="2.5" fill="white"/>
+            <rect x="111" y="14" width="6" height="17" rx="3" fill="white"/>
+            <rect x="90" y="36" width="16" height="12" rx="2" fill="white" opacity="0.8"/>
+            <rect x="112" y="36" width="16" height="12" rx="2" fill="white" opacity="0.8"/>
+            <rect x="134" y="36" width="16" height="12" rx="2" fill="white" opacity="0.8"/>
+            <rect x="90" y="54" width="16" height="12" rx="2" fill="white" opacity="0.8"/>
+            <rect x="112" y="54" width="16" height="12" rx="2" fill="white" opacity="0.8"/>
+            <rect x="134" y="54" width="16" height="12" rx="2" fill="white" opacity="0.8"/>
+            <rect x="108" y="86" width="20" height="24" rx="3" fill="white" opacity="0.9"/>
+            <!-- Shield data transfer -->
+            <path d="M48 65L30 70v16c0 10 8 18 18 20 10-2 18-10 18-20V70L48 65z" fill="#1a6fd4"/>
+            <path d="M42 80l4 4 8-10" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+            <!-- Arrow -->
+            <path d="M68 75 L80 75" stroke="#1a6fd4" stroke-width="2" stroke-dasharray="3 2" stroke-linecap="round"/>
+            <path d="M76 71 L80 75 L76 79" stroke="#1a6fd4" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
+        </div>
+        <div class="how-step-body">
+          <h3>Hospital Pulls Your Data</h3>
+          <p>Hospital retrieves your complete patient file instantly. No paperwork, no delays — verified records delivered securely in seconds.</p>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ═══════════════════════ SECURITY & COMPLIANCE ═══════════════════════ -->
+<section id="security">
+  <div class="section-inner">
+    <div class="sec-head">
+      <div class="sec-head-left">
+        <h2>Security &amp; Compliance</h2>
+        <p>HID is built with enterprise-level protection, strict privacy controls, and global healthcare compliance ensuring every patient record stays secure, encrypted, and fully under your control.</p>
+      </div>
+      <a class="sec-link" href="/signup">
+        Get Started
+        <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M3 8h10M9 4l4 4-4 4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      </a>
+    </div>
+
+    <div class="sec-grid">
+      <div class="sec-card">
+        <div class="sec-icon"><svg width="20" height="20" viewBox="0 0 20 20" fill="none"><rect x="3" y="3" width="14" height="14" rx="3" stroke="currentColor" stroke-width="1.5" fill="none"/><path d="M7 10l2 2 4-4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
+        <h4>Controlled Access</h4>
+        <p>Only verified medical professionals can access or update a patient's health information.</p>
+      </div>
+      <div class="sec-card">
+        <div class="sec-icon"><svg width="20" height="20" viewBox="0 0 20 20" fill="none"><path d="M10 2L3 5v7c0 5 4 8.5 7 9.5 3-1 7-4.5 7-9.5V5L10 2z" stroke="currentColor" stroke-width="1.5" fill="none"/></svg></div>
+        <h4>Consent-Based Sharing</h4>
+        <p>Patients approve when and where their data can be accessed to ensure full End-to-End viewing.</p>
+      </div>
+      <div class="sec-card">
+        <div class="sec-icon"><svg width="20" height="20" viewBox="0 0 20 20" fill="none"><path d="M10 2a8 8 0 100 16A8 8 0 0010 2z" stroke="currentColor" stroke-width="1.5" fill="none"/><path d="M10 6v4l3 3" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg></div>
+        <h4>Secure Cloud Infrastructure</h4>
+        <p>Reliable, redundant, encryption systems that ensure uptime 99.99% and continuous protection.</p>
+      </div>
+      <div class="sec-card">
+        <div class="sec-icon"><svg width="20" height="20" viewBox="0 0 20 20" fill="none"><rect x="5" y="9" width="10" height="9" rx="2" stroke="currentColor" stroke-width="1.5" fill="none"/><path d="M7 9V7a3 3 0 016 0v2" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg></div>
+        <h4>End-to-End Encryption</h4>
+        <p>Your records are encrypted at rest and in transit—unreadable to anyone except authorised hospitals.</p>
+      </div>
+      <div class="sec-card">
+        <div class="sec-icon"><svg width="20" height="20" viewBox="0 0 20 20" fill="none"><circle cx="10" cy="8" r="3.5" stroke="currentColor" stroke-width="1.5" fill="none"/><path d="M3 17c0-4 14-4 14 0" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/><path d="M14 5l2 2" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg></div>
+        <h4>Verified Identity Protection</h4>
+        <p>Each HID is linked to NIN/SSN with OTP verification, preventing duplicates, fraud, or mistaken identity.</p>
+      </div>
+      <div class="sec-card">
+        <div class="sec-icon"><svg width="20" height="20" viewBox="0 0 20 20" fill="none"><rect x="3" y="4" width="14" height="14" rx="2" stroke="currentColor" stroke-width="1.5" fill="none"/><path d="M7 2v4M13 2v4M3 10h14" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg></div>
+        <h4>Compliance Standards</h4>
+        <ul>
+          <li>HIPAA Compliant</li>
+          <li>GDPR Aligned</li>
+          <li>NDPR Achieved</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ═══════════════════════ CTA BANNER ═══════════════════════ -->
+<div class="cta-banner">
+  <h2>Be First to Experience Seamless Healthcare Access</h2>
+  <p>Join the early adopters getting one unified health identity, instant record access, and faster care — before HID launches publicly.</p>
+  <button class="btn-cta" onclick="window.location.href='/signup'">
+    Get Started
+    <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M3 8h10M9 4l4 4-4 4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+  </button>
+</div>
+
+<!-- ═══════════════════════ FAQ ═══════════════════════ -->
+<section id="faq">
+  <div class="faq-inner">
+    <div class="faq-left">
+      <h2>FAQ</h2>
+      <p>Everything you need to know about HID from setup to security and accessing your health records anywhere.</p>
+    </div>
+    <div class="faq-list">
+      <div class="faq-item">
+        <button class="faq-q" onclick="toggleFaq(this)">
+          What is HID?
+          <span class="faq-icon"><svg width="10" height="10" viewBox="0 0 10 10" fill="none"><path d="M5 2v6M2 5h6" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg></span>
+        </button>
+        <div class="faq-a">HID (Health Identity Directory) is a unified digital health identity platform that gives every patient a single, secure ID linking their complete medical history — accessible at any hospital, anytime, anywhere.</div>
+      </div>
+      <div class="faq-item">
+        <button class="faq-q" onclick="toggleFaq(this)">
+          How do I create my HID?
+          <span class="faq-icon"><svg width="10" height="10" viewBox="0 0 10 10" fill="none"><path d="M5 2v6M2 5h6" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg></span>
+        </button>
+        <div class="faq-a">Simply sign up with your name, email, and phone number. Verify your identity via OTP, link your NIN or SSN, and your unique Health ID is created instantly. The entire process takes less than 5 minutes.</div>
+      </div>
+      <div class="faq-item">
+        <button class="faq-q" onclick="toggleFaq(this)">
+          Is my data safe?
+          <span class="faq-icon"><svg width="10" height="10" viewBox="0 0 10 10" fill="none"><path d="M5 2v6M2 5h6" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg></span>
+        </button>
+        <div class="faq-a">Yes. All data is encrypted end-to-end, stored on secure cloud infrastructure, and protected by enterprise-level access controls. HID is fully HIPAA, GDPR, and NDPR compliant. You control who sees your records.</div>
+      </div>
+      <div class="faq-item">
+        <button class="faq-q" onclick="toggleFaq(this)">
+          Can hospitals outside my city access my HID?
+          <span class="faq-icon"><svg width="10" height="10" viewBox="0 0 10 10" fill="none"><path d="M5 2v6M2 5h6" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg></span>
+        </button>
+        <div class="faq-a">Yes — any verified hospital in the HID network, regardless of location, can access your records using your HID number or NIN. This ensures continuity of care wherever you are in the country.</div>
+      </div>
+      <div class="faq-item">
+        <button class="faq-q" onclick="toggleFaq(this)">
+          What happens if I lose access to my account?
+          <span class="faq-icon"><svg width="10" height="10" viewBox="0 0 10 10" fill="none"><path d="M5 2v6M2 5h6" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg></span>
+        </button>
+        <div class="faq-a">You can recover your account using your registered phone number, email, or NIN. Our secure recovery process verifies your identity through multiple factors before restoring access to ensure your records stay protected.</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ═══════════════════════ FOOTER ═══════════════════════ -->
+<footer>
+  <div class="footer-inner">
+    <div class="footer-top">
+      <div class="footer-brand">
+        <div class="nav-logo">
+          <svg width="30" height="30" viewBox="0 0 36 36" fill="none"><path d="M18 2L4 8v10c0 8.284 5.96 15.636 14 17 8.04-1.364 14-8.716 14-17V8L18 2z" fill="#1a6fd4"/><text x="18" y="24" text-anchor="middle" font-family="Inter,sans-serif" font-size="14" font-weight="700" fill="white">H</text></svg>
+          <span style="font-size:18px;font-weight:700">HID</span>
+        </div>
+        <p>HID is a unified digital health identity that lets patients and hospitals securely access verified medical records anytime, anywhere.</p>
+      </div>
+      <div class="footer-col">
+        <h5>Product</h5>
+        <a href="#how">How HID Works</a>
+        <a href="#features">Features</a>
+        <a href="#security">Security &amp; Compliance</a>
+        <a href="/signup">Early Access</a>
+      </div>
+      <div class="footer-col">
+        <h5>Support</h5>
+        <a href="#">Help Center</a>
+        <a href="#faq">FAQs</a>
+        <a href="#">Documentation</a>
+      </div>
+      <div class="footer-col">
+        <h5>Legal</h5>
+        <a href="#">Privacy Policy</a>
+        <a href="#">Terms of Service</a>
+        <a href="#">Data Protection &amp; Compliance</a>
+        <a href="#">Cookie Settings</a>
+      </div>
+    </div>
+
+    <div class="footer-bottom">
+      <div class="social-links">
+        <!-- LinkedIn -->
+        <a class="social-link" href="#"><svg width="14" height="14" viewBox="0 0 14 14" fill="none"><rect x="1" y="1" width="12" height="12" rx="2.5" stroke="currentColor" stroke-width="1.2" fill="none"/><path d="M4 6v4M4 4.5v.5" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/><path d="M7 10V7.5c0-1 .5-1.5 1.5-1.5S10 6.5 10 7.5V10" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/></svg></a>
+        <!-- Instagram -->
+        <a class="social-link" href="#"><svg width="14" height="14" viewBox="0 0 14 14" fill="none"><rect x="1" y="1" width="12" height="12" rx="3" stroke="currentColor" stroke-width="1.2" fill="none"/><circle cx="7" cy="7" r="2.5" stroke="currentColor" stroke-width="1.2" fill="none"/><circle cx="10.5" cy="3.5" r="0.7" fill="currentColor"/></svg></a>
+        <!-- X/Twitter -->
+        <a class="social-link" href="#"><svg width="14" height="14" viewBox="0 0 14 14" fill="none"><path d="M2 2l10 10M12 2L2 12" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/></svg></a>
+        <!-- GitHub -->
+        <a class="social-link" href="#"><svg width="14" height="14" viewBox="0 0 14 14" fill="none"><path d="M7 1a6 6 0 00-1.9 11.7c.3.05.4-.13.4-.3v-1c-1.67.36-2.02-.8-2.02-.8-.27-.7-.67-.88-.67-.88-.55-.37.04-.36.04-.36.6.04.92.62.92.62.54.92 1.41.66 1.76.5.05-.39.21-.66.38-.81-1.33-.15-2.73-.67-2.73-2.97 0-.65.23-1.19.62-1.61-.06-.15-.27-.76.06-1.59 0 0 .5-.16 1.65.62a5.7 5.7 0 013 0c1.15-.78 1.65-.62 1.65-.62.33.83.12 1.44.06 1.59.39.42.62.96.62 1.61 0 2.31-1.41 2.82-2.75 2.97.22.19.41.56.41 1.13v1.68c0 .16.1.35.41.29A6 6 0 007 1z" stroke="currentColor" stroke-width="0.8" fill="none"/></svg></a>
+      </div>
+      <p class="footer-copy">© 2025 HID Technologies. All rights reserved.</p>
+    </div>
+  </div>
+  <div class="footer-wordmark">HEALTH IDENTITY DIRECTORY</div>
+</footer>
+
+<script>
+  function toggleFaq(btn) {
+    const item = btn.closest('.faq-item');
+    const isOpen = item.classList.contains('open');
+    document.querySelectorAll('.faq-item').forEach(i => i.classList.remove('open'));
+    if (!isOpen) item.classList.add('open');
+  }
+</script>
+</body>
+</html>

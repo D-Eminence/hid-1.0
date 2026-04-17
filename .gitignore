@@ -1,0 +1,17 @@
+node_modules/
+client/node_modules/
+server/node_modules/
+
+.env
+.env*
+.env.production
+
+dist/
+build/
+client/dist/
+server/dist/
+server/public/app/
+
+supabase/.temp/
+*.log
+.vercel
