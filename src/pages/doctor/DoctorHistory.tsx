@@ -57,6 +57,7 @@ export default function DoctorHistory() {
   const [search, setSearch] = useState('')
   const [filter, setFilter] = useState<'all' | 'standard' | 'emergency'>('all')
   const [selected, setSelected] = useState<HospitalAccessLog | null>(null)
+  const [isCompact, setIsCompact] = useState(() => (typeof window !== 'undefined' ? window.innerWidth < 900 : false))
 
   useEffect(() => {
     if (!session) {
@@ -65,6 +66,13 @@ export default function DoctorHistory() {
     }
     void loadLogs()
   }, [navigate, session])
+
+  useEffect(() => {
+    const handleResize = () => setIsCompact(window.innerWidth < 900)
+    handleResize()
+    window.addEventListener('resize', handleResize)
+    return () => window.removeEventListener('resize', handleResize)
+  }, [])
 
   async function loadLogs() {
     setLoading(true)
@@ -192,6 +200,60 @@ export default function DoctorHistory() {
               title="No access logs found"
               description="Hospital access events are logged automatically when patient records are opened."
             />
+          ) : isCompact ? (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 12, padding: 14 }}>
+              {filtered.map(log => (
+                <div
+                  key={log.id}
+                  style={{
+                    border: '1px solid #eef2f7',
+                    borderRadius: 14,
+                    padding: 14,
+                    background: log.access_type === 'emergency' ? '#fffbeb' : '#fff',
+                    display: 'flex',
+                    flexDirection: 'column',
+                    gap: 10,
+                  }}
+                >
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 10 }}>
+                    <div style={{ minWidth: 0 }}>
+                      <div style={{ fontFamily: 'monospace', fontSize: 13, color: '#1a6fd4', fontWeight: 600 }}>{log.hid_code}</div>
+                      <div style={{ fontSize: 13, fontWeight: 600, color: '#111827', marginTop: 4 }}>{log.patient_name ?? 'Unknown patient'}</div>
+                    </div>
+                    <Badge color={log.access_type === 'emergency' ? 'red' : 'blue'}>
+                      {log.access_type === 'emergency' ? 'Emergency' : 'Standard'}
+                    </Badge>
+                  </div>
+                  <div style={{ fontSize: 13, color: '#374151' }}>{log.action}</div>
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: 10, fontSize: 12, color: '#6b7280' }}>
+                    <div>
+                      <div style={{ fontSize: 10, textTransform: 'uppercase', letterSpacing: '0.04em', color: '#9ca3af', marginBottom: 4 }}>Time</div>
+                      <div>{timeAgo(log.access_time)}</div>
+                    </div>
+                    <div>
+                      <div style={{ fontSize: 10, textTransform: 'uppercase', letterSpacing: '0.04em', color: '#9ca3af', marginBottom: 4 }}>Details</div>
+                      <div>{formatDateTime(log.access_time)}</div>
+                    </div>
+                  </div>
+                  <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
+                    <button
+                      onClick={() => setSelected(log)}
+                      style={{
+                        background: 'none',
+                        border: '1px solid #e5e7eb',
+                        borderRadius: 8,
+                        padding: '8px 12px',
+                        fontSize: 12,
+                        color: '#6b7280',
+                        cursor: 'pointer',
+                      }}
+                    >
+                      View
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
           ) : (
             <div>
               <div style={{ display: 'grid', gridTemplateColumns: '1.2fr 1.4fr 1fr 1fr 80px', gap: 12, padding: '10px 20px', fontSize: 11, color: '#9ca3af', textTransform: 'uppercase', letterSpacing: '0.4px', borderBottom: '1px solid #f3f4f6' }}>

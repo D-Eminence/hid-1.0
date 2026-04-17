@@ -17,7 +17,7 @@ The active product in this repo is the root React + Vite app in `src/`, backed b
   - verify with a 6-digit OTP
   - sign in with hospital email + password
 - admin auth:
-  - manual sign in at `/admin/login`
+  - manual sign in at `/eminence/login`
   - password recovery by 6-digit OTP
 
 Ignore these for the active product:
@@ -34,7 +34,7 @@ Ignore these for the active product:
 - patient signup, OTP verification, signin, profile, records, notifications, and access history at `/patient`
 - patient password reset by email OTP
 - hospital signup, OTP verification, signin, dashboard, access, history, emergency, and patient-record flows at `/hospital`
-- admin manual sign in and overview at `/admin/login` and `/admin/overview`
+- admin manual sign in and overview at `/eminence/login` and `/eminence/overview`
 - Supabase RLS, storage signed URLs, and audit logging
 - multi-file upload in patient and hospital record flows
 
@@ -114,7 +114,7 @@ For the current production path:
 - add redirect URLs for:
   - `https://your-domain.com/patient`
   - `https://your-domain.com/hospital/auth`
-  - `https://your-domain.com/admin/login`
+  - `https://your-domain.com/eminence/login`
 
 SMTP should point to Brevo.
 

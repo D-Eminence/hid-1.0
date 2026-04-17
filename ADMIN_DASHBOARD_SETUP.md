@@ -1,6 +1,6 @@
 # HID Admin Dashboard Setup
 
-This project now includes an admin overview route at `/admin/overview`.
+This project now includes an admin overview route at `/eminence/overview`.
 
 ## What The Admin Dashboard Uses
 
@@ -83,4 +83,4 @@ Then sign out and sign back in before opening `/admin`.
 2. Set the Supabase secrets for Sentry and PostHog.
 3. Deploy `admin-dashboard-overview`.
 4. Promote your admin user to `platform_admin`.
-5. Open `/admin/overview` and verify the Sentry and PostHog panels show `Connected`.
+5. Open `/eminence/overview` and verify the Sentry and PostHog panels show `Connected`.

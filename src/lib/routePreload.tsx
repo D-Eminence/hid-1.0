@@ -69,8 +69,8 @@ export function getRoutePreloadKeys(path: string): RoutePreloadKey[] {
   if (path === '/records' || path.startsWith('/patient/records')) return ['patientRecords', 'patientProfile', 'patientHistory', 'patientNotifications']
   if (path === '/logs' || path.startsWith('/patient/history')) return ['patientHistory', 'patientProfile', 'patientRecords', 'patientNotifications']
   if (path.startsWith('/patient/notifications')) return ['patientNotifications', 'patientProfile', 'patientRecords', 'patientHistory']
-  if (path === '/admin' || path.startsWith('/admin/login')) return ['adminLogin', 'adminDashboard']
-  if (path.startsWith('/admin/')) return ['adminDashboard', 'adminLogin']
+  if (path === '/admin' || path.startsWith('/admin/login') || path === '/eminence' || path.startsWith('/eminence/login')) return ['adminLogin', 'adminDashboard']
+  if (path.startsWith('/admin/') || path.startsWith('/eminence/')) return ['adminDashboard', 'adminLogin']
   if (path === '/hospital' || path.startsWith('/hospital/auth') || path.startsWith('/doctor/auth')) {
     return ['doctorAuth', 'doctorDashboard', 'doctorAccess', 'doctorHistory', 'doctorEmergency']
   }

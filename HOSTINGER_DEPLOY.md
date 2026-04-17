@@ -52,7 +52,7 @@ Before testing production:
 - add redirect URLs for:
   - `https://your-domain.com/patient`
   - `https://your-domain.com/hospital/auth`
-  - `https://your-domain.com/admin/login`
+  - `https://your-domain.com/eminence/login`
 - enable Email auth
 - disable Phone auth
 - configure custom SMTP with Brevo or your active mail provider

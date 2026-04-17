@@ -40,8 +40,8 @@ This repo includes [vercel.json](/home/l2e/V1/hid-unified-package/vercel.json) s
 - `/hospital/history`
 - `/hospital/emergency`
 - `/admin`
-- `/admin/login`
-- `/admin/overview`
+- `/eminence/login`
+- `/eminence/overview`
 
 ## After First Deploy
 

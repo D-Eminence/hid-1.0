@@ -1,4 +1,4 @@
-import React from 'react'
+import React, { useEffect, useState } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
 import { HIDLogo } from './HIDLogo'
 import {
@@ -76,29 +76,45 @@ export function HospitalLayout({
 }) {
   const navigate = useNavigate()
   const { pathname } = useLocation()
+  const [isCompact, setIsCompact] = useState(() => (typeof window !== 'undefined' ? window.innerWidth < 980 : false))
+
+  useEffect(() => {
+    const handleResize = () => setIsCompact(window.innerWidth < 980)
+    handleResize()
+    window.addEventListener('resize', handleResize)
+    return () => window.removeEventListener('resize', handleResize)
+  }, [])
 
   return (
-    <div style={{ display: 'flex', minHeight: '100vh' }}>
+    <div style={{ display: 'flex', flexDirection: isCompact ? 'column' : 'row', minHeight: '100vh' }}>
       <aside
         style={{
-          width: 228,
-          minHeight: '100vh',
+          width: isCompact ? '100%' : 228,
+          minHeight: isCompact ? 'auto' : '100vh',
           background: '#fff',
-          borderRight: '1px solid #e5e7eb',
+          borderRight: isCompact ? 'none' : '1px solid #e5e7eb',
+          borderBottom: isCompact ? '1px solid #e5e7eb' : 'none',
           display: 'flex',
           flexDirection: 'column',
-          padding: '20px 12px',
-          position: 'fixed',
-          top: 0,
-          left: 0,
+          padding: isCompact ? '14px 12px' : '20px 12px',
+          position: isCompact ? 'relative' : 'fixed',
+          top: isCompact ? 'auto' : 0,
+          left: isCompact ? 'auto' : 0,
           zIndex: 50,
         }}
       >
-        <div style={{ padding: '4px 8px 24px', cursor: 'pointer' }} onClick={() => navigate(HOSPITAL_DASHBOARD_PATH)}>
+        <div style={{ padding: isCompact ? '4px 8px 14px' : '4px 8px 24px', cursor: 'pointer' }} onClick={() => navigate(HOSPITAL_DASHBOARD_PATH)}>
           <HIDLogo size="sm" />
         </div>
 
-        <nav style={{ display: 'flex', flexDirection: 'column', gap: 2, flex: 1 }}>
+        <nav
+          style={{
+            display: 'grid',
+            gridTemplateColumns: isCompact ? 'repeat(auto-fit, minmax(140px, 1fr))' : '1fr',
+            gap: 6,
+            flex: 1,
+          }}
+        >
           {hospitalNav.map(item => {
             const active = activeSection === item.section || (item.section === 'access' && pathname.startsWith('/hospital/patient-records/'))
             return (
@@ -108,15 +124,16 @@ export function HospitalLayout({
                 style={{
                   display: 'flex',
                   alignItems: 'center',
+                  justifyContent: isCompact ? 'center' : 'flex-start',
                   gap: 10,
-                  padding: '9px 12px',
-                  borderRadius: 8,
+                  padding: '10px 12px',
+                  borderRadius: 10,
                   border: 'none',
                   background: active ? '#e8f1fc' : 'transparent',
                   color: active ? '#1a6fd4' : '#374151',
                   fontWeight: active ? 600 : 400,
                   fontSize: 14,
-                  textAlign: 'left',
+                  textAlign: isCompact ? 'center' : 'left',
                   cursor: 'pointer',
                   transition: 'all 0.15s',
                   width: '100%',
@@ -129,7 +146,7 @@ export function HospitalLayout({
           })}
         </nav>
 
-        <div style={{ borderTop: '1px solid #e5e7eb', paddingTop: 16 }}>
+        <div style={{ borderTop: '1px solid #e5e7eb', paddingTop: 16, marginTop: 10 }}>
           {userName && (
             <div style={{ fontSize: 11, color: '#6b7280', padding: '0 8px 10px', lineHeight: 1.6 }}>
               <strong style={{ color: '#374151' }}>{userName}</strong>
@@ -162,19 +179,21 @@ export function HospitalLayout({
         </div>
       </aside>
 
-      <main style={{ marginLeft: 228, flex: 1, display: 'flex', flexDirection: 'column', minHeight: '100vh' }}>
+      <main style={{ marginLeft: isCompact ? 0 : 228, flex: 1, display: 'flex', flexDirection: 'column', minHeight: '100vh' }}>
         <div
           style={{
-            height: 64,
+            minHeight: 64,
             background: '#fff',
             borderBottom: '1px solid #e5e7eb',
             display: 'flex',
             alignItems: 'center',
-            padding: '0 32px',
+            padding: isCompact ? '14px 16px' : '0 32px',
             justifyContent: 'space-between',
             position: 'sticky',
             top: 0,
             zIndex: 40,
+            gap: 12,
+            flexWrap: 'wrap',
           }}
         >
           <div>
@@ -186,7 +205,7 @@ export function HospitalLayout({
           </div>
         </div>
 
-        <div style={{ flex: 1, padding: 32, background: '#f3f4f6' }}>{children}</div>
+        <div style={{ flex: 1, padding: isCompact ? 16 : 32, background: '#f3f4f6' }}>{children}</div>
       </main>
     </div>
   )

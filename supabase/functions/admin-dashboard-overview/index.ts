@@ -380,30 +380,23 @@ async function loadPosthogOverview(windowKey: OverviewWindow) {
   const intervalExpression = `INTERVAL ${config.posthogInterval}`
 
   try {
-    const [eventsResponse, uniqueUsersResponse, topEventsResponse, trendResponse, otpBreakdownResponse] = await Promise.all([
+    const [eventsResponse, uniqueUsersResponse, topEventsResponse, trendResponse, otpStartedResponse, otpCompletedResponse] = await Promise.all([
       runPosthogQuery(baseUrl, projectId, apiKey, `SELECT count() AS events FROM events WHERE timestamp >= now() - ${intervalExpression}`),
       runPosthogQuery(baseUrl, projectId, apiKey, `SELECT count(DISTINCT coalesce(person_id, distinct_id)) AS users FROM events WHERE timestamp >= now() - ${intervalExpression}`),
       runPosthogQuery(baseUrl, projectId, apiKey, `SELECT event AS name, count() AS total FROM events WHERE timestamp >= now() - ${intervalExpression} GROUP BY event ORDER BY total DESC LIMIT 8`),
       runPosthogQuery(baseUrl, projectId, apiKey, `SELECT ${bucketExpression} AS bucket, count() AS total FROM events WHERE timestamp >= now() - ${intervalExpression} GROUP BY bucket ORDER BY bucket ASC`),
-      runPosthogQuery(
-        baseUrl,
-        projectId,
-        apiKey,
-        `SELECT event AS name, count() AS total FROM events WHERE timestamp >= now() - ${intervalExpression} AND event IN (${toHogQlList([...POSTHOG_OTP_STARTED_EVENTS, ...POSTHOG_OTP_COMPLETED_EVENTS])}) GROUP BY event`
-      ),
+      runPosthogQuery(baseUrl, projectId, apiKey, `SELECT count(DISTINCT coalesce(person_id, distinct_id)) AS total FROM events WHERE timestamp >= now() - ${intervalExpression} AND event IN (${toHogQlList(POSTHOG_OTP_STARTED_EVENTS)})`),
+      runPosthogQuery(baseUrl, projectId, apiKey, `SELECT count(DISTINCT coalesce(person_id, distinct_id)) AS total FROM events WHERE timestamp >= now() - ${intervalExpression} AND event IN (${toHogQlList(POSTHOG_OTP_COMPLETED_EVENTS)})`),
     ])
 
     const eventRows = normalizeRows(eventsResponse)
     const userRows = normalizeRows(uniqueUsersResponse)
     const topEventRows = normalizeRows(topEventsResponse)
     const trendRows = normalizeRows(trendResponse)
-    const otpRows = normalizeRows(otpBreakdownResponse)
-    const otpCounts = new Map(otpRows.map(row => [
-      String(getRowValue(row, 'name') ?? ''),
-      parseNumeric(getRowValue(row, 'total')),
-    ]))
-    const otpStarted = POSTHOG_OTP_STARTED_EVENTS.reduce((sum, event) => sum + (otpCounts.get(event) ?? 0), 0)
-    const otpCompleted = POSTHOG_OTP_COMPLETED_EVENTS.reduce((sum, event) => sum + (otpCounts.get(event) ?? 0), 0)
+    const otpStartedRows = normalizeRows(otpStartedResponse)
+    const otpCompletedRows = normalizeRows(otpCompletedResponse)
+    const otpStarted = parseNumeric(getRowValue(otpStartedRows[0], 'total'))
+    const otpCompleted = parseNumeric(getRowValue(otpCompletedRows[0], 'total'))
 
     return {
       configured: true,
@@ -671,10 +664,10 @@ Deno.serve(req => withErrorHandling(req, async () => {
       message: `${failedLoginAttempts} failed login attempts were recorded in the current window.`,
       title: 'Failed login spike',
     } : null,
-    otpSuccessRate != null && otpSuccessRate < 70 ? {
+    otpSuccessRate != null && (posthog.otpStarted ?? 0) >= 10 && otpSuccessRate < 50 ? {
       id: 'otp-success-drop',
       level: 'warning' as const,
-      message: `OTP success rate is ${otpSuccessRate.toFixed(1)}%. Review delivery reliability and challenge expiry.`,
+      message: `OTP success rate is ${otpSuccessRate.toFixed(1)}%. Monitor verification drop-off and retry friction.`,
       title: 'OTP completion dropped',
     } : null,
     apiResponseTimeMs >= 800 ? {
