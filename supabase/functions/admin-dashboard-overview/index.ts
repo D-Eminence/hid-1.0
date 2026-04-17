@@ -21,6 +21,22 @@ type SentryIssue = {
   permalink: string | null
 }
 
+const POSTHOG_OTP_STARTED_EVENTS = [
+  'patient_signup_pending_verification',
+  'hospital_signup_pending_verification',
+  'patient_password_reset_requested',
+] as const
+
+const POSTHOG_OTP_COMPLETED_EVENTS = [
+  'patient_signup_completed',
+  'hospital_signup_completed',
+  'patient_password_reset_code_verified',
+] as const
+
+function toHogQlList(values: readonly string[]) {
+  return values.map(value => `'${value.replace(/'/g, "\\'")}'`).join(', ')
+}
+
 function normalizeIssueText(...values: Array<string | null | undefined>) {
   return values
     .map(value => (value ?? '').trim().toLowerCase())
@@ -287,12 +303,39 @@ function extractRows(payload: unknown) {
   return []
 }
 
+function getColumns(payload: unknown) {
+  if (payload && typeof payload === 'object') {
+    const record = payload as Record<string, unknown>
+    if (Array.isArray(record.columns)) {
+      return record.columns
+        .map(value => (typeof value === 'string' ? value : null))
+        .filter((value): value is string => Boolean(value))
+    }
+  }
+  return []
+}
+
+function normalizeRows(payload: unknown) {
+  const rows = extractRows(payload)
+  const columns = getColumns(payload)
+
+  if (columns.length === 0) return rows
+
+  return rows.map(row => {
+    if (!Array.isArray(row)) return row
+
+    return columns.reduce<Record<string, unknown>>((record, column, index) => {
+      record[column] = row[index] ?? null
+      return record
+    }, {})
+  })
+}
+
 function getRowValue(row: unknown, key: string) {
   if (row && typeof row === 'object' && !Array.isArray(row)) {
     const record = row as Record<string, unknown>
     return record[key]
   }
-  if (Array.isArray(row)) return row[0]
   return null
 }
 
@@ -323,6 +366,8 @@ async function loadPosthogOverview(windowKey: OverviewWindow) {
       events: null,
       externalUrl: null,
       message: 'Add POSTHOG_PERSONAL_API_KEY and POSTHOG_PROJECT_ID to Supabase secrets.',
+      otpCompleted: null,
+      otpStarted: null,
       projectLabel: null,
       topEvents: [] as Array<{ name: string; total: number }>,
       trend: [] as MetricPoint[],
@@ -335,23 +380,38 @@ async function loadPosthogOverview(windowKey: OverviewWindow) {
   const intervalExpression = `INTERVAL ${config.posthogInterval}`
 
   try {
-    const [eventsResponse, uniqueUsersResponse, topEventsResponse, trendResponse] = await Promise.all([
+    const [eventsResponse, uniqueUsersResponse, topEventsResponse, trendResponse, otpBreakdownResponse] = await Promise.all([
       runPosthogQuery(baseUrl, projectId, apiKey, `SELECT count() AS events FROM events WHERE timestamp >= now() - ${intervalExpression}`),
       runPosthogQuery(baseUrl, projectId, apiKey, `SELECT count(DISTINCT coalesce(person_id, distinct_id)) AS users FROM events WHERE timestamp >= now() - ${intervalExpression}`),
       runPosthogQuery(baseUrl, projectId, apiKey, `SELECT event AS name, count() AS total FROM events WHERE timestamp >= now() - ${intervalExpression} GROUP BY event ORDER BY total DESC LIMIT 8`),
       runPosthogQuery(baseUrl, projectId, apiKey, `SELECT ${bucketExpression} AS bucket, count() AS total FROM events WHERE timestamp >= now() - ${intervalExpression} GROUP BY bucket ORDER BY bucket ASC`),
+      runPosthogQuery(
+        baseUrl,
+        projectId,
+        apiKey,
+        `SELECT event AS name, count() AS total FROM events WHERE timestamp >= now() - ${intervalExpression} AND event IN (${toHogQlList([...POSTHOG_OTP_STARTED_EVENTS, ...POSTHOG_OTP_COMPLETED_EVENTS])}) GROUP BY event`
+      ),
     ])
 
-    const eventRows = extractRows(eventsResponse)
-    const userRows = extractRows(uniqueUsersResponse)
-    const topEventRows = extractRows(topEventsResponse)
-    const trendRows = extractRows(trendResponse)
+    const eventRows = normalizeRows(eventsResponse)
+    const userRows = normalizeRows(uniqueUsersResponse)
+    const topEventRows = normalizeRows(topEventsResponse)
+    const trendRows = normalizeRows(trendResponse)
+    const otpRows = normalizeRows(otpBreakdownResponse)
+    const otpCounts = new Map(otpRows.map(row => [
+      String(getRowValue(row, 'name') ?? ''),
+      parseNumeric(getRowValue(row, 'total')),
+    ]))
+    const otpStarted = POSTHOG_OTP_STARTED_EVENTS.reduce((sum, event) => sum + (otpCounts.get(event) ?? 0), 0)
+    const otpCompleted = POSTHOG_OTP_COMPLETED_EVENTS.reduce((sum, event) => sum + (otpCounts.get(event) ?? 0), 0)
 
     return {
       configured: true,
       events: parseNumeric(getRowValue(eventRows[0], 'events')),
       externalUrl: `${baseUrl}/project/${encodeURIComponent(projectId)}/insights`,
       message: null,
+      otpCompleted,
+      otpStarted,
       projectLabel: `Project ${projectId}`,
       topEvents: topEventRows.map(row => ({
         name: String(getRowValue(row, 'name') ?? 'Unknown event'),
@@ -369,6 +429,8 @@ async function loadPosthogOverview(windowKey: OverviewWindow) {
       events: null,
       externalUrl: `${baseUrl}/project/${encodeURIComponent(projectId)}/insights`,
       message: error instanceof Error ? error.message : 'Unable to load PostHog overview right now.',
+      otpCompleted: null,
+      otpStarted: null,
       projectLabel: `Project ${projectId}`,
       topEvents: [] as Array<{ name: string; total: number }>,
       trend: [] as MetricPoint[],
@@ -576,7 +638,10 @@ Deno.serve(req => withErrorHandling(req, async () => {
 
   const challenges = (authChallengesResponse.data ?? []) as Array<Record<string, unknown>>
   const otpCompleted = challenges.filter(challenge => Boolean(challenge.verified_at)).length
-  const otpSuccessRate = challenges.length === 0 ? null : Number(((otpCompleted / challenges.length) * 100).toFixed(1))
+  const posthogOtpSuccessRate = posthog.otpStarted && posthog.otpStarted > 0
+    ? Number(((Number(posthog.otpCompleted ?? 0) / Number(posthog.otpStarted)) * 100).toFixed(1))
+    : null
+  const otpSuccessRate = posthogOtpSuccessRate ?? (challenges.length === 0 ? null : Number(((otpCompleted / challenges.length) * 100).toFixed(1)))
 
   const accountCreated = profileRows.filter(profile => isOnOrAfter(profile.created_at as string | null, periodStart)).length
   const firstRecordUploaded = new Set(windowRecordRows.map(record => String(record.patient_id ?? '')).filter(Boolean)).size

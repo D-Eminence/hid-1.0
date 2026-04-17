@@ -272,6 +272,8 @@ export default function AdminDashboard() {
   const verifiedRate = data?.users.totalUsers ? (data.users.verifiedUsers / data.users.totalUsers) * 100 : null
   const sentryConfigured = Boolean(data?.sentry.configured)
   const posthogConfigured = Boolean(data?.posthog.configured)
+  const otpSuccessLabel = data?.security.otpSuccessRate == null ? 'No recent OTP activity' : 'Verification completion rate'
+  const otpSuccessHelper = data?.security.otpSuccessRate == null ? 'This updates after signup or reset OTP events are recorded.' : 'OTP completion performance'
   const deploymentReadinessCards = [
     { label: 'Frontend Hosting', value: 'Vercel production deployment is active.', ready: true },
     { label: 'Domain & CDN', value: 'Custom domain is serving through Vercel and Cloudflare.', ready: true },
@@ -450,7 +452,7 @@ export default function AdminDashboard() {
             <AdminMetricCard accent="var(--admin-accent)" icon={metricIcon('uptime')} title="Uptime" value={data?.system.uptimePercent ?? null} valueFormatter={formatPercentage} trendLabel="Service health snapshot" trendTone="positive" helper="Observed availability" />
             <AdminMetricCard accent="var(--admin-accent)" icon={metricIcon('failed', 'var(--admin-danger)')} title="Failed Requests" value={data?.system.failedRequests ?? null} trendLabel="Issue-linked failures" trendTone="critical" helper="Failed request count" />
             <AdminMetricCard accent="var(--admin-accent)" icon={metricIcon('lock', 'var(--admin-danger)')} title="Failed Logins" value={data?.security.failedLoginAttempts ?? null} trendLabel="Selected window" trendTone="critical" helper="Failed login attempts" />
-            <AdminMetricCard accent="var(--admin-accent)" icon={metricIcon('check')} title="OTP Success" value={data?.security.otpSuccessRate ?? null} valueFormatter={formatPercentage} trendLabel="Verification completion rate" trendTone={(data?.security.otpSuccessRate ?? 0) < 70 ? 'warning' : 'positive'} helper="OTP completion performance" />
+            <AdminMetricCard accent="var(--admin-accent)" icon={metricIcon('check')} title="OTP Success" value={data?.security.otpSuccessRate ?? null} valueFormatter={formatPercentage} trendLabel={otpSuccessLabel} trendTone={data?.security.otpSuccessRate == null ? 'neutral' : (data.security.otpSuccessRate < 70 ? 'warning' : 'positive')} helper={otpSuccessHelper} />
             <AdminMetricCard accent="var(--admin-accent)" icon={metricIcon('shield')} title="Suspicious Activity" value={data?.security.suspiciousActivityCount ?? null} trendLabel="Break-glass and auth spikes" trendTone={(data?.security.suspiciousActivityCount ?? 0) > 0 ? 'warning' : 'positive'} helper="Security anomaly count" />
           </div>
         </section>
