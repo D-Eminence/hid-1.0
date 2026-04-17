@@ -20,7 +20,7 @@ import {
 import { trackEvent } from '../../lib/observability'
 import { preloadRoutesAfterDelay } from '../../lib/routePreload'
 import { supabase } from '../../lib/supabase'
-import { COUNTRIES, PASSWORD_REQUIREMENTS_TEXT, STATES_BY_COUNTRY, isStrongPassword } from '../../lib/utils'
+import { COUNTRIES, PASSWORD_REQUIREMENTS_TEXT, STATES_BY_COUNTRY, isStrongPassword, maskEmailAddress } from '../../lib/utils'
 
 type DoctorStep = 'login' | 'signup' | 'verify' | 'forgot' | 'reset'
 const TURNSTILE_ENABLED = Boolean(import.meta.env.VITE_TURNSTILE_SITE_KEY)
@@ -362,7 +362,7 @@ export default function DoctorAuth() {
               {!forgotCodeSent
                 ? 'Enter the email linked to your hospital account and we will send a verification code.'
                 : !forgotOtpVerified
-                ? `We sent a 6-digit code to ${forgot.email || 'your email address'}.`
+                ? `We sent a 6-digit code to ${maskEmailAddress(forgot.email) || 'your email address'}.`
                 : 'Verification complete. Enter your new password below.'}
             </p>
           </div>
@@ -415,7 +415,7 @@ export default function DoctorAuth() {
           <div style={{ textAlign: 'center' }}>
             <div style={{ fontSize: 30, fontWeight: 700 }}>Enter verification code</div>
             <p style={{ color: '#7d8797', marginTop: 10, fontSize: 12, lineHeight: 1.6 }}>
-              We sent a 6-digit code to {signupVerification.email || 'your email address'}. Enter it here to finish creating the hospital account.
+              We sent a 6-digit code to {maskEmailAddress(signupVerification.email) || 'your email address'}. Enter it here to finish creating the hospital account.
             </p>
           </div>
           <div style={{ marginTop: 24 }}>

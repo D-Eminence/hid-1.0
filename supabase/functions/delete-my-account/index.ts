@@ -1,8 +1,15 @@
 import { createAdminClient, requireUser } from '../_shared/auth.ts'
-import { HttpError, json, withErrorHandling } from '../_shared/http.ts'
+import { HttpError, json, readJson, withErrorHandling } from '../_shared/http.ts'
+import { consumeAccountDeletionChallenge } from '../_shared/otp.ts'
+import { asTrimmedString } from '../_shared/validation.ts'
 
 const RECORD_FILE_BUCKET = 'medical-record-files'
 const STORAGE_CHUNK_SIZE = 100
+
+type Payload = {
+  challengeId: string
+  verificationToken: string
+}
 
 async function listStoragePathsForPatient(adminClient: ReturnType<typeof createAdminClient>, patientId: string) {
   const { data, error } = await adminClient
@@ -65,6 +72,9 @@ Deno.serve(req => withErrorHandling(req, async () => {
 
   const { user } = await requireUser(req)
   const adminClient = createAdminClient()
+  const body = await readJson<Payload>(req)
+  const challengeId = asTrimmedString(body.challengeId, 'challengeId')
+  const verificationToken = asTrimmedString(body.verificationToken, 'verificationToken')
 
   const profileResult = await adminClient
     .from('hid_user_profiles')
@@ -77,6 +87,12 @@ Deno.serve(req => withErrorHandling(req, async () => {
   if (profileResult.data.app_role === 'platform_admin') {
     throw new HttpError(403, 'Platform admin accounts cannot be deleted here.')
   }
+
+  await consumeAccountDeletionChallenge(adminClient, {
+    authUserId: user.id,
+    challengeId,
+    verificationToken,
+  })
 
   const profileId = profileResult.data.id
 

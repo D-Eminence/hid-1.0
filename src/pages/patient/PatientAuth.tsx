@@ -18,7 +18,7 @@ import {
 } from '../../lib/hidApi'
 import { trackEvent } from '../../lib/observability'
 import { preloadRoutesAfterDelay } from '../../lib/routePreload'
-import { PASSWORD_REQUIREMENTS_TEXT, isStrongPassword } from '../../lib/utils'
+import { PASSWORD_REQUIREMENTS_TEXT, isStrongPassword, maskEmailAddress } from '../../lib/utils'
 
 type Step = 'signup' | 'password' | 'verify' | 'success' | 'signin' | 'forgot'
 
@@ -504,7 +504,7 @@ export default function PatientAuth() {
           <div style={{ textAlign: 'center' }}>
             <div style={{ fontSize: 30, fontWeight: 700, color: '#111827' }}>Enter verification code</div>
             <p style={{ color: '#7d8797', marginTop: 10, fontSize: 12, lineHeight: 1.6 }}>
-              We sent a 6-digit code to {signupVerification.email || 'your email address'}. Enter it here to finish creating your HID account.
+              We sent a 6-digit code to {maskEmailAddress(signupVerification.email) || 'your email address'}. Enter it here to finish creating your HID account.
             </p>
           </div>
           <div style={{ marginTop: 24 }}>

@@ -2,9 +2,9 @@ begin;
 
 create table if not exists public.hid_auth_challenges (
   id uuid primary key default gen_random_uuid(),
-  patient_id uuid not null references public.hid_patients(id) on delete cascade,
+  patient_id uuid references public.hid_patients(id) on delete cascade,
   auth_user_id uuid not null references auth.users(id) on delete cascade,
-  challenge_type text not null check (challenge_type in ('patient_password_reset')),
+  challenge_type text not null check (challenge_type in ('patient_password_reset', 'account_deletion')),
   otp_hash text not null,
   otp_length integer not null check (otp_length between 4 and 10),
   delivery_channels jsonb not null default '[]'::jsonb,

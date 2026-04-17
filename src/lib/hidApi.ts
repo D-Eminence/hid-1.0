@@ -70,6 +70,18 @@ type PasswordResetVerifyResponse = {
   verificationToken: string
 }
 
+type AccountDeletionStartResponse = {
+  challengeId: string
+  deliveryChannels: Array<'email'>
+  expiresAt: string
+  maskedEmail: string | null
+}
+
+type AccountDeletionVerifyResponse = {
+  challengeId: string
+  verificationToken: string
+}
+
 type RecordCreationResponse = {
   record_id: string
   version_id: string
@@ -1229,9 +1241,29 @@ export async function updateCurrentUserPassword(password: string) {
   }
 }
 
-export async function deleteMyAccount() {
+export async function startAccountDeletion() {
+  return edgeRequest<AccountDeletionStartResponse>('account-delete-start', {
+    method: 'POST',
+  })
+}
+
+export async function verifyAccountDeletionCode(challengeId: string, code: string) {
+  return edgeRequest<AccountDeletionVerifyResponse>('account-delete-verify', {
+    method: 'POST',
+    body: {
+      challengeId,
+      code,
+    },
+  })
+}
+
+export async function deleteMyAccount(challengeId: string, verificationToken: string) {
   await edgeRequest<{ deleted: true }>('delete-my-account', {
     method: 'POST',
+    body: {
+      challengeId,
+      verificationToken,
+    },
   })
 
   await resetAuthState()

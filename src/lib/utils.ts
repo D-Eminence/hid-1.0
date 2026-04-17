@@ -160,6 +160,16 @@ export function getHospitalInitials(name: string | null | undefined): string {
   return letters || 'HO'
 }
 
+export function maskEmailAddress(value: string | null | undefined): string {
+  const trimmed = `${value ?? ''}`.trim().toLowerCase()
+  if (!trimmed) return ''
+
+  const [localPart, domainPart] = trimmed.split('@')
+  if (!localPart || !domainPart) return trimmed
+  if (localPart.length <= 2) return `${localPart[0] ?? '*'}***@${domainPart}`
+  return `${localPart.slice(0, 2)}***@${domainPart}`
+}
+
 export function getAccessLogLabel(log: Pick<AccessLog, 'access_type' | 'reason'>): string {
   const reason = `${log.reason ?? ''}`.toLowerCase()
   if (reason.includes('revoked')) return 'Revoked'

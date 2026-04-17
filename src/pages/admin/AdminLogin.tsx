@@ -7,7 +7,7 @@ import { clearAllPortalSessions, signOutAndClearSessions } from '../../lib/auth'
 import { ADMIN_LOGIN_PATH, ADMIN_OVERVIEW_PATH } from '../../lib/adminRoutes'
 import { startAdminPasswordResetOtp, updateCurrentUserPassword, verifyAdminPasswordResetOtp } from '../../lib/hidApi'
 import { supabase } from '../../lib/supabase'
-import { isStrongPassword, PASSWORD_REQUIREMENTS_TEXT } from '../../lib/utils'
+import { isStrongPassword, maskEmailAddress, PASSWORD_REQUIREMENTS_TEXT } from '../../lib/utils'
 
 async function getCurrentAppRole() {
   const { data } = await supabase.auth.getUser()
@@ -179,7 +179,7 @@ export default function AdminLogin() {
           <div style={{ color: '#6b7280', fontSize: 13, lineHeight: 1.6 }}>
             {!otpSent
               ? 'Enter the platform admin email and we will send a verification code if the account is eligible.'
-              : `We sent a 6-digit code to ${email || 'your email address'}.`}
+              : `We sent a 6-digit code to ${maskEmailAddress(email) || 'your email address'}.`}
           </div>
           {!otpSent ? (
             <>

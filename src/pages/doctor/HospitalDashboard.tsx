@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
+import { OtpInputs } from '../../components/OtpInputs'
 import { Badge, Button, Card, Input, Modal, PageLoader, showToast } from '../../components/ui'
 import { HospitalLayout } from '../../components/HospitalLayout'
 import { getStaffSession, signOutAndClearSessions } from '../../lib/auth'
@@ -10,7 +11,7 @@ import {
   HOSPITAL_HISTORY_PATH,
   getHospitalPatientRecordsPath,
 } from '../../lib/hospitalRoutes'
-import { deleteMyAccount, fetchStaffDashboard } from '../../lib/hidApi'
+import { deleteMyAccount, fetchStaffDashboard, startAccountDeletion, verifyAccountDeletionCode } from '../../lib/hidApi'
 import { formatDateTime } from '../../lib/utils'
 import type { HidStaffDashboardResponse } from '../../types/hid'
 
@@ -35,6 +36,12 @@ export default function HospitalDashboard() {
   const [loading, setLoading] = useState(true)
   const [deleteModalOpen, setDeleteModalOpen] = useState(false)
   const [deleteConfirmText, setDeleteConfirmText] = useState('')
+  const [deleteChallengeId, setDeleteChallengeId] = useState('')
+  const [deleteMaskedEmail, setDeleteMaskedEmail] = useState('')
+  const [deleteOtp, setDeleteOtp] = useState('')
+  const [deleteVerificationToken, setDeleteVerificationToken] = useState('')
+  const [sendingDeleteOtp, setSendingDeleteOtp] = useState(false)
+  const [verifyingDeleteOtp, setVerifyingDeleteOtp] = useState(false)
   const [deletingAccount, setDeletingAccount] = useState(false)
 
   useEffect(() => {
@@ -63,15 +70,67 @@ export default function HospitalDashboard() {
     navigate(HOSPITAL_AUTH_PATH)
   }
 
-  async function confirmPermanentDelete() {
+  function resetDeleteFlow() {
+    setDeleteConfirmText('')
+    setDeleteChallengeId('')
+    setDeleteMaskedEmail('')
+    setDeleteOtp('')
+    setDeleteVerificationToken('')
+    setSendingDeleteOtp(false)
+    setVerifyingDeleteOtp(false)
+    setDeletingAccount(false)
+  }
+
+  async function requestDeleteOtp() {
     if (deleteConfirmText.trim().toUpperCase() !== 'DELETE') {
       showToast('Type DELETE to confirm permanent account removal.', 'error')
       return
     }
 
+    setSendingDeleteOtp(true)
+    try {
+      const result = await startAccountDeletion()
+      setDeleteChallengeId(result.challengeId)
+      setDeleteMaskedEmail(result.maskedEmail ?? '')
+      setDeleteOtp('')
+      setDeleteVerificationToken('')
+      showToast(`We sent a 6-digit code to ${result.maskedEmail || 'your email address'}.`, 'success')
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Unable to send a verification code right now.'
+      showToast(message, 'error')
+    } finally {
+      setSendingDeleteOtp(false)
+    }
+  }
+
+  async function verifyDeleteOtp(nextCode = deleteOtp) {
+    if (nextCode.trim().length !== 6 || !deleteChallengeId) {
+      showToast('Enter the full 6-digit verification code first.', 'error')
+      return
+    }
+
+    setVerifyingDeleteOtp(true)
+    try {
+      const result = await verifyAccountDeletionCode(deleteChallengeId, nextCode.trim())
+      setDeleteVerificationToken(result.verificationToken)
+      showToast('Verification complete. You can now delete this hospital account.', 'success')
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'The verification code is not correct.'
+      showToast(message, 'error')
+    } finally {
+      setVerifyingDeleteOtp(false)
+    }
+  }
+
+  async function confirmPermanentDelete() {
+    if (!deleteChallengeId || !deleteVerificationToken) {
+      showToast('Verify the 6-digit code before deleting this account.', 'error')
+      return
+    }
+
     setDeletingAccount(true)
     try {
-      await deleteMyAccount()
+      await deleteMyAccount(deleteChallengeId, deleteVerificationToken)
       showToast('Your hospital account has been permanently deleted.', 'success')
       navigate(HOSPITAL_AUTH_PATH, { replace: true })
     } catch (error) {
@@ -289,7 +348,7 @@ export default function HospitalDashboard() {
             variant="danger"
             style={{ marginTop: 14 }}
             onClick={() => {
-              setDeleteConfirmText('')
+              resetDeleteFlow()
               setDeleteModalOpen(true)
             }}
           >
@@ -298,26 +357,67 @@ export default function HospitalDashboard() {
         </Card>
       </div>
 
-      <Modal open={deleteModalOpen} onClose={() => { if (!deletingAccount) setDeleteModalOpen(false) }} title="Delete hospital account permanently" width={520}>
+      <Modal open={deleteModalOpen} onClose={() => { if (!sendingDeleteOtp && !verifyingDeleteOtp && !deletingAccount) setDeleteModalOpen(false) }} title="Delete hospital account permanently" width={520}>
         <div style={{ display: 'grid', gap: 16 }}>
-          <div style={{ color: '#4b5563', fontSize: 13, lineHeight: 1.7 }}>
-            This permanently removes the hospital account, ends its access, and deletes the records created by this account. This action cannot be undone.
-          </div>
-          <Input
-            label='Type "DELETE" to confirm'
-            value={deleteConfirmText}
-            onChange={event => setDeleteConfirmText(event.target.value)}
-            placeholder="DELETE"
-            autoComplete="off"
-          />
-          <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10, flexWrap: 'wrap' }}>
-            <Button variant="outline" onClick={() => setDeleteModalOpen(false)} disabled={deletingAccount}>
-              Cancel
-            </Button>
-            <Button variant="danger" loading={deletingAccount} onClick={() => void confirmPermanentDelete()}>
-              Delete permanently
-            </Button>
-          </div>
+          {!deleteChallengeId ? (
+            <>
+              <div style={{ color: '#4b5563', fontSize: 13, lineHeight: 1.7 }}>
+                This permanently removes the hospital account, ends its access, and deletes the records created by this account. This action cannot be undone. Type DELETE, then we will send a 6-digit verification code to your email.
+              </div>
+              <Input
+                label='Type "DELETE" to confirm'
+                value={deleteConfirmText}
+                onChange={event => setDeleteConfirmText(event.target.value)}
+                placeholder="DELETE"
+                autoComplete="off"
+              />
+              <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10, flexWrap: 'wrap' }}>
+                <Button variant="outline" onClick={() => setDeleteModalOpen(false)} disabled={sendingDeleteOtp}>
+                  Cancel
+                </Button>
+                <Button variant="danger" loading={sendingDeleteOtp} onClick={() => void requestDeleteOtp()}>
+                  Send OTP
+                </Button>
+              </div>
+            </>
+          ) : !deleteVerificationToken ? (
+            <>
+              <div style={{ color: '#4b5563', fontSize: 13, lineHeight: 1.7 }}>
+                We sent a 6-digit code to {deleteMaskedEmail || 'your email address'}. Enter it below to confirm permanent account deletion.
+              </div>
+              <OtpInputs value={deleteOtp} onChange={setDeleteOtp} onComplete={verifyDeleteOtp} />
+              <div style={{ display: 'flex', justifyContent: 'space-between', gap: 10, flexWrap: 'wrap' }}>
+                <button
+                  onClick={() => void requestDeleteOtp()}
+                  style={{ border: 'none', background: 'none', color: '#1f8cff', fontSize: 12, cursor: 'pointer', padding: 0 }}
+                >
+                  Send code again
+                </button>
+                <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
+                  <Button variant="outline" onClick={() => setDeleteModalOpen(false)} disabled={verifyingDeleteOtp || sendingDeleteOtp}>
+                    Cancel
+                  </Button>
+                  <Button variant="danger" loading={verifyingDeleteOtp} onClick={() => void verifyDeleteOtp()}>
+                    Verify code
+                  </Button>
+                </div>
+              </div>
+            </>
+          ) : (
+            <>
+              <div style={{ color: '#4b5563', fontSize: 13, lineHeight: 1.7 }}>
+                Verification complete. Deleting this hospital account will permanently remove its access history, dashboard data, and records created by this account.
+              </div>
+              <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10, flexWrap: 'wrap' }}>
+                <Button variant="outline" onClick={() => setDeleteModalOpen(false)} disabled={deletingAccount}>
+                  Cancel
+                </Button>
+                <Button variant="danger" loading={deletingAccount} onClick={() => void confirmPermanentDelete()}>
+                  Delete permanently
+                </Button>
+              </div>
+            </>
+          )}
         </div>
       </Modal>
     </HospitalLayout>
