@@ -42,6 +42,8 @@ export default function PatientProfile() {
   const [patient, setPatient] = useState<Patient | null>(null)
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
+  const [savedOnce, setSavedOnce] = useState(false)
+  const [savedProfileSnapshot, setSavedProfileSnapshot] = useState('')
   const [uploadingPhoto, setUploadingPhoto] = useState(false)
   const [profileConfirmed, setProfileConfirmed] = useState(false)
   const [accessPinDraft, setAccessPinDraft] = useState('')
@@ -75,6 +77,7 @@ export default function PatientProfile() {
         if (!active) return
         setPatient(nextPatient)
         setDobInput(formatDate(nextPatient.dob))
+        setSavedProfileSnapshot(buildProfileSnapshot(nextPatient, formatDate(nextPatient.dob), ''))
       } catch (error) {
         const message = error instanceof Error ? error.message : 'Unable to load your profile.'
         showToast(message, 'error')
@@ -86,6 +89,12 @@ export default function PatientProfile() {
 
     return () => { active = false }
   }, [navigate, session])
+
+  const hasPendingProfileChanges = useMemo(() => {
+    if (!patient) return false
+
+    return buildProfileSnapshot(patient, dobInput, accessPinDraft) !== savedProfileSnapshot
+  }, [accessPinDraft, dobInput, patient, savedProfileSnapshot])
 
   async function logout() {
     await signOutAndClearSessions()
@@ -109,6 +118,7 @@ export default function PatientProfile() {
     try {
       const nextPatient = await updateMyPatientProfile({ photo_url: validation.dataUrl })
       setPatient(nextPatient)
+      setSavedProfileSnapshot(buildProfileSnapshot(nextPatient, formatDate(nextPatient.dob), accessPinDraft))
       showToast('Profile photo updated.', 'success')
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Unable to update your profile photo.'
@@ -120,6 +130,10 @@ export default function PatientProfile() {
 
   async function saveProfile() {
     if (!patient || saving) return
+    if (savedOnce && !hasPendingProfileChanges) {
+      window.scrollTo({ top: 0, behavior: 'smooth' })
+      return
+    }
     if (!profileConfirmed) {
       showToast('Confirm that the information provided is correct before saving.', 'error')
       return
@@ -161,12 +175,15 @@ export default function PatientProfile() {
 
       setPatient(nextPatient)
       setAccessPinDraft('')
+      setSavedProfileSnapshot(buildProfileSnapshot(nextPatient, formatDate(nextPatient.dob), ''))
       setPatientSession({
         hidCode: nextPatient.hid_code,
         phone: nextPatient.phone ?? '',
         fullName: nextPatient.full_name,
       })
+      setSavedOnce(true)
       showToast('Profile saved.', 'success')
+      window.scrollTo({ top: 0, behavior: 'smooth' })
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Unable to save your profile.'
       showToast(message, 'error')
@@ -472,7 +489,9 @@ export default function PatientProfile() {
               <div style={{ color: '#6b7280', fontSize: 12 }}>
                 Profile completion: {liveProfilePercent}%
               </div>
-              <Button loading={saving} onClick={saveProfile}>Save</Button>
+              <Button loading={saving} onClick={saveProfile}>
+                {savedOnce && !hasPendingProfileChanges ? 'Edit' : 'Save'}
+              </Button>
             </div>
 
             <label style={{ display: 'flex', alignItems: 'flex-start', gap: 8, marginTop: 14, color: '#4b5563', fontSize: 12 }}>
@@ -618,6 +637,33 @@ function calculateProfilePercent(patient: Patient, parsedDob: string | null, acc
     accessPinConfigured ? 'configured' : null,
   ]
   return Math.round((requiredFields.filter(Boolean).length / requiredFields.length) * 100)
+}
+
+function buildProfileSnapshot(patient: Patient, dobValue: string, accessPinDraft: string) {
+  return JSON.stringify({
+    first_name: patient.first_name ?? '',
+    last_name: patient.last_name ?? '',
+    full_name: patient.full_name ?? '',
+    phone: patient.phone ?? '',
+    email: normalizePatientEmail(patient.email),
+    gender: patient.gender ?? '',
+    dob: parseDisplayDate(dobValue) ?? '',
+    blood_group: patient.blood_group ?? '',
+    genotype: patient.genotype ?? '',
+    country: patient.country ?? '',
+    state: patient.state ?? '',
+    allergies: patient.allergies ?? '',
+    chronic_conditions: patient.chronic_conditions ?? '',
+    current_medications: patient.current_medications ?? '',
+    photo_url: patient.photo_url ?? '',
+    emergency_contact_name: patient.emergency_contact_name ?? '',
+    emergency_contact_relationship: patient.emergency_contact_relationship ?? '',
+    emergency_contact_phone: patient.emergency_contact_phone ?? '',
+    emergency_contact_address: patient.emergency_contact_address ?? '',
+    medical_notes: patient.medical_notes ?? '',
+    notifications_enabled: Boolean(patient.notifications_enabled),
+    access_pin_draft: accessPinDraft.trim(),
+  })
 }
 
 function normalizePatientEmail(value: string | null | undefined) {

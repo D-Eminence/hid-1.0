@@ -95,12 +95,22 @@ type HistoryView = {
 
 const RECORD_FILE_BUCKET = 'medical-record-files'
 const VIEW_CACHE_TTL_MS = 12000
+const RECENT_RECORD_SAVE_TTL_MS = 5 * 60 * 1000
+const RECORD_UPLOAD_TIMEOUT_MS = 90000
+const RECORD_UPLOAD_RETRY_COUNT = 3
 const inflightRecordSaves = new Map<string, Promise<RecordCreationResponse>>()
+const recentRecordSaves = new Map<string, RecentRecordSaveEntry>()
 
 type ViewCacheEntry<T> = {
   expiresAt: number
   promise?: Promise<T>
   value?: T
+}
+
+type RecentRecordSaveEntry = {
+  expiresAt: number
+  result: RecordCreationResponse
+  uploadedFileKeys: Set<string>
 }
 
 const viewCache = new Map<string, ViewCacheEntry<unknown>>()
@@ -704,12 +714,78 @@ function toLegacyMedicalRecord(
 }
 
 async function dataUrlToBlob(dataUrl: string) {
-  const response = await fetchWithTimeout(dataUrl)
-  return response.blob()
+  const match = dataUrl.match(/^data:([^;,]+)?(;base64)?,(.*)$/)
+  if (!match) {
+    const response = await fetchWithTimeout(dataUrl)
+    return response.blob()
+  }
+
+  const mimeType = match[1] || 'application/octet-stream'
+  const isBase64 = Boolean(match[2])
+  const payload = match[3] ?? ''
+
+  if (isBase64) {
+    const binary = atob(payload)
+    const bytes = new Uint8Array(binary.length)
+    for (let index = 0; index < binary.length; index += 1) {
+      bytes[index] = binary.charCodeAt(index)
+    }
+    return new Blob([bytes], { type: mimeType })
+  }
+
+  return new Blob([decodeURIComponent(payload)], { type: mimeType })
 }
 
 function delay(ms: number) {
   return new Promise(resolve => window.setTimeout(resolve, ms))
+}
+
+function buildUploadDraftKey(upload: UploadDraft) {
+  return `${upload.file_name}:${upload.file_type ?? ''}:${upload.file_data_url.length}`
+}
+
+function pruneRecentRecordSaves() {
+  const now = Date.now()
+  for (const [key, value] of recentRecordSaves.entries()) {
+    if (value.expiresAt <= now) {
+      recentRecordSaves.delete(key)
+    }
+  }
+}
+
+async function fetchWithManualTimeout(input: RequestInfo | URL, init: RequestInit, timeoutMs: number) {
+  const controller = new AbortController()
+  const timeoutId = window.setTimeout(() => controller.abort(new Error(NETWORK_TIMEOUT_MESSAGE)), timeoutMs)
+  try {
+    return await fetch(input, {
+      ...init,
+      signal: controller.signal,
+    })
+  } catch (error) {
+    if (controller.signal.aborted) {
+      throw new HidApiError(408, NETWORK_TIMEOUT_MESSAGE, error)
+    }
+    throw error
+  } finally {
+    window.clearTimeout(timeoutId)
+  }
+}
+
+async function retryRecordUpload<T>(operation: () => Promise<T>) {
+  let lastError: unknown = null
+  for (let attempt = 0; attempt < RECORD_UPLOAD_RETRY_COUNT; attempt += 1) {
+    try {
+      return await operation()
+    } catch (error) {
+      if (error instanceof HidApiError && [400, 401, 403, 404, 409, 422].includes(error.status)) {
+        throw error
+      }
+      lastError = error
+      if (attempt === RECORD_UPLOAD_RETRY_COUNT - 1) break
+      await delay(400 * (attempt + 1))
+    }
+  }
+  throw lastError instanceof Error ? lastError : new HidApiError(502, 'Unable to finish uploading the attached files right now.')
 }
 
 export async function fetchPatientProfileBundle() {
@@ -954,9 +1030,10 @@ export async function createMedicalRecordWithUploads({
   notes?: string | null
   uploads?: UploadDraft[]
 }) {
+  pruneRecentRecordSaves()
   const normalizedNotes = normalizeOptionalText(notes)
   const uploadsFingerprint = (uploads ?? [])
-    .map(upload => `${upload.file_name}:${upload.file_type ?? ''}:${upload.file_data_url.length}`)
+    .map(buildUploadDraftKey)
     .join('|')
   const requestKey = [
     patientIdentifier.trim().toUpperCase(),
@@ -973,25 +1050,37 @@ export async function createMedicalRecordWithUploads({
   }
 
   const request = (async () => {
-    const created = await edgeRequest<RecordCreationResponse>('records-create', {
-      method: 'POST',
-      body: {
-        patientIdentifier,
-        title,
-        category,
-        record,
-        notes: normalizedNotes,
-      },
-    })
+    let saveEntry = recentRecordSaves.get(requestKey)
+    if (!saveEntry || saveEntry.expiresAt <= Date.now()) {
+      const created = await edgeRequest<RecordCreationResponse>('records-create', {
+        method: 'POST',
+        body: {
+          patientIdentifier,
+          title,
+          category,
+          record,
+          notes: normalizedNotes,
+        },
+      })
+
+      saveEntry = {
+        expiresAt: Date.now() + RECENT_RECORD_SAVE_TTL_MS,
+        result: created,
+        uploadedFileKeys: new Set<string>(),
+      }
+      recentRecordSaves.set(requestKey, saveEntry)
+    }
 
     if (uploads && uploads.length > 0) {
-      await uploadRecordFiles(created.record_id, uploads)
+      await uploadRecordFiles(saveEntry.result.record_id, uploads, saveEntry.uploadedFileKeys)
     }
 
     invalidateViewCache('records:')
     invalidateViewCache('history:')
     invalidateViewCache('staff-dashboard:')
-    return created
+    saveEntry.expiresAt = Date.now() + RECENT_RECORD_SAVE_TTL_MS
+    recentRecordSaves.set(requestKey, saveEntry)
+    return saveEntry.result
   })()
 
   inflightRecordSaves.set(requestKey, request)
@@ -1003,40 +1092,47 @@ export async function createMedicalRecordWithUploads({
   }
 }
 
-export async function uploadRecordFiles(recordId: string, uploads: UploadDraft[]) {
-  await Promise.all(uploads.map(async upload => {
-    const signed = await edgeRequest<SignedUploadResponse>('files-sign-upload', {
-      method: 'POST',
-      body: {
-        recordId,
-        fileName: upload.file_name,
-      },
+export async function uploadRecordFiles(recordId: string, uploads: UploadDraft[], uploadedFileKeys = new Set<string>()) {
+  for (const upload of uploads) {
+    const uploadKey = buildUploadDraftKey(upload)
+    if (uploadedFileKeys.has(uploadKey)) continue
+
+    await retryRecordUpload(async () => {
+      const signed = await edgeRequest<SignedUploadResponse>('files-sign-upload', {
+        method: 'POST',
+        body: {
+          recordId,
+          fileName: upload.file_name,
+        },
+      })
+
+      const blob = await dataUrlToBlob(upload.file_data_url)
+      const uploadResponse = await fetchWithManualTimeout(signed.signedUrl, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': upload.file_type ?? 'application/octet-stream',
+        },
+        body: blob,
+      }, RECORD_UPLOAD_TIMEOUT_MS)
+
+      if (!uploadResponse.ok) {
+        throw new HidApiError(uploadResponse.status, `Unable to upload ${upload.file_name}.`)
+      }
+
+      await edgeRequest('files-register-upload', {
+        method: 'POST',
+        body: {
+          recordId,
+          storagePath: signed.path,
+          originalFileName: upload.file_name,
+          mimeType: upload.file_type,
+          sizeBytes: blob.size,
+        },
+      })
     })
 
-    const blob = await dataUrlToBlob(upload.file_data_url)
-    const uploadResponse = await fetchWithTimeout(signed.signedUrl, {
-      method: 'PUT',
-      headers: {
-        'Content-Type': upload.file_type ?? 'application/octet-stream',
-      },
-      body: blob,
-    })
-
-    if (!uploadResponse.ok) {
-      throw new HidApiError(uploadResponse.status, `Unable to upload ${upload.file_name}.`)
-    }
-
-    await edgeRequest('files-register-upload', {
-      method: 'POST',
-      body: {
-        recordId,
-        storagePath: signed.path,
-        originalFileName: upload.file_name,
-        mimeType: upload.file_type,
-        sizeBytes: blob.size,
-      },
-    })
-  }))
+    uploadedFileKeys.add(uploadKey)
+  }
 }
 
 export async function fetchPatientHistory(hidCode: string): Promise<HistoryView> {

@@ -4,22 +4,72 @@ import { formatDateTime } from '../lib/utils'
 import type { MedicalRecord, MedicalRecordFile, PatientNote } from '../types/database'
 
 function markdownShell(lines: string[]) {
+  const renderedLines = lines.join('\n').split('\n')
+
   return (
-    <pre
+    <div
       style={{
         margin: 0,
         background: '#0f172a',
         color: '#e2e8f0',
         padding: 16,
         borderRadius: 12,
-        overflowX: 'auto',
-        whiteSpace: 'pre-wrap',
         lineHeight: 1.7,
         fontSize: 13,
+        display: 'grid',
+        gap: 6,
       }}
     >
-      {lines.join('\n')}
-    </pre>
+      {renderedLines.map((line, index) => {
+        const headingMatch = line.match(/^(#{1,6})\s+(.*)$/)
+        if (headingMatch) {
+          const level = headingMatch[1].length
+          const fontSize = level === 1 ? 18 : level === 2 ? 15 : 14
+          return (
+            <div key={`line-${index}`} style={{ fontWeight: 700, fontSize, color: '#f8fafc', marginTop: level === 1 ? 4 : 8 }}>
+              {headingMatch[2]}
+            </div>
+          )
+        }
+
+        if (!line.trim()) {
+          return <div key={`line-${index}`} style={{ height: 4 }} />
+        }
+
+        if (line.startsWith('- ')) {
+          return (
+            <div key={`line-${index}`} style={{ display: 'flex', alignItems: 'flex-start', gap: 8, color: '#dbe7f3' }}>
+              <span style={{ color: '#93c5fd', lineHeight: 1.7 }}>•</span>
+              <span style={{ whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>{line.slice(2)}</span>
+            </div>
+          )
+        }
+
+        if (line.startsWith('> ')) {
+          return (
+            <div
+              key={`line-${index}`}
+              style={{
+                borderLeft: '3px solid #60a5fa',
+                paddingLeft: 10,
+                color: '#cbd5e1',
+                fontStyle: 'italic',
+                whiteSpace: 'pre-wrap',
+                wordBreak: 'break-word',
+              }}
+            >
+              {line.slice(2)}
+            </div>
+          )
+        }
+
+        return (
+          <div key={`line-${index}`} style={{ whiteSpace: 'pre-wrap', wordBreak: 'break-word', color: '#e2e8f0' }}>
+            {line}
+          </div>
+        )
+      })}
+    </div>
   )
 }
 

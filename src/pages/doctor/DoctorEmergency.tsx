@@ -39,6 +39,7 @@ export default function DoctorEmergency() {
   const [errors, setErrors] = useState<Record<string, string>>({})
   const [showAddRecord, setShowAddRecord] = useState(false)
   const [savingRecord, setSavingRecord] = useState(false)
+  const [preparingUploads, setPreparingUploads] = useState(false)
   const [sessionRecords, setSessionRecords] = useState<SessionRecordEntry[]>([])
   const [recordForm, setRecordForm] = useState(createEmptyRecordForm())
   const saveLockRef = useRef(false)
@@ -90,6 +91,10 @@ export default function DoctorEmergency() {
   async function handleAddRecord(event: React.FormEvent) {
     event.preventDefault()
     if (!data || savingRecord || saveLockRef.current) return
+    if (preparingUploads) {
+      showToast('Attached files are still being prepared. Please wait a moment, then save again.', 'error')
+      return
+    }
     if (!recordForm.title.trim()) {
       showToast('Enter a record title before saving.', 'error')
       return
@@ -137,7 +142,7 @@ export default function DoctorEmergency() {
   }
 
   async function onAttachment(files: FileList | null) {
-    if (!files || files.length === 0) return
+    if (!files || files.length === 0 || preparingUploads) return
     const selectedFiles = Array.from(files)
     const invalidFiles = getInvalidRecordUploadNames(selectedFiles)
     if (invalidFiles.length > 0) {
@@ -145,21 +150,29 @@ export default function DoctorEmergency() {
       return
     }
 
-    const uploads = await Promise.all(selectedFiles.map(file => new Promise<UploadDraft>((resolve, reject) => {
-      const reader = new FileReader()
-      reader.onload = () => resolve({
-        file_name: file.name,
-        file_type: file.type || 'application/octet-stream',
-        file_data_url: typeof reader.result === 'string' ? reader.result : '',
-      })
-      reader.onerror = () => reject(new Error(`Unable to read ${file.name}`))
-      reader.readAsDataURL(file)
-    })))
+    setPreparingUploads(true)
+    try {
+      const uploads = await Promise.all(selectedFiles.map(file => new Promise<UploadDraft>((resolve, reject) => {
+        const reader = new FileReader()
+        reader.onload = () => resolve({
+          file_name: file.name,
+          file_type: file.type || 'application/octet-stream',
+          file_data_url: typeof reader.result === 'string' ? reader.result : '',
+        })
+        reader.onerror = () => reject(new Error(`Unable to read ${file.name}`))
+        reader.readAsDataURL(file)
+      })))
 
-    setRecordForm(current => ({
-      ...current,
-      uploads: [...current.uploads, ...uploads],
-    }))
+      setRecordForm(current => ({
+        ...current,
+        uploads: [...current.uploads, ...uploads],
+      }))
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Unable to prepare the selected files right now.'
+      showToast(message, 'error')
+    } finally {
+      setPreparingUploads(false)
+    }
   }
 
   function appendAudioTranscript(transcript: string) {
@@ -341,14 +354,14 @@ export default function DoctorEmergency() {
 
           <div style={{ display: 'grid', gap: 8 }}>
             <label style={{ fontSize: 13, fontWeight: 500, color: '#374151' }}>Choose file</label>
-            <input type="file" multiple accept={RECORD_UPLOAD_ACCEPT} onChange={event => void onAttachment(event.target.files)} />
+            <input type="file" multiple accept={RECORD_UPLOAD_ACCEPT} disabled={preparingUploads || savingRecord} onChange={event => void onAttachment(event.target.files)} />
           </div>
 
           <div style={{ display: 'grid', gap: 8 }}>
             {recordForm.uploads.map((file, index) => (
               <div key={`${file.file_name}-${index}`} style={{ display: 'grid', gap: 8 }}>
                 <FileAttachmentPreview attachment={file} />
-                <button onClick={() => removeUpload(index)} style={{ border: 'none', background: 'none', color: '#dc2626', cursor: 'pointer', fontWeight: 600, justifySelf: 'flex-end' }}>
+                <button type="button" onClick={() => removeUpload(index)} style={{ border: 'none', background: 'none', color: '#dc2626', cursor: 'pointer', fontWeight: 600, justifySelf: 'flex-end' }}>
                   Remove
                 </button>
               </div>
@@ -357,8 +370,8 @@ export default function DoctorEmergency() {
 
           <div style={{ display: 'flex', gap: 12, justifyContent: 'flex-end', marginTop: 4 }}>
             <Button variant="secondary" onClick={() => { setShowAddRecord(false); setRecordForm(createEmptyRecordForm()) }} type="button">Cancel</Button>
-            <Button type="submit" loading={savingRecord}>
-              Save medical record
+            <Button type="submit" loading={savingRecord || preparingUploads} disabled={preparingUploads}>
+              {preparingUploads ? 'Preparing files...' : 'Save medical record'}
             </Button>
           </div>
         </form>
