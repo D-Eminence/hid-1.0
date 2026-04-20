@@ -15,7 +15,7 @@ import {
   RECORD_UPLOAD_ACCEPT,
   type UploadDraft,
 } from '../../lib/medicalRecordUtils'
-import { accessPatientWithPin, createMedicalRecordWithUploads, fetchPatientRecordsView } from '../../lib/hidApi'
+import { accessPatientWithPin, createMedicalRecordWithUploads, fetchPatientRecordsView, fetchStaffDashboard } from '../../lib/hidApi'
 import { formatDateTime } from '../../lib/utils'
 import type { MedicalRecord, MedicalRecordFile, Patient } from '../../types/database'
 
@@ -38,6 +38,7 @@ export default function DoctorPortal() {
   const [addingRecord, setAddingRecord] = useState(false)
   const [preparingUploads, setPreparingUploads] = useState(false)
   const [recordForm, setRecordForm] = useState(createEmptyRecordForm())
+  const [activeGrantId, setActiveGrantId] = useState<string | null>(null)
   const saveLockRef = useRef(false)
 
   useEffect(() => {
@@ -79,7 +80,8 @@ export default function DoctorPortal() {
     setData(null)
 
     try {
-      await accessPatientWithPin(normalizedHidCode, pin.trim(), 60)
+      const response = await accessPatientWithPin(normalizedHidCode, pin.trim(), 60)
+      setActiveGrantId(response.grant_id)
       const view = await loadPatientView(normalizedHidCode)
       showToast(`Access granted. Patient: ${view.patient.full_name}`, 'success')
     } catch (error) {
@@ -89,6 +91,58 @@ export default function DoctorPortal() {
       setLoading(false)
     }
   }
+
+  useEffect(() => {
+    if (!activeGrantId || !data?.patient.hid_code || !session) return
+
+    let active = true
+    let checking = false
+
+    const verifyGrant = async () => {
+      if (!active || checking) return
+      checking = true
+      try {
+        const dashboard = await fetchStaffDashboard({ forceRefresh: true })
+        const stillActive = dashboard.requests.some(item =>
+          item.grant_id === activeGrantId &&
+          item.hid_code === data.patient.hid_code &&
+          item.grant_status === 'active' &&
+          !!item.expires_at &&
+          new Date(item.expires_at).getTime() > Date.now()
+        )
+
+        if (!stillActive && active) {
+          setActiveGrantId(null)
+          setData(null)
+          setPin('')
+          showToast('This patient access was closed or revoked. Enter the HID details again to continue.', 'error')
+        }
+      } catch {
+        // Best effort only. Access actions will still be enforced by the backend.
+      } finally {
+        checking = false
+      }
+    }
+
+    const interval = window.setInterval(() => {
+      if (document.visibilityState === 'visible') {
+        void verifyGrant()
+      }
+    }, 5000)
+
+    const handleVisibility = () => {
+      if (document.visibilityState === 'visible') {
+        void verifyGrant()
+      }
+    }
+
+    document.addEventListener('visibilitychange', handleVisibility)
+    return () => {
+      active = false
+      window.clearInterval(interval)
+      document.removeEventListener('visibilitychange', handleVisibility)
+    }
+  }, [activeGrantId, data?.patient.hid_code, session])
 
   async function handleAddRecord(event: React.FormEvent) {
     event.preventDefault()
@@ -183,7 +237,8 @@ export default function DoctorPortal() {
       title="Doctor Access Portal"
       subtitle="Access and manage patient records securely."
       onLogout={() => { void logout() }}
-      userName={session.hospitalName ?? session.fullName}
+      userName={session.fullName}
+      organizationName={session.hospitalName ?? null}
     >
       <div style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
         <Card>

@@ -85,6 +85,7 @@ export default function PatientHistory() {
     setActingId(grant.id)
     try {
       await revokeAccessGrant(grant.id)
+      setActiveGrants(current => current.filter(item => item.id !== grant.id))
       showToast('Access revoked.', 'success')
       await loadHistoryData()
     } catch (error) {

@@ -52,6 +52,59 @@ export default function DoctorPatientRecords() {
     void loadPageData()
   }, [navigate, normalizedHidCode, session])
 
+  useEffect(() => {
+    if (!activeRequest?.grant_id || !normalizedHidCode || !session) return
+
+    let active = true
+    let checking = false
+
+    const verifyGrant = async () => {
+      if (!active || checking) return
+      checking = true
+      try {
+        const dashboard = await fetchStaffDashboard({ forceRefresh: true })
+        const grant = dashboard.requests.find(item =>
+          item.grant_id === activeRequest.grant_id &&
+          item.hid_code === normalizedHidCode &&
+          item.grant_status === 'active' &&
+          !!item.expires_at &&
+          new Date(item.expires_at).getTime() > Date.now()
+        ) ?? null
+
+        if (!grant && active) {
+          showToast('This patient access was closed or revoked. Return to the access page to continue.', 'error')
+          navigate(HOSPITAL_ACCESS_PATH, { replace: true })
+          return
+        }
+
+        setActiveRequest(grant)
+      } catch {
+        // Best effort only. Access control is still enforced by the backend.
+      } finally {
+        checking = false
+      }
+    }
+
+    const interval = window.setInterval(() => {
+      if (document.visibilityState === 'visible') {
+        void verifyGrant()
+      }
+    }, 5000)
+
+    const handleVisibility = () => {
+      if (document.visibilityState === 'visible') {
+        void verifyGrant()
+      }
+    }
+
+    document.addEventListener('visibilitychange', handleVisibility)
+    return () => {
+      active = false
+      window.clearInterval(interval)
+      document.removeEventListener('visibilitychange', handleVisibility)
+    }
+  }, [activeRequest?.grant_id, navigate, normalizedHidCode, session])
+
   async function loadPageData() {
     if (!session || !normalizedHidCode) return
     setLoading(true)
@@ -207,7 +260,8 @@ export default function DoctorPatientRecords() {
       title="Patient Records"
       subtitle="Authorized provider access to saved patient medical records."
       onLogout={() => { void logout() }}
-      userName={session.hospitalName ?? session.fullName}
+      userName={session.fullName}
+      organizationName={session.hospitalName ?? null}
     >
       <Card style={{ borderRadius: 24, marginBottom: 18, background: 'linear-gradient(180deg, #ffffff 0%, #f7fbff 100%)', borderColor: '#dbe8f8' }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', gap: 16, flexWrap: 'wrap', alignItems: 'flex-start' }}>

@@ -15,7 +15,7 @@ import {
   RECORD_UPLOAD_ACCEPT,
   type UploadDraft,
 } from '../../lib/medicalRecordUtils'
-import { breakGlassAccess, createMedicalRecordWithUploads, fetchPatientRecordsView } from '../../lib/hidApi'
+import { breakGlassAccess, createMedicalRecordWithUploads, fetchPatientRecordsView, fetchStaffDashboard } from '../../lib/hidApi'
 import { formatDateTime } from '../../lib/utils'
 import type { MedicalRecord, MedicalRecordFile, Patient } from '../../types/database'
 
@@ -42,6 +42,7 @@ export default function DoctorEmergency() {
   const [preparingUploads, setPreparingUploads] = useState(false)
   const [sessionRecords, setSessionRecords] = useState<SessionRecordEntry[]>([])
   const [recordForm, setRecordForm] = useState(createEmptyRecordForm())
+  const [activeGrantId, setActiveGrantId] = useState<string | null>(null)
   const saveLockRef = useRef(false)
 
   useEffect(() => {
@@ -74,7 +75,8 @@ export default function DoctorEmergency() {
     setSessionRecords([])
 
     try {
-      await breakGlassAccess(normalizedHidCode, reason.trim(), 30)
+      const response = await breakGlassAccess(normalizedHidCode, reason.trim(), 30)
+      setActiveGrantId(response.grant_id)
       const view = await fetchPatientRecordsView(normalizedHidCode)
       setData({
         patient: view.patient,
@@ -87,6 +89,58 @@ export default function DoctorEmergency() {
       setLoading(false)
     }
   }
+
+  useEffect(() => {
+    if (!activeGrantId || !data?.patient.hid_code || !session) return
+
+    let active = true
+    let checking = false
+
+    const verifyGrant = async () => {
+      if (!active || checking) return
+      checking = true
+      try {
+        const dashboard = await fetchStaffDashboard({ forceRefresh: true })
+        const stillActive = dashboard.requests.some(item =>
+          item.grant_id === activeGrantId &&
+          item.hid_code === data.patient.hid_code &&
+          item.grant_status === 'active' &&
+          !!item.expires_at &&
+          new Date(item.expires_at).getTime() > Date.now()
+        )
+
+        if (!stillActive && active) {
+          setActiveGrantId(null)
+          setData(null)
+          setReason('')
+          showToast('Emergency access was closed or revoked. Start a new emergency access session to continue.', 'error')
+        }
+      } catch {
+        // Best effort only. Emergency actions are still enforced by the backend.
+      } finally {
+        checking = false
+      }
+    }
+
+    const interval = window.setInterval(() => {
+      if (document.visibilityState === 'visible') {
+        void verifyGrant()
+      }
+    }, 5000)
+
+    const handleVisibility = () => {
+      if (document.visibilityState === 'visible') {
+        void verifyGrant()
+      }
+    }
+
+    document.addEventListener('visibilitychange', handleVisibility)
+    return () => {
+      active = false
+      window.clearInterval(interval)
+      document.removeEventListener('visibilitychange', handleVisibility)
+    }
+  }, [activeGrantId, data?.patient.hid_code, session])
 
   async function handleAddRecord(event: React.FormEvent) {
     event.preventDefault()
@@ -194,7 +248,8 @@ export default function DoctorEmergency() {
       title="Emergency Access"
       subtitle="Use break-glass access only for urgent patient care."
       onLogout={() => { void logout() }}
-      userName={session.hospitalName ?? session.fullName}
+      userName={session.fullName}
+      organizationName={session.hospitalName ?? null}
     >
       <div style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
         <Card>
@@ -286,6 +341,16 @@ export default function DoctorEmergency() {
                     { label: 'Genotype', value: data.patient.genotype || '-' },
                     { label: 'Allergies', value: data.patient.allergies || '-' },
                     { label: 'Current Medication', value: data.patient.current_medications || '-' },
+                  ]}
+                />
+
+                <EmergencyProfileSection
+                  title="Emergency Contact"
+                  fields={[
+                    { label: 'Name', value: data.patient.emergency_contact_name || '-' },
+                    { label: 'Relationship', value: data.patient.emergency_contact_relationship || '-' },
+                    { label: 'Phone Number', value: data.patient.emergency_contact_phone || '-' },
+                    { label: 'Address', value: data.patient.emergency_contact_address || '-' },
                   ]}
                 />
               </div>

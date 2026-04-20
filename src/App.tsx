@@ -1,5 +1,6 @@
 import React, { Component, Suspense } from 'react'
 import { BrowserRouter, Navigate, Route, Routes, useParams } from 'react-router-dom'
+import { AppInstallPrompt } from './components/AppInstallPrompt'
 import { HIDLogo } from './components/HIDLogo'
 import { RouteObservability } from './components/RouteObservability'
 import { SessionBootstrap } from './components/SessionBootstrap'
@@ -56,7 +57,7 @@ class ErrorBoundary extends Component<{ children: React.ReactNode }, { error: Er
           <div style={{ background: '#fff', borderRadius: 16, padding: 40, maxWidth: 520, width: '100%', border: '1px solid #e5e7eb', textAlign: 'center' }}>
             <div style={{ fontSize: 40, marginBottom: 16 }}>!</div>
             <h2 style={{ fontWeight: 700, fontSize: 18, marginBottom: 8 }}>Something went wrong</h2>
-            <p style={{ color: '#6b7280', fontSize: 14, marginBottom: 20, lineHeight: 1.6 }}>We could not load this page right now. Please refresh and try again.</p>
+            <p style={{ color: '#6b7280', fontSize: 14, marginBottom: 20, lineHeight: 1.6 }}>Something went wrong. Please refresh or try again.</p>
             <button
               onClick={() => window.location.reload()}
               style={{ background: '#1a6fd4', color: '#fff', border: 'none', borderRadius: 8, padding: '10px 24px', fontWeight: 600, cursor: 'pointer', fontSize: 14 }}
@@ -128,6 +129,7 @@ export default function App() {
         <ToastProvider />
         <SessionBootstrap />
         <RouteObservability />
+        <AppInstallPrompt />
         <SetupBanner />
         <Suspense fallback={<RouteLoadingScreen />}>
           <Routes>

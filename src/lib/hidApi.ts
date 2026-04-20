@@ -987,8 +987,11 @@ export async function markAllNotificationsRead() {
   }
 }
 
-export async function fetchPatientRecordsView(patientIdentifier?: string) {
+export async function fetchPatientRecordsView(patientIdentifier?: string, options: { forceRefresh?: boolean } = {}) {
   const cacheKey = `records:${patientIdentifier ?? 'self'}`
+  if (options.forceRefresh) {
+    viewCache.delete(cacheKey)
+  }
 
   return loadCachedView(cacheKey, async () => {
     const bundle = await edgeRequest<HidPatientRecordsResponse>('patients-records', {
@@ -1652,11 +1655,15 @@ export async function verifyAdminPasswordResetOtp(email: string, code: string) {
   }
 }
 
-export async function fetchStaffDashboard() {
+export async function fetchStaffDashboard(options: { forceRefresh?: boolean } = {}) {
   const { data } = await supabase.auth.getUser()
   const user = data.user
   if (!user) {
     throw new HidApiError(401, 'Please sign in to continue.')
+  }
+
+  if (options.forceRefresh) {
+    viewCache.delete(`staff-dashboard:${user.id}`)
   }
 
   return loadCachedView(`staff-dashboard:${user.id}`, async () => edgeRequest<HidStaffDashboardResponse>('staff-dashboard'))

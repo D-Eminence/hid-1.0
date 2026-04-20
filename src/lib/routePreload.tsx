@@ -5,11 +5,48 @@ type LazyWithPreload<T extends React.ComponentType<any>> = React.LazyExoticCompo
   preload: () => Promise<ComponentModule<T>>
 }
 
+const DYNAMIC_IMPORT_RELOAD_KEY = 'hid:dynamic-import-reload'
+
+function isRecoverableImportError(error: unknown) {
+  if (!(error instanceof Error)) return false
+  const message = error.message.toLowerCase()
+  return (
+    message.includes('failed to fetch dynamically imported module') ||
+    message.includes('importing a module script failed') ||
+    message.includes('load failed')
+  )
+}
+
+async function loadRouteModule<T extends React.ComponentType<any>>(
+  loader: () => Promise<ComponentModule<T>>
+) {
+  try {
+    const loaded = await loader()
+    if (typeof window !== 'undefined') {
+      sessionStorage.removeItem(DYNAMIC_IMPORT_RELOAD_KEY)
+    }
+    return loaded
+  } catch (error) {
+    if (typeof window !== 'undefined' && isRecoverableImportError(error)) {
+      const hasRetried = sessionStorage.getItem(DYNAMIC_IMPORT_RELOAD_KEY) === '1'
+      if (!hasRetried) {
+        sessionStorage.setItem(DYNAMIC_IMPORT_RELOAD_KEY, '1')
+        const nextUrl = new URL(window.location.href)
+        nextUrl.searchParams.set('v', `${Date.now()}`)
+        window.location.replace(nextUrl.toString())
+        return new Promise<ComponentModule<T>>(() => undefined)
+      }
+    }
+    throw error
+  }
+}
+
 function lazyWithPreload<T extends React.ComponentType<any>>(
   loader: () => Promise<ComponentModule<T>>
 ): LazyWithPreload<T> {
-  const LazyComponent = React.lazy(loader) as LazyWithPreload<T>
-  LazyComponent.preload = loader
+  const wrappedLoader = () => loadRouteModule(loader)
+  const LazyComponent = React.lazy(wrappedLoader) as LazyWithPreload<T>
+  LazyComponent.preload = wrappedLoader
   return LazyComponent
 }
 

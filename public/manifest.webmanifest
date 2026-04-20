@@ -1,0 +1,24 @@
+{
+  "name": "HID",
+  "short_name": "HID",
+  "description": "Health Identity Directory",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#f5f6fa",
+  "theme_color": "#1a6fd4",
+  "icons": [
+    {
+      "src": "/hid-logo.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/hid-logo.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ]
+}

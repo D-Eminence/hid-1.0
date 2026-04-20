@@ -66,6 +66,7 @@ export function HospitalLayout({
   subtitle,
   onLogout,
   userName,
+  organizationName,
 }: {
   activeSection: HospitalSection
   children: React.ReactNode
@@ -73,6 +74,7 @@ export function HospitalLayout({
   subtitle?: string
   onLogout?: () => void
   userName?: string | null
+  organizationName?: string | null
 }) {
   const navigate = useNavigate()
   const { pathname } = useLocation()
@@ -109,10 +111,12 @@ export function HospitalLayout({
 
         <nav
           style={{
-            display: 'grid',
-            gridTemplateColumns: isCompact ? 'repeat(auto-fit, minmax(140px, 1fr))' : '1fr',
+            display: isCompact ? 'grid' : 'flex',
+            gridTemplateColumns: isCompact ? 'repeat(auto-fit, minmax(140px, 1fr))' : undefined,
+            flexDirection: isCompact ? undefined : 'column',
             gap: 6,
             flex: 1,
+            alignContent: 'start',
           }}
         >
           {hospitalNav.map(item => {
@@ -150,6 +154,12 @@ export function HospitalLayout({
           {userName && (
             <div style={{ fontSize: 11, color: '#6b7280', padding: '0 8px 10px', lineHeight: 1.6 }}>
               <strong style={{ color: '#374151' }}>{userName}</strong>
+              {organizationName && organizationName !== userName && (
+                <>
+                  <br />
+                  <span>{organizationName}</span>
+                </>
+              )}
             </div>
           )}
           {onLogout && (

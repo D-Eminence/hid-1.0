@@ -104,7 +104,8 @@ export default function DoctorHistory() {
   })
 
   const emergencyCount = logs.filter(log => log.access_type === 'emergency').length
-  const hospitalName = dashboard?.staff_account.hospital_name ?? session?.hospitalName ?? session?.fullName ?? 'Hospital'
+  const hospitalName = dashboard?.staff_account.hospital_name ?? session?.hospitalName ?? 'Hospital'
+  const staffDisplayName = dashboard?.staff_account.full_name ?? session?.fullName ?? hospitalName
 
   if (!session) return null
   if (loading && logs.length === 0) {
@@ -114,7 +115,8 @@ export default function DoctorHistory() {
         title="Access Logs"
         subtitle="Complete audit trail of all hospital record access events."
         onLogout={() => { void logout() }}
-        userName={hospitalName}
+        userName={staffDisplayName}
+        organizationName={hospitalName}
       >
         <PageLoader label="Loading access logs..." />
       </HospitalLayout>
@@ -127,7 +129,8 @@ export default function DoctorHistory() {
       title="Access Logs"
       subtitle="Complete audit trail of all hospital record access events."
       onLogout={() => { void logout() }}
-      userName={hospitalName}
+      userName={staffDisplayName}
+      organizationName={hospitalName}
     >
       <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 14 }}>

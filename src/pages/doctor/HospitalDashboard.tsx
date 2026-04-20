@@ -148,7 +148,8 @@ export default function HospitalDashboard() {
   const emergencySessions = requests.filter(item => item.break_glass).length
   const recentPatients = [...uniquePatients].sort((left, right) => new Date(right.created_at).getTime() - new Date(left.created_at).getTime()).slice(0, 5)
   const recentEvents = [...auditEvents].sort((left, right) => new Date(right.created_at).getTime() - new Date(left.created_at).getTime()).slice(0, 5)
-  const hospitalName = dashboard?.staff_account.hospital_name ?? session?.hospitalName ?? session?.fullName ?? 'Hospital'
+  const hospitalName = dashboard?.staff_account.hospital_name ?? session?.hospitalName ?? 'Hospital'
+  const staffDisplayName = dashboard?.staff_account.full_name ?? session?.fullName ?? hospitalName
 
   const statCards = [
     {
@@ -201,7 +202,8 @@ export default function HospitalDashboard() {
         title="Dashboard"
         subtitle="Hospital CTA home - overview of active access, patient activity, and audit trail."
         onLogout={() => { void logout() }}
-        userName={hospitalName}
+        userName={staffDisplayName}
+        organizationName={hospitalName}
       >
         <PageLoader label="Loading hospital dashboard..." />
       </HospitalLayout>
@@ -214,7 +216,8 @@ export default function HospitalDashboard() {
       title="Dashboard"
       subtitle="Hospital CTA home - overview of active access, patient activity, and audit trail."
       onLogout={() => { void logout() }}
-      userName={hospitalName}
+      userName={staffDisplayName}
+      organizationName={hospitalName}
     >
       <div style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 16 }}>
