@@ -267,6 +267,14 @@ export default function AdminDashboard() {
   const filteredEvents = useMemo(() => (
     (data?.posthog.topEvents ?? []).filter(event => matchesQuery([event.name], searchQuery))
   ), [data?.posthog.topEvents, searchQuery])
+  const posthogWebSignals = useMemo(() => (
+    [
+      { key: 'pageviews', label: 'Pageviews', value: data?.posthog.pageviews ?? null, helper: 'Tracked web page views' },
+      { key: 'autocaptures', label: 'Autocapture', value: data?.posthog.autocaptures ?? null, helper: 'Captured browser interactions' },
+      { key: 'identifies', label: 'Identify Calls', value: data?.posthog.identifies ?? null, helper: 'Identity association events' },
+      { key: 'webVitals', label: 'Web Vitals', value: data?.posthog.webVitals ?? null, helper: 'Frontend performance signals' },
+    ].filter(signal => matchesQuery([signal.label, signal.helper], searchQuery))
+  ), [data?.posthog.autocaptures, data?.posthog.identifies, data?.posthog.pageviews, data?.posthog.webVitals, searchQuery])
 
   const notificationsCount = filteredAlerts.filter(alert => alert.level !== 'info').length
   const verifiedRate = data?.users.totalUsers ? (data.users.verifiedUsers / data.users.totalUsers) * 100 : null
@@ -603,27 +611,59 @@ export default function AdminDashboard() {
             <div style={{ ...metricGridStyle, marginBottom: 12 }}>
               <AdminMetricCard accent="var(--admin-accent)" icon={metricIcon('analytics')} title="Tracked Events" value={data?.posthog.events ?? null} trendLabel={data?.posthog.projectLabel ?? 'PostHog project'} trendTone={data?.posthog.message ? 'warning' : 'positive'} helper="Selected window" />
               <AdminMetricCard accent="var(--admin-accent)" icon={metricIcon('users')} title="Unique Users" value={data?.posthog.uniqueUsers ?? null} trendLabel={`${filteredEvents.length} top events`} trendTone="positive" helper="Unique users in range" />
+              <AdminMetricCard accent="var(--admin-accent)" icon={metricIcon('analytics')} title="Pageviews" value={data?.posthog.pageviews ?? null} trendLabel="Web traffic activity" trendTone="positive" helper="Observed $pageview events" />
+              <AdminMetricCard accent="var(--admin-accent)" icon={metricIcon('activity')} title="Autocapture" value={data?.posthog.autocaptures ?? null} trendLabel="Browser interaction tracking" trendTone="positive" helper="Observed $autocapture events" />
+              <AdminMetricCard accent="var(--admin-accent)" icon={metricIcon('check')} title="Identify Calls" value={data?.posthog.identifies ?? null} trendLabel="Known-user attribution" trendTone="positive" helper="Observed $identify events" />
+              <AdminMetricCard accent="var(--admin-accent)" icon={metricIcon('activity')} title="Web Vitals" value={data?.posthog.webVitals ?? null} trendLabel="Performance telemetry" trendTone="positive" helper="Frontend web performance events" />
             </div>
             {data?.posthog.message && (
               <div style={{ ...alertToneStyle('warning'), borderRadius: 10, padding: '10px 12px', marginBottom: 12, fontSize: 11.5 }}>
                 {data.posthog.message}
               </div>
             )}
-            <AdminSeriesChart points={data?.posthog.trend ?? []} type="bar" tone="#22c55e" />
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginTop: 12 }}>
-              {filteredEvents.length === 0 ? (
-                <div style={{ fontSize: 11.5, color: 'var(--admin-muted)' }}>No matching PostHog events.</div>
-              ) : (
-                filteredEvents.slice(0, 6).map(event => (
-                  <div key={event.name} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, border: '1px solid var(--admin-border)', borderRadius: 10, padding: '10px 12px' }}>
-                    <div>
-                      <div style={{ fontSize: 12, fontWeight: 700 }}>{event.name}</div>
-                      <div style={{ fontSize: 10.5, color: 'var(--admin-muted)' }}>Observed in selected range</div>
+            <div style={{ ...splitPanelStyle, marginTop: 12 }}>
+              <div>
+                <div style={{ fontSize: 11.5, fontWeight: 700, color: 'var(--admin-text)', marginBottom: 8 }}>All Event Trend</div>
+                <AdminSeriesChart points={data?.posthog.trend ?? []} type="bar" tone="#22c55e" />
+              </div>
+              <div>
+                <div style={{ fontSize: 11.5, fontWeight: 700, color: 'var(--admin-text)', marginBottom: 8 }}>Pageview Trend</div>
+                <AdminSeriesChart points={data?.posthog.pageviewTrend ?? []} type="line" tone="#1a6fd4" />
+              </div>
+            </div>
+            <div style={{ ...splitPanelStyle, marginTop: 12 }}>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                <div style={{ fontSize: 11.5, fontWeight: 700, color: 'var(--admin-text)' }}>Top Events</div>
+                {filteredEvents.length === 0 ? (
+                  <div style={{ fontSize: 11.5, color: 'var(--admin-muted)' }}>No matching PostHog events.</div>
+                ) : (
+                  filteredEvents.slice(0, 6).map(event => (
+                    <div key={event.name} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, border: '1px solid var(--admin-border)', borderRadius: 10, padding: '10px 12px' }}>
+                      <div>
+                        <div style={{ fontSize: 12, fontWeight: 700 }}>{event.name}</div>
+                        <div style={{ fontSize: 10.5, color: 'var(--admin-muted)' }}>Observed in selected range</div>
+                      </div>
+                      <Badge color="green">{formatCompact(event.total)}</Badge>
                     </div>
-                    <Badge color="green">{formatCompact(event.total)}</Badge>
-                  </div>
-                ))
-              )}
+                  ))
+                )}
+              </div>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                <div style={{ fontSize: 11.5, fontWeight: 700, color: 'var(--admin-text)' }}>Web Analytics Signals</div>
+                {posthogWebSignals.length === 0 ? (
+                  <div style={{ fontSize: 11.5, color: 'var(--admin-muted)' }}>No matching PostHog web analytics metrics.</div>
+                ) : (
+                  posthogWebSignals.map(signal => (
+                    <div key={signal.key} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, border: '1px solid var(--admin-border)', borderRadius: 10, padding: '10px 12px' }}>
+                      <div>
+                        <div style={{ fontSize: 12, fontWeight: 700 }}>{signal.label}</div>
+                        <div style={{ fontSize: 10.5, color: 'var(--admin-muted)' }}>{signal.helper}</div>
+                      </div>
+                      <Badge color="blue">{formatCompact(signal.value)}</Badge>
+                    </div>
+                  ))
+                )}
+              </div>
             </div>
             {data?.posthog.externalUrl && (
               <div style={{ marginTop: 12 }}>

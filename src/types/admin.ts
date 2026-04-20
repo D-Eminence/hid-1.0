@@ -71,11 +71,16 @@ export interface AdminSentryOverview extends AdminObservabilityProviderBase {
 }
 
 export interface AdminPosthogOverview extends AdminObservabilityProviderBase {
+  autocaptures: number | null
   events: number | null
+  identifies: number | null
+  pageviewTrend: AdminMetricPoint[]
+  pageviews: number | null
   projectLabel: string | null
   topEvents: AdminPosthogEvent[]
   trend: AdminMetricPoint[]
   uniqueUsers: number | null
+  webVitals: number | null
 }
 
 export interface AdminUserMetrics {

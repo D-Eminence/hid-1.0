@@ -365,16 +365,21 @@ async function loadPosthogOverview(windowKey: OverviewWindow) {
 
   if (!apiKey || !projectId) {
     return {
+      autocaptures: null,
       configured: false,
       events: null,
       externalUrl: null,
+      identifies: null,
       message: 'Add POSTHOG_PERSONAL_API_KEY and POSTHOG_PROJECT_ID to Supabase secrets.',
       otpCompleted: null,
       otpStarted: null,
+      pageviewTrend: [] as MetricPoint[],
+      pageviews: null,
       projectLabel: null,
       topEvents: [] as Array<{ name: string; total: number }>,
       trend: [] as MetricPoint[],
       uniqueUsers: null,
+      webVitals: null,
     }
   }
 
@@ -383,13 +388,30 @@ async function loadPosthogOverview(windowKey: OverviewWindow) {
   const intervalExpression = `INTERVAL ${config.posthogInterval}`
 
   try {
-    const [eventsResponse, uniqueUsersResponse, topEventsResponse, trendResponse, otpStartedResponse, otpCompletedResponse] = await Promise.all([
+    const [
+      eventsResponse,
+      uniqueUsersResponse,
+      topEventsResponse,
+      trendResponse,
+      otpStartedResponse,
+      otpCompletedResponse,
+      pageviewsResponse,
+      autocapturesResponse,
+      identifiesResponse,
+      webVitalsResponse,
+      pageviewTrendResponse,
+    ] = await Promise.all([
       runPosthogQuery(baseUrl, projectId, apiKey, `SELECT count() AS events FROM events WHERE timestamp >= now() - ${intervalExpression}`),
       runPosthogQuery(baseUrl, projectId, apiKey, `SELECT count(DISTINCT coalesce(person_id, distinct_id)) AS users FROM events WHERE timestamp >= now() - ${intervalExpression}`),
       runPosthogQuery(baseUrl, projectId, apiKey, `SELECT event AS name, count() AS total FROM events WHERE timestamp >= now() - ${intervalExpression} GROUP BY event ORDER BY total DESC LIMIT 8`),
       runPosthogQuery(baseUrl, projectId, apiKey, `SELECT ${bucketExpression} AS bucket, count() AS total FROM events WHERE timestamp >= now() - ${intervalExpression} GROUP BY bucket ORDER BY bucket ASC`),
       runPosthogQuery(baseUrl, projectId, apiKey, `SELECT count(DISTINCT coalesce(person_id, distinct_id)) AS total FROM events WHERE timestamp >= now() - ${intervalExpression} AND event IN (${toHogQlList(POSTHOG_OTP_STARTED_EVENTS)})`),
       runPosthogQuery(baseUrl, projectId, apiKey, `SELECT count(DISTINCT coalesce(person_id, distinct_id)) AS total FROM events WHERE timestamp >= now() - ${intervalExpression} AND event IN (${toHogQlList(POSTHOG_OTP_COMPLETED_EVENTS)})`),
+      runPosthogQuery(baseUrl, projectId, apiKey, `SELECT count() AS total FROM events WHERE timestamp >= now() - ${intervalExpression} AND event = '$pageview'`),
+      runPosthogQuery(baseUrl, projectId, apiKey, `SELECT count() AS total FROM events WHERE timestamp >= now() - ${intervalExpression} AND event = '$autocapture'`),
+      runPosthogQuery(baseUrl, projectId, apiKey, `SELECT count() AS total FROM events WHERE timestamp >= now() - ${intervalExpression} AND event = '$identify'`),
+      runPosthogQuery(baseUrl, projectId, apiKey, `SELECT count() AS total FROM events WHERE timestamp >= now() - ${intervalExpression} AND event IN ('$web_vitals', 'web_vitals', 'Web vitals')`),
+      runPosthogQuery(baseUrl, projectId, apiKey, `SELECT ${bucketExpression} AS bucket, count() AS total FROM events WHERE timestamp >= now() - ${intervalExpression} AND event = '$pageview' GROUP BY bucket ORDER BY bucket ASC`),
     ])
 
     const eventRows = normalizeRows(eventsResponse)
@@ -398,16 +420,28 @@ async function loadPosthogOverview(windowKey: OverviewWindow) {
     const trendRows = normalizeRows(trendResponse)
     const otpStartedRows = normalizeRows(otpStartedResponse)
     const otpCompletedRows = normalizeRows(otpCompletedResponse)
+    const pageviewRows = normalizeRows(pageviewsResponse)
+    const autocaptureRows = normalizeRows(autocapturesResponse)
+    const identifyRows = normalizeRows(identifiesResponse)
+    const webVitalsRows = normalizeRows(webVitalsResponse)
+    const pageviewTrendRows = normalizeRows(pageviewTrendResponse)
     const otpStarted = parseNumeric(getRowValue(otpStartedRows[0], 'total'))
     const otpCompleted = parseNumeric(getRowValue(otpCompletedRows[0], 'total'))
 
     return {
+      autocaptures: parseNumeric(getRowValue(autocaptureRows[0], 'total')),
       configured: true,
       events: parseNumeric(getRowValue(eventRows[0], 'events')),
       externalUrl: `${baseUrl}/project/${encodeURIComponent(projectId)}/insights`,
+      identifies: parseNumeric(getRowValue(identifyRows[0], 'total')),
       message: null,
       otpCompleted,
       otpStarted,
+      pageviewTrend: pageviewTrendRows.map(row => ({
+        timestamp: toTimestamp(getRowValue(row, 'bucket')),
+        value: parseNumeric(getRowValue(row, 'total')),
+      })),
+      pageviews: parseNumeric(getRowValue(pageviewRows[0], 'total')),
       projectLabel: `Project ${projectId}`,
       topEvents: topEventRows.map(row => ({
         name: String(getRowValue(row, 'name') ?? 'Unknown event'),
@@ -418,19 +452,25 @@ async function loadPosthogOverview(windowKey: OverviewWindow) {
         value: parseNumeric(getRowValue(row, 'total')),
       })),
       uniqueUsers: parseNumeric(getRowValue(userRows[0], 'users')),
+      webVitals: parseNumeric(getRowValue(webVitalsRows[0], 'total')),
     }
   } catch (error) {
     return {
+      autocaptures: null,
       configured: true,
       events: null,
       externalUrl: `${baseUrl}/project/${encodeURIComponent(projectId)}/insights`,
+      identifies: null,
       message: error instanceof Error ? error.message : 'Unable to load PostHog overview right now.',
       otpCompleted: null,
       otpStarted: null,
+      pageviewTrend: [] as MetricPoint[],
+      pageviews: null,
       projectLabel: `Project ${projectId}`,
       topEvents: [] as Array<{ name: string; total: number }>,
       trend: [] as MetricPoint[],
       uniqueUsers: null,
+      webVitals: null,
     }
   }
 }
