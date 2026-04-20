@@ -75,6 +75,19 @@ function matchesQuery(values: Array<string | null | undefined>, query: string) {
   return values.some(value => `${value ?? ''}`.toLowerCase().includes(normalized))
 }
 
+const POSTHOG_WEB_SIGNAL_EVENT_KEYS = new Set([
+  '$autocapture',
+  '$identify',
+  '$pageview',
+  '$web_vitals',
+  'web_vitals',
+  'web vitals',
+])
+
+function normalizePosthogEventKey(value: string | null | undefined) {
+  return `${value ?? ''}`.trim().toLowerCase().replace(/\s+/g, '_')
+}
+
 function metricIcon(path: 'users' | 'plus' | 'activity' | 'check' | 'records' | 'upload' | 'average' | 'storage' | 'providers' | 'provider-active' | 'api' | 'warning' | 'uptime' | 'failed' | 'lock' | 'shield' | 'analytics', color = 'var(--admin-accent)') {
   const wrap: React.CSSProperties = {
     width: 20,
@@ -274,7 +287,9 @@ export default function AdminDashboard() {
   ), [data?.sentry.topCulprits, searchQuery])
 
   const filteredEvents = useMemo(() => (
-    (data?.posthog.topEvents ?? []).filter(event => matchesQuery([event.name], searchQuery))
+    (data?.posthog.topEvents ?? [])
+      .filter(event => !POSTHOG_WEB_SIGNAL_EVENT_KEYS.has(normalizePosthogEventKey(event.name)))
+      .filter(event => matchesQuery([event.name], searchQuery))
   ), [data?.posthog.topEvents, searchQuery])
   const posthogWebSignals = useMemo(() => (
     [
@@ -694,7 +709,7 @@ export default function AdminDashboard() {
               <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
                 <div style={{ fontSize: 11.5, fontWeight: 700, color: 'var(--admin-text)' }}>Top Events</div>
                 {filteredEvents.length === 0 ? (
-                  <div style={{ fontSize: 11.5, color: 'var(--admin-muted)' }}>No matching PostHog events.</div>
+                  <div style={{ fontSize: 11.5, color: 'var(--admin-muted)' }}>No matching custom PostHog events.</div>
                 ) : (
                   filteredEvents.slice(0, 6).map(event => (
                     <div key={event.name} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, border: '1px solid var(--admin-border)', borderRadius: 10, padding: '10px 12px' }}>
