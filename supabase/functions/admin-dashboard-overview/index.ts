@@ -9,6 +9,13 @@ type MetricPoint = {
   value: number
 }
 
+type BreakdownItem = {
+  key: string
+  label: string
+  value: number
+  helper?: string | null
+}
+
 type SentryIssue = {
   id: string
   title: string
@@ -99,6 +106,14 @@ function startOfWindow(windowKey: OverviewWindow, now = new Date()) {
 function parseNumeric(value: unknown) {
   const parsed = Number(value)
   return Number.isFinite(parsed) ? parsed : 0
+}
+
+function toKey(value: string) {
+  return value
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '_')
+    .replace(/^_+|_+$/g, '')
 }
 
 function toTimestamp(value: unknown) {
@@ -222,6 +237,84 @@ function normalizeSentryIssue(input: unknown): SentryIssue | null {
   }
 }
 
+function getSentryLevelLabel(level: string | null) {
+  const normalized = (level ?? 'issue').trim().toLowerCase()
+  if (normalized === 'fatal') return 'Fatal'
+  if (normalized === 'error') return 'Error'
+  if (normalized === 'warning') return 'Warning'
+  if (normalized === 'info') return 'Info'
+  if (normalized === 'debug') return 'Debug'
+  return 'Other'
+}
+
+function getSentryStatusLabel(status: string | null) {
+  const normalized = (status ?? 'unknown').trim().toLowerCase()
+  if (normalized === 'unresolved') return 'Unresolved'
+  if (normalized === 'resolved') return 'Resolved'
+  if (normalized === 'ignored') return 'Ignored'
+  return 'Other'
+}
+
+function sortBreakdown(items: BreakdownItem[]) {
+  return items
+    .slice()
+    .sort((left, right) => right.value - left.value || left.label.localeCompare(right.label))
+}
+
+function buildSentryLevelBreakdown(issues: SentryIssue[]) {
+  const counts = new Map<string, number>()
+
+  for (const issue of issues) {
+    const label = getSentryLevelLabel(issue.level)
+    counts.set(label, (counts.get(label) ?? 0) + 1)
+  }
+
+  return sortBreakdown(Array.from(counts.entries()).map(([label, value]) => ({
+    key: toKey(label),
+    label,
+    value,
+    helper: `${value} issue${value === 1 ? '' : 's'}`,
+  })))
+}
+
+function buildSentryStatusBreakdown(issues: SentryIssue[]) {
+  const counts = new Map<string, number>()
+
+  for (const issue of issues) {
+    const label = getSentryStatusLabel(issue.status)
+    counts.set(label, (counts.get(label) ?? 0) + 1)
+  }
+
+  return sortBreakdown(Array.from(counts.entries()).map(([label, value]) => ({
+    key: toKey(label),
+    label,
+    value,
+    helper: `${value} issue${value === 1 ? '' : 's'}`,
+  })))
+}
+
+function buildSentryCulpritBreakdown(issues: SentryIssue[]) {
+  const counts = new Map<string, { hits: number; issues: number }>()
+
+  for (const issue of issues) {
+    const label = issue.culprit?.trim() || 'Unknown surface'
+    const current = counts.get(label) ?? { hits: 0, issues: 0 }
+    current.hits += issue.count
+    current.issues += 1
+    counts.set(label, current)
+  }
+
+  return Array.from(counts.entries())
+    .map(([label, value]) => ({
+      key: toKey(label),
+      label,
+      value: value.hits,
+      helper: `${value.issues} issue${value.issues === 1 ? '' : 's'}`,
+    }))
+    .sort((left, right) => right.value - left.value || left.label.localeCompare(right.label))
+    .slice(0, 6)
+}
+
 async function loadSentryOverview(windowKey: OverviewWindow) {
   const authToken = getRequiredSecret('SENTRY_AUTH_TOKEN')
   const orgSlug = getRequiredSecret('SENTRY_ORG_SLUG')
@@ -235,11 +328,16 @@ async function loadSentryOverview(windowKey: OverviewWindow) {
     return {
       affectedUsers: null,
       configured: false,
+      criticalIssues: null,
       externalUrl: null,
       issueEvents: null,
+      issuesByLevel: [] as BreakdownItem[],
+      issuesByStatus: [] as BreakdownItem[],
       message: 'Add SENTRY_AUTH_TOKEN, SENTRY_ORG_SLUG, and SENTRY_PROJECT_SLUG to Supabase secrets.',
+      mostRecentIssueAt: null,
       projectLabel: null,
       recentIssues: [] as SentryIssue[],
+      topCulprits: [] as BreakdownItem[],
       trend: [] as MetricPoint[],
       unresolvedIssues: null,
     }
@@ -270,15 +368,27 @@ async function loadSentryOverview(windowKey: OverviewWindow) {
     const combinedIssues = results.flatMap(result => result.issues)
       .sort((left, right) => new Date(right.lastSeen ?? 0).getTime() - new Date(left.lastSeen ?? 0).getTime())
     const actionableIssues = combinedIssues.filter(issue => !isIgnoredSentryIssue(issue)).slice(0, 8)
+    const issuesByLevel = buildSentryLevelBreakdown(actionableIssues)
+    const issuesByStatus = buildSentryStatusBreakdown(actionableIssues)
+    const topCulprits = buildSentryCulpritBreakdown(actionableIssues)
+    const criticalIssues = actionableIssues.filter(issue => {
+      const level = (issue.level ?? '').toLowerCase()
+      return level === 'fatal' || level === 'error'
+    }).length
 
     return {
       affectedUsers: actionableIssues.reduce((sum, issue) => sum + issue.users, 0),
       configured: true,
+      criticalIssues,
       externalUrl: `${baseUrl}/organizations/${encodeURIComponent(orgSlug)}/issues/`,
       issueEvents: actionableIssues.reduce((sum, issue) => sum + issue.count, 0),
+      issuesByLevel,
+      issuesByStatus,
       message: null,
+      mostRecentIssueAt: actionableIssues[0]?.lastSeen ?? null,
       projectLabel: projectList.join(', '),
       recentIssues: actionableIssues,
+      topCulprits,
       trend: aggregateTrendSeries(results.map(result => result.trend)),
       unresolvedIssues: actionableIssues.length,
     }
@@ -286,11 +396,16 @@ async function loadSentryOverview(windowKey: OverviewWindow) {
     return {
       affectedUsers: null,
       configured: true,
+      criticalIssues: null,
       externalUrl: `${baseUrl}/organizations/${encodeURIComponent(orgSlug)}/issues/`,
       issueEvents: null,
+      issuesByLevel: [] as BreakdownItem[],
+      issuesByStatus: [] as BreakdownItem[],
       message: error instanceof Error ? error.message : 'Unable to load Sentry overview right now.',
+      mostRecentIssueAt: null,
       projectLabel: projectList.join(', '),
       recentIssues: [] as SentryIssue[],
+      topCulprits: [] as BreakdownItem[],
       trend: [] as MetricPoint[],
       unresolvedIssues: null,
     }

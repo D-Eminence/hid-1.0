@@ -55,6 +55,13 @@ export interface AdminPosthogEvent {
   total: number
 }
 
+export interface AdminBreakdownItem {
+  key: string
+  label: string
+  value: number
+  helper?: string | null
+}
+
 export interface AdminObservabilityProviderBase {
   configured: boolean
   message: string | null
@@ -63,9 +70,14 @@ export interface AdminObservabilityProviderBase {
 
 export interface AdminSentryOverview extends AdminObservabilityProviderBase {
   affectedUsers: number | null
+  criticalIssues: number | null
   issueEvents: number | null
+  issuesByLevel: AdminBreakdownItem[]
+  issuesByStatus: AdminBreakdownItem[]
+  mostRecentIssueAt: string | null
   projectLabel: string | null
   recentIssues: AdminSentryIssue[]
+  topCulprits: AdminBreakdownItem[]
   trend: AdminMetricPoint[]
   unresolvedIssues: number | null
 }

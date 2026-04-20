@@ -263,6 +263,15 @@ export default function AdminDashboard() {
   const filteredIssues = useMemo(() => (
     (data?.sentry.recentIssues ?? []).filter(issue => matchesQuery([issue.title, issue.culprit, issue.level, issue.status], searchQuery))
   ), [data?.sentry.recentIssues, searchQuery])
+  const sentryLevelSignals = useMemo(() => (
+    (data?.sentry.issuesByLevel ?? []).filter(item => matchesQuery([item.label, item.helper], searchQuery))
+  ), [data?.sentry.issuesByLevel, searchQuery])
+  const sentryStatusSignals = useMemo(() => (
+    (data?.sentry.issuesByStatus ?? []).filter(item => matchesQuery([item.label, item.helper], searchQuery))
+  ), [data?.sentry.issuesByStatus, searchQuery])
+  const sentryHotspots = useMemo(() => (
+    (data?.sentry.topCulprits ?? []).filter(item => matchesQuery([item.label, item.helper], searchQuery))
+  ), [data?.sentry.topCulprits, searchQuery])
 
   const filteredEvents = useMemo(() => (
     (data?.posthog.topEvents ?? []).filter(event => matchesQuery([event.name], searchQuery))
@@ -567,6 +576,8 @@ export default function AdminDashboard() {
             <div style={{ ...metricGridStyle, marginBottom: 12 }}>
               <AdminMetricCard accent="var(--admin-accent)" icon={metricIcon('warning', 'var(--admin-danger)')} title="Unresolved Issues" value={data?.sentry.unresolvedIssues ?? null} trendLabel={data?.sentry.projectLabel ?? 'Sentry project'} trendTone={data?.sentry.message ? 'warning' : 'positive'} helper="Open issues in selected window" />
               <AdminMetricCard accent="var(--admin-accent)" icon={metricIcon('failed', 'var(--admin-danger)')} title="Issue Hits" value={data?.sentry.issueEvents ?? null} trendLabel={`${formatCompact(data?.sentry.affectedUsers ?? null)} affected users`} trendTone="critical" helper="Total recent issue events" />
+              <AdminMetricCard accent="var(--admin-accent)" icon={metricIcon('shield', 'var(--admin-danger)')} title="Critical Issues" value={data?.sentry.criticalIssues ?? null} trendLabel={data?.sentry.mostRecentIssueAt ? `Last seen ${formatRelativeTime(data.sentry.mostRecentIssueAt)}` : 'No recent critical issue'} trendTone={(data?.sentry.criticalIssues ?? 0) > 0 ? 'critical' : 'positive'} helper="Fatal and error-level issues" />
+              <AdminMetricCard accent="var(--admin-accent)" icon={metricIcon('users')} title="Affected Users" value={data?.sentry.affectedUsers ?? null} trendLabel={`${formatCompact(filteredIssues.length)} active issue groups`} trendTone={(data?.sentry.affectedUsers ?? 0) > 0 ? 'warning' : 'positive'} helper="Users touched by recent issues" />
             </div>
             {data?.sentry.message && (
               <div style={{ ...alertToneStyle('warning'), borderRadius: 10, padding: '10px 12px', marginBottom: 12, fontSize: 11.5 }}>
@@ -574,6 +585,54 @@ export default function AdminDashboard() {
               </div>
             )}
             <AdminSeriesChart points={data?.sentry.trend ?? []} type="line" tone="#5b8def" />
+            <div style={{ ...splitPanelStyle, marginTop: 12 }}>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                <div style={{ fontSize: 11.5, fontWeight: 700, color: 'var(--admin-text)' }}>Issue Severity Mix</div>
+                {sentryLevelSignals.length === 0 ? (
+                  <div style={{ fontSize: 11.5, color: 'var(--admin-muted)' }}>No matching severity data in this window.</div>
+                ) : (
+                  sentryLevelSignals.map(item => (
+                    <div key={item.key} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, border: '1px solid var(--admin-border)', borderRadius: 10, padding: '10px 12px' }}>
+                      <div>
+                        <div style={{ fontSize: 12, fontWeight: 700 }}>{item.label}</div>
+                        <div style={{ fontSize: 10.5, color: 'var(--admin-muted)' }}>{item.helper ?? 'Observed issue groups'}</div>
+                      </div>
+                      <Badge color={item.label === 'Fatal' || item.label === 'Error' ? 'red' : item.label === 'Warning' ? 'amber' : 'blue'}>{formatCompact(item.value)}</Badge>
+                    </div>
+                  ))
+                )}
+                <div style={{ fontSize: 11.5, fontWeight: 700, color: 'var(--admin-text)', marginTop: 4 }}>Issue Status</div>
+                {sentryStatusSignals.length === 0 ? (
+                  <div style={{ fontSize: 11.5, color: 'var(--admin-muted)' }}>No matching issue status data in this window.</div>
+                ) : (
+                  sentryStatusSignals.map(item => (
+                    <div key={item.key} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, border: '1px solid var(--admin-border)', borderRadius: 10, padding: '10px 12px' }}>
+                      <div>
+                        <div style={{ fontSize: 12, fontWeight: 700 }}>{item.label}</div>
+                        <div style={{ fontSize: 10.5, color: 'var(--admin-muted)' }}>{item.helper ?? 'Observed issue groups'}</div>
+                      </div>
+                      <Badge color={item.label === 'Unresolved' ? 'red' : item.label === 'Resolved' ? 'green' : 'amber'}>{formatCompact(item.value)}</Badge>
+                    </div>
+                  ))
+                )}
+              </div>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                <div style={{ fontSize: 11.5, fontWeight: 700, color: 'var(--admin-text)' }}>Issue Hotspots</div>
+                {sentryHotspots.length === 0 ? (
+                  <div style={{ fontSize: 11.5, color: 'var(--admin-muted)' }}>No matching Sentry hotspots in this window.</div>
+                ) : (
+                  sentryHotspots.map(item => (
+                    <div key={item.key} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, border: '1px solid var(--admin-border)', borderRadius: 10, padding: '10px 12px' }}>
+                      <div style={{ minWidth: 0 }}>
+                        <div style={{ fontSize: 12, fontWeight: 700, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{item.label}</div>
+                        <div style={{ fontSize: 10.5, color: 'var(--admin-muted)' }}>{item.helper ?? 'Observed issue groups'}</div>
+                      </div>
+                      <Badge color="amber">{formatCompact(item.value)}</Badge>
+                    </div>
+                  ))
+                )}
+              </div>
+            </div>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginTop: 12 }}>
               {filteredIssues.length === 0 ? (
                 <div style={{ fontSize: 11.5, color: 'var(--admin-muted)' }}>
