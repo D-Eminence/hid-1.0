@@ -370,6 +370,11 @@ function isLowSignalError(lower: string) {
 
 function isTechnicalErrorMessage(lower: string, raw: string) {
   return (
+    lower.includes('lock:sb-') ||
+    lower.includes('auth-token') ||
+    lower.includes('lock was stolen by another request') ||
+    lower.includes('another request stole it') ||
+    lower.includes('navigatorlock') ||
     lower.includes('stack') ||
     lower.includes('trace') ||
     lower.includes('sqlstate') ||
@@ -399,6 +404,14 @@ function isTechnicalErrorMessage(lower: string, raw: string) {
 
 function fallbackErrorMessage(raw: string) {
   const lower = raw.toLowerCase()
+  if (
+    lower.includes('lock:sb-') ||
+    lower.includes('auth-token') ||
+    lower.includes('lock was stolen by another request') ||
+    lower.includes('another request stole it')
+  ) {
+    return 'Your session was updated in another tab or request. Please try again.'
+  }
   if (lower.includes('provider request failed with status 401') || lower.includes('provider request failed with status 403')) {
     return 'A connected service rejected this request. Check the admin integration settings and try again.'
   }
@@ -522,6 +535,17 @@ function normalizeToastMessage(message: string, type: ToastType) {
     if (lower.includes('unable to save the patient profile') || lower.includes('save that profile information')) {
       return 'We could not save those profile changes right now. Review the email address and phone number, then try again.'
     }
+    if (
+      lower.includes('lock:sb-') ||
+      lower.includes('auth-token') ||
+      lower.includes('lock was stolen by another request') ||
+      lower.includes('another request stole it')
+    ) {
+      return 'Your session was updated in another tab or request. Please try again.'
+    }
+    if (lower.includes('aborterror')) {
+      return 'The request was interrupted. Please try again.'
+    }
     if (lower.includes('jwt') || lower.includes('refresh token')) {
       return 'Your session needs to be refreshed. Please sign in again.'
     }
@@ -545,6 +569,10 @@ function normalizeToastMessage(message: string, type: ToastType) {
   }
 
   return readable
+}
+
+export function sanitizeUserFacingMessage(message: string, type: ToastType = 'error') {
+  return normalizeToastMessage(message, type)
 }
 
 export function showToast(msg: string, type: ToastType = 'info') {

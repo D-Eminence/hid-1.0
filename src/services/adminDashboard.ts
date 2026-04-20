@@ -36,6 +36,30 @@ function isLowSignalErrorMessage(message: string) {
   )
 }
 
+function sanitizeAdminDashboardMessage(raw: string, status: number) {
+  const lower = raw.toLowerCase()
+  if (
+    lower.includes('lock:sb-') ||
+    lower.includes('auth-token') ||
+    lower.includes('lock was stolen by another request') ||
+    lower.includes('another request stole it')
+  ) {
+    return 'Your session was updated in another tab or request. Please try again.'
+  }
+  if (lower.includes('jwt') || lower.includes('refresh token')) {
+    return 'Please sign in again to continue.'
+  }
+  if (lower.includes('provider request failed with status 401') || status === 401) {
+    return 'Please sign in to open the admin dashboard.'
+  }
+  if (lower.includes('provider request failed with status 403') || status === 403) {
+    return 'Admin access is limited to platform admins.'
+  }
+  if (lower.includes('sentry')) return 'Sentry data is not available right now.'
+  if (lower.includes('posthog')) return 'PostHog data is not available right now.'
+  return fallbackErrorMessage(raw, status)
+}
+
 function requireSupabaseUrl() {
   const value = import.meta.env.VITE_SUPABASE_URL as string | undefined
   if (!value) throw new HidApiError(500, 'Supabase is not configured for this app.')
@@ -49,8 +73,13 @@ function requireSupabaseAnonKey() {
 }
 
 async function getAccessToken() {
-  const { data } = await supabase.auth.getSession()
-  return data.session?.access_token ?? null
+  try {
+    const { data } = await supabase.auth.getSession()
+    return data.session?.access_token ?? null
+  } catch (error) {
+    const rawMessage = error instanceof Error ? error.message : 'Unable to read the current session.'
+    throw new HidApiError(401, sanitizeAdminDashboardMessage(rawMessage, 401), error)
+  }
 }
 
 export async function fetchAdminDashboardOverview(window: AdminOverviewWindow = '7d') {
@@ -99,8 +128,8 @@ export async function fetchAdminDashboardOverview(window: AdminOverviewWindow = 
         ? parsedPayload.error
         : rawBody || response.statusText || ''
     const message = rawMessage && !isLowSignalErrorMessage(rawMessage)
-      ? rawMessage
-      : fallbackErrorMessage(rawMessage, response.status)
+      ? sanitizeAdminDashboardMessage(rawMessage, response.status)
+      : sanitizeAdminDashboardMessage(rawMessage, response.status)
 
     if (response.status === 401 || message.toLowerCase().includes('please sign in again')) {
       try {

@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react'
-import { showToast } from '../components/ui'
+import { sanitizeUserFacingMessage, showToast } from '../components/ui'
 import { fetchAdminDashboardOverview } from '../services/adminDashboard'
 import type { AdminDashboardOverview, AdminOverviewWindow } from '../types/admin'
 
@@ -30,7 +30,7 @@ export function useAdminDashboard(windowKey: AdminOverviewWindow) {
               ? 'Sentry data is not available right now.'
               : lower.includes('posthog')
                 ? 'PostHog data is not available right now.'
-                : rawMessage
+                : sanitizeUserFacingMessage(rawMessage, 'error')
       setError(message)
       if (!silent) {
         showToast(message, 'error')
