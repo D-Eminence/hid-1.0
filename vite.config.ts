@@ -21,4 +21,23 @@ export default defineConfig({
     port: 3000,
     strictPort: true,
   },
+  build: {
+    rollupOptions: {
+      output: {
+        manualChunks(id) {
+          if (!id.includes('node_modules')) return undefined
+          if (id.includes('react-router-dom') || id.includes('/react/') || id.includes('/react-dom/')) {
+            return 'vendor-react'
+          }
+          if (id.includes('@supabase/supabase-js')) {
+            return 'vendor-supabase'
+          }
+          if (id.includes('@sentry/') || id.includes('posthog-js')) {
+            return 'vendor-observability'
+          }
+          return undefined
+        },
+      },
+    },
+  },
 })

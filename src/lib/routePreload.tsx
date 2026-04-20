@@ -92,6 +92,36 @@ export function preloadRoutes(keys: RoutePreloadKey[]) {
   keys.forEach(preloadRoute)
 }
 
+function isConstrainedNetwork() {
+  if (typeof navigator === 'undefined') return false
+  const connection = (navigator as Navigator & {
+    connection?: { saveData?: boolean; effectiveType?: string }
+  }).connection as
+    | { saveData?: boolean; effectiveType?: string }
+    | undefined
+
+  if (!connection) return false
+  if (connection.saveData) return true
+  return typeof connection.effectiveType === 'string' && connection.effectiveType.includes('2g')
+}
+
+function scheduleIdle(callback: () => void, timeoutMs: number) {
+  if (typeof window === 'undefined') return () => undefined
+
+  const idleWindow = window as Window & {
+    requestIdleCallback?: (task: () => void, options?: { timeout: number }) => number
+    cancelIdleCallback?: (id: number) => void
+  }
+
+  if (typeof idleWindow.requestIdleCallback === 'function') {
+    const idleId = idleWindow.requestIdleCallback(callback, { timeout: timeoutMs })
+    return () => idleWindow.cancelIdleCallback?.(idleId)
+  }
+
+  const timer = globalThis.setTimeout(callback, Math.min(timeoutMs, 250))
+  return () => globalThis.clearTimeout(timer)
+}
+
 export function preloadPath(path: string) {
   getRoutePreloadKeys(path).forEach(preloadRoute)
 }
@@ -127,4 +157,15 @@ export function preloadRoutesAfterDelay(keys: RoutePreloadKey[], delayMs = 20) {
     preloadRoutes(keys)
   }, delayMs)
   return () => window.clearTimeout(timer)
+}
+
+export function preloadRoutesWhenIdle(keys: RoutePreloadKey[], timeoutMs = 800) {
+  if (typeof window === 'undefined' || keys.length === 0 || isConstrainedNetwork()) {
+    return () => undefined
+  }
+
+  const uniqueKeys = [...new Set(keys)]
+  return scheduleIdle(() => {
+    preloadRoutes(uniqueKeys)
+  }, timeoutMs)
 }

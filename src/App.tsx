@@ -1,5 +1,5 @@
 import React, { Component, Suspense } from 'react'
-import { BrowserRouter, Navigate, Route, Routes, useParams } from 'react-router-dom'
+import { BrowserRouter, Navigate, Route, Routes, useLocation, useParams } from 'react-router-dom'
 import { AppInstallPrompt } from './components/AppInstallPrompt'
 import { HIDLogo } from './components/HIDLogo'
 import { RouteObservability } from './components/RouteObservability'
@@ -17,10 +17,12 @@ import {
   DoctorPatientRecordsPage,
   LandingPage,
   PatientAuthPage,
+  getRoutePreloadKeys,
   PatientHistoryPage,
   PatientNotificationsPage,
   PatientProfilePage,
   PatientRecordsPage,
+  preloadRoutesWhenIdle,
 } from './lib/routePreload'
 import {
   ADMIN_LOGIN_PATH,
@@ -122,6 +124,16 @@ function LegacyDoctorEmergencyRedirect() {
   return <Navigate to={HOSPITAL_EMERGENCY_PATH} replace />
 }
 
+function RouteWarmup() {
+  const location = useLocation()
+
+  React.useEffect(() => {
+    return preloadRoutesWhenIdle(getRoutePreloadKeys(location.pathname), 900)
+  }, [location.pathname])
+
+  return null
+}
+
 export default function App() {
   return (
     <ErrorBoundary>
@@ -129,6 +141,7 @@ export default function App() {
         <ToastProvider />
         <SessionBootstrap />
         <RouteObservability />
+        <RouteWarmup />
         <AppInstallPrompt />
         <SetupBanner />
         <Suspense fallback={<RouteLoadingScreen />}>

@@ -4,7 +4,7 @@ import folderPreviewImage from '../../lp/B.png'
 import { HIDLogo } from '../components/HIDLogo'
 import { LegalDocumentsModal } from '../components/LegalDocumentsModal'
 import { HOSPITAL_AUTH_PATH } from '../lib/hospitalRoutes'
-import { preloadRoute, preloadRoutesAfterDelay } from '../lib/routePreload'
+import { preloadRoute, preloadRoutesWhenIdle } from '../lib/routePreload'
 
 type FooterLink = {
   label: string
@@ -200,7 +200,7 @@ export default function Landing() {
     },
   ]
 
-  useEffect(() => preloadRoutesAfterDelay(['patientAuth', 'doctorAuth']), [])
+  useEffect(() => preloadRoutesWhenIdle(['patientAuth', 'doctorAuth', 'adminLogin']), [])
 
   return (
     <div style={{ fontFamily: "'Inter', -apple-system, sans-serif", color: '#111827', background: '#fff' }}>

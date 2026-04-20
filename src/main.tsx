@@ -1,13 +1,13 @@
 import React from 'react'
 import ReactDOM from 'react-dom/client'
 import App from './App'
-import { initObservability } from './lib/observability'
-import { registerAppServiceWorker } from './lib/pwa'
+import { scheduleNonCriticalStartup, warmCriticalConnections } from './lib/performance'
 import './index.css'
 
-void initObservability()
-void registerAppServiceWorker()
+warmCriticalConnections()
 
 ReactDOM.createRoot(document.getElementById('root')!).render(
   <React.StrictMode><App /></React.StrictMode>
 )
+
+scheduleNonCriticalStartup()
