@@ -223,7 +223,7 @@ export default function AdminDashboard() {
   const [searchQuery, setSearchQuery] = useState('')
   const [activeSection, setActiveSection] = useState('dashboard')
   const [viewportWidth, setViewportWidth] = useState(() => (typeof window !== 'undefined' ? window.innerWidth : 1440))
-  const { data, error, loading, refresh } = useAdminDashboard(windowKey)
+  const { data, error, loading, refreshing, refresh } = useAdminDashboard(windowKey)
 
   useEffect(() => {
     void loadViewer()
@@ -435,7 +435,7 @@ export default function AdminDashboard() {
                 {option.label}
               </button>
             ))}
-            <Button size="sm" variant="outline" onClick={() => { void refresh().catch(() => undefined) }}>
+            <Button size="sm" variant="outline" loading={refreshing} onClick={() => { void refresh().catch(() => undefined) }}>
               Refresh
             </Button>
           </div>

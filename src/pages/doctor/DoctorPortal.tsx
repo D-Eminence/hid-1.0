@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { HospitalLayout } from '../../components/HospitalLayout'
+import { StaffNotificationWatcher } from '../../components/StaffNotificationWatcher'
 import { Badge, Button, Card, EmptyState, Input, Modal, PageLoader, Textarea, showToast } from '../../components/ui'
 import { FileAttachmentPreview, MedicalRecordMarkdownView } from '../../components/RecordMarkdownView'
 import { VoiceToTextButton } from '../../components/VoiceToTextButton'
@@ -40,6 +41,12 @@ export default function DoctorPortal() {
   const [recordForm, setRecordForm] = useState(createEmptyRecordForm())
   const [activeGrantId, setActiveGrantId] = useState<string | null>(null)
   const saveLockRef = useRef(false)
+
+  function handleRevokedAccess() {
+    setActiveGrantId(null)
+    setData(null)
+    setPin('')
+  }
 
   useEffect(() => {
     if (!session) {
@@ -240,6 +247,7 @@ export default function DoctorPortal() {
       userName={session.fullName}
       organizationName={session.hospitalName ?? null}
     >
+      <StaffNotificationWatcher onAccessRevoked={handleRevokedAccess} />
       <div style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
         <Card>
           <h2 style={{ fontSize: 16, fontWeight: 700, marginBottom: 6 }}>Patient Record Lookup</h2>

@@ -82,7 +82,7 @@ async function getAccessToken() {
   }
 }
 
-export async function fetchAdminDashboardOverview(window: AdminOverviewWindow = '7d') {
+export async function fetchAdminDashboardOverview(window: AdminOverviewWindow = '7d', options: { force?: boolean } = {}) {
   const accessToken = await getAccessToken()
   if (!accessToken) {
     throw new HidApiError(401, 'Please sign in to continue.')
@@ -90,10 +90,14 @@ export async function fetchAdminDashboardOverview(window: AdminOverviewWindow = 
 
   const url = new URL(`${requireSupabaseUrl()}/functions/v1/admin-dashboard-overview`)
   url.searchParams.set('window', window)
+  if (options.force) {
+    url.searchParams.set('_ts', `${Date.now()}`)
+  }
 
   let response: Response
   try {
     response = await fetchWithTimeout(url.toString(), {
+      cache: 'no-store',
       headers: {
         Authorization: `Bearer ${accessToken}`,
         apikey: requireSupabaseAnonKey(),

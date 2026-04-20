@@ -4,6 +4,7 @@ import { HIDLogo } from './HIDLogo'
 import { getPersonInitials } from '../lib/utils'
 import { preloadPath } from '../lib/routePreload'
 import { supabase } from '../lib/supabase'
+import { subscribeToNotifications } from '../lib/notificationsRealtime'
 
 interface NavItem {
   path: string
@@ -98,13 +99,17 @@ export function PortalShell({
     }
 
     void loadUnread()
+    const unsubscribe = subscribeToNotifications(() => {
+      void loadUnread()
+    })
     const interval = window.setInterval(() => {
       if (document.visibilityState === 'visible') {
         void loadUnread()
       }
-    }, 60000)
+    }, 15000)
     return () => {
       active = false
+      unsubscribe()
       window.clearInterval(interval)
     }
   }, [notificationPath])

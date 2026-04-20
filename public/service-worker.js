@@ -1,5 +1,14 @@
-const CACHE_VERSION = 'hid-static-v2026-04-20-1'
-const STATIC_CACHE_URLS = ['/', '/manifest.webmanifest', '/hid-logo.png']
+const CACHE_VERSION = 'hid-static-v2026-04-20-2'
+const STATIC_CACHE_URLS = [
+  '/',
+  '/manifest.webmanifest',
+  '/hid-logo.png',
+  '/favicon.ico',
+  '/favicon-16x16.png',
+  '/favicon-32x32.png',
+  '/apple-touch-icon.png',
+  '/android-chrome-192x192.png',
+]
 
 self.addEventListener('install', event => {
   event.waitUntil(

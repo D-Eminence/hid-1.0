@@ -4,6 +4,7 @@ import { PortalShell } from '../../components/PortalShell'
 import { Button, Card, PageLoader, showToast } from '../../components/ui'
 import { getPatientSession, signOutAndClearSessions } from '../../lib/auth'
 import { fetchMyPatient, listNotifications, markNotificationRead } from '../../lib/hidApi'
+import { subscribeToNotifications } from '../../lib/notificationsRealtime'
 import { formatDateTime } from '../../lib/utils'
 import type { Notification, Patient } from '../../types/database'
 
@@ -28,6 +29,17 @@ export default function PatientNotifications() {
     }
     void loadNotificationsPage()
   }, [navigate, session])
+
+  useEffect(() => {
+    if (!session) return
+    const unsubscribe = subscribeToNotifications(() => {
+      void loadNotificationsPage()
+    })
+
+    return () => {
+      unsubscribe()
+    }
+  }, [session])
 
   async function loadNotificationsPage() {
     if (!session) return

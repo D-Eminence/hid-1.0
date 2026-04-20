@@ -1,6 +1,7 @@
 import React, { useEffect } from 'react'
 import { showToast } from './ui'
 import { listUnreadNotifications, markAllNotificationsRead } from '../lib/hidApi'
+import { subscribeToNotifications } from '../lib/notificationsRealtime'
 
 const TOAST_PREVIEW_LIMIT = 3
 
@@ -28,13 +29,19 @@ export function PatientNotificationWatcher({ hidCode }: { hidCode: string }) {
     }
 
     void flushUnreadSummary()
+    const unsubscribe = subscribeToNotifications(() => {
+      if (document.visibilityState === 'visible') {
+        void flushUnreadSummary()
+      }
+    })
     const interval = window.setInterval(() => {
       if (document.visibilityState === 'visible') {
         void flushUnreadSummary()
       }
-    }, 60000)
+    }, 15000)
     return () => {
       cancelled = true
+      unsubscribe()
       window.clearInterval(interval)
     }
   }, [hidCode])

@@ -13,16 +13,36 @@ const DISMISS_TTL_MS = 7 * 24 * 60 * 60 * 1000
 function canShowInstallPrompt() {
   if (typeof window === 'undefined') return false
   if (window.matchMedia?.('(display-mode: standalone)').matches) return false
+  if ((window.navigator as Navigator & { standalone?: boolean }).standalone) return false
   const dismissedAt = Number(localStorage.getItem(DISMISS_KEY) ?? '0')
   return !dismissedAt || Date.now() - dismissedAt > DISMISS_TTL_MS
+}
+
+function isIosDevice() {
+  if (typeof navigator === 'undefined') return false
+  const ua = navigator.userAgent || navigator.vendor || ''
+  return /iPad|iPhone|iPod/.test(ua)
+}
+
+function isSafariBrowser() {
+  if (typeof navigator === 'undefined') return false
+  const ua = navigator.userAgent || ''
+  return /Safari/i.test(ua) && !/CriOS|FxiOS|EdgiOS|OPiOS|DuckDuckGo/i.test(ua)
 }
 
 export function AppInstallPrompt() {
   const [deferredPrompt, setDeferredPrompt] = useState<DeferredInstallPromptEvent | null>(null)
   const [visible, setVisible] = useState(false)
+  const [iosPrompt, setIosPrompt] = useState(false)
 
   useEffect(() => {
     if (typeof window === 'undefined' || !canShowInstallPrompt()) return undefined
+
+    if (isIosDevice()) {
+      setIosPrompt(true)
+      setVisible(true)
+      return undefined
+    }
 
     const handleBeforeInstallPrompt = (event: Event) => {
       event.preventDefault()
@@ -46,8 +66,12 @@ export function AppInstallPrompt() {
   }, [])
 
   const description = useMemo(() => (
-    'Install HID on this device for faster access from your home screen and a more app-like experience.'
-  ), [])
+    iosPrompt
+      ? isSafariBrowser()
+        ? 'Install HID on your iPhone or iPad by tapping Share, then Add to Home Screen.'
+        : 'To install HID on iPhone or iPad, open this page in Safari, tap Share, then Add to Home Screen.'
+      : 'Install HID on this device for faster access from your home screen and a more app-like experience.'
+  ), [iosPrompt])
 
   async function install() {
     if (!deferredPrompt) return
@@ -65,9 +89,10 @@ export function AppInstallPrompt() {
   function dismiss() {
     localStorage.setItem(DISMISS_KEY, `${Date.now()}`)
     setVisible(false)
+    setIosPrompt(false)
   }
 
-  if (!visible || !deferredPrompt) return null
+  if (!visible || (!deferredPrompt && !iosPrompt)) return null
 
   return (
     <div
@@ -95,7 +120,7 @@ export function AppInstallPrompt() {
       </div>
       <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10, marginTop: 14, flexWrap: 'wrap' }}>
         <Button size="sm" variant="outline" onClick={dismiss}>Not now</Button>
-        <Button size="sm" onClick={() => void install()}>Add to device</Button>
+        {!iosPrompt && <Button size="sm" onClick={() => void install()}>Add to device</Button>}
       </div>
     </div>
   )

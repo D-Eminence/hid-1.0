@@ -8,13 +8,19 @@ const REFRESH_INTERVAL_MS = 60000
 export function useAdminDashboard(windowKey: AdminOverviewWindow) {
   const [data, setData] = useState<AdminDashboardOverview | null>(null)
   const [loading, setLoading] = useState(true)
+  const [refreshing, setRefreshing] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
   const refresh = useCallback(async (silent = false) => {
-    if (!silent) setLoading(true)
+    if (silent) {
+      setRefreshing(true)
+    } else {
+      setLoading(true)
+      setRefreshing(true)
+    }
 
     try {
-      const next = await fetchAdminDashboardOverview(windowKey)
+      const next = await fetchAdminDashboardOverview(windowKey, { force: true })
       setData(next)
       setError(null)
       return next
@@ -37,6 +43,7 @@ export function useAdminDashboard(windowKey: AdminOverviewWindow) {
       }
       throw reason
     } finally {
+      setRefreshing(false)
       if (!silent) setLoading(false)
     }
   }, [windowKey])
@@ -57,6 +64,7 @@ export function useAdminDashboard(windowKey: AdminOverviewWindow) {
     data,
     error,
     loading,
+    refreshing,
     refresh,
   }
 }
