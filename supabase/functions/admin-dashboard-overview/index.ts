@@ -49,7 +49,10 @@ function isIgnoredSentryIssue(issue: SentryIssue) {
 
   return (
     text.includes('invalid login credentials') ||
+    text.includes('token has expired or is invalid') ||
+    text.includes('authapierror') ||
     text.includes('lock was stolen by another request') ||
+    text.includes('importing a module script failed') ||
     text.includes('typeerror: load failed') ||
     text.includes('failed to fetch dynamically imported module')
   )
