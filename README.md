@@ -126,11 +126,9 @@ SMTP should point to Brevo.
 
 The active live path is Vercel + Cloudflare. The Hostinger notes are still useful for mailbox and DNS-related setup.
 
-For automatic full production deploys from GitHub, add these repository secrets:
+For automatic full production deploys from GitHub, add this repository secret:
 
 - `VERCEL_TOKEN`
-- `VERCEL_ORG_ID`
-- `VERCEL_PROJECT_ID`
 
 That workflow uses `vercel pull`, `vercel build --prod`, and `vercel deploy --prebuilt --prod` so production always receives a complete immutable build, and the attached custom domain continues to point to the latest successful production deployment.
 
