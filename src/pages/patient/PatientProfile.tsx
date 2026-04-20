@@ -1,7 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { OtpInputs } from '../../components/OtpInputs'
-import { PatientNotificationWatcher } from '../../components/PatientNotificationWatcher'
 import { PortalShell } from '../../components/PortalShell'
 import { Button, Card, Input, Modal, PageLoader, Select, Textarea, showToast } from '../../components/ui'
 import { getPatientSession, setPatientSession, signOutAndClearSessions } from '../../lib/auth'
@@ -280,8 +279,8 @@ export default function PatientProfile() {
         onLogout={() => { void logout() }}
         userName={session.fullName}
         notificationPath="/patient/notifications"
+        notificationHidCode={session.hidCode}
       >
-        <PatientNotificationWatcher hidCode={session.hidCode} />
         <PageLoader label="Loading your profile..." />
       </PortalShell>
     )
@@ -319,10 +318,9 @@ export default function PatientProfile() {
       userName={patientName}
       avatarUrl={patient.photo_url}
       notificationPath="/patient/notifications"
+      notificationHidCode={session.hidCode}
       onAvatarUpload={file => { void uploadProfilePicture(file) }}
     >
-      <PatientNotificationWatcher hidCode={session.hidCode} />
-
       <div style={{ display: 'grid', gap: 24 }}>
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: 28, alignItems: 'start' }}>
           <div style={{ display: 'grid', gap: 20 }}>

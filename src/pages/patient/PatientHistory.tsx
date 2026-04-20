@@ -1,6 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { PatientNotificationWatcher } from '../../components/PatientNotificationWatcher'
 import { PortalShell } from '../../components/PortalShell'
 import { Badge, Button, Card, PageLoader, showToast } from '../../components/ui'
 import { getPatientSession, signOutAndClearSessions } from '../../lib/auth'
@@ -107,8 +106,8 @@ export default function PatientHistory() {
         userName={patient?.full_name ?? session.fullName}
         avatarUrl={patient?.photo_url}
         notificationPath="/patient/notifications"
+        notificationHidCode={session.hidCode}
       >
-        <PatientNotificationWatcher hidCode={session.hidCode} />
         <PageLoader label="Loading your access history..." />
       </PortalShell>
     )
@@ -123,9 +122,8 @@ export default function PatientHistory() {
       userName={patient?.full_name ?? session.fullName}
       avatarUrl={patient?.photo_url}
       notificationPath="/patient/notifications"
+      notificationHidCode={session.hidCode}
     >
-      <PatientNotificationWatcher hidCode={session.hidCode} />
-
       <Card style={{ borderRadius: 24, marginBottom: 18 }}>
         <div style={{ fontSize: 24, fontWeight: 700, color: '#111827' }}>Active access</div>
         <div style={{ color: '#8a95a6', marginTop: 6, fontSize: 13 }}>Providers that currently have access to your records.</div>

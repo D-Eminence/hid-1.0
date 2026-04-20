@@ -1,6 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { PatientNotificationWatcher } from '../../components/PatientNotificationWatcher'
 import { PortalShell } from '../../components/PortalShell'
 import { Badge, Button, Card, EmptyState, Input, Modal, PageLoader, Textarea, showToast } from '../../components/ui'
 import { FileAttachmentPreview, MedicalRecordMarkdownView } from '../../components/RecordMarkdownView'
@@ -174,8 +173,8 @@ export default function PatientRecords() {
         userName={patient?.full_name ?? session.fullName}
         avatarUrl={patient?.photo_url}
         notificationPath="/patient/notifications"
+        notificationHidCode={session.hidCode}
       >
-        <PatientNotificationWatcher hidCode={session.hidCode} />
         <PageLoader label="Loading your records..." />
       </PortalShell>
     )
@@ -190,9 +189,8 @@ export default function PatientRecords() {
       userName={patient?.full_name ?? session.fullName}
       avatarUrl={patient?.photo_url}
       notificationPath="/patient/notifications"
+      notificationHidCode={session.hidCode}
     >
-      <PatientNotificationWatcher hidCode={session.hidCode} />
-
       <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 20 }}>
         <div style={{ width: 44, height: 44, borderRadius: '50%', overflow: 'hidden', background: 'linear-gradient(180deg, #f4f7fb 0%, #dfe8f4 100%)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 700, color: '#68758b' }}>
           {patient?.photo_url ? <img src={patient.photo_url} alt={session.fullName} style={{ width: '100%', height: '100%', objectFit: 'cover' }} /> : patientInitials}

@@ -35,9 +35,16 @@ export default function PatientNotifications() {
     const unsubscribe = subscribeToNotifications(() => {
       void loadNotificationsPage()
     })
+    const handleVisibility = () => {
+      if (document.visibilityState === 'visible') {
+        void loadNotificationsPage()
+      }
+    }
+    document.addEventListener('visibilitychange', handleVisibility)
 
     return () => {
       unsubscribe()
+      document.removeEventListener('visibilitychange', handleVisibility)
     }
   }, [session])
 
@@ -85,6 +92,7 @@ export default function PatientNotifications() {
         userName={patient?.full_name ?? session.fullName}
         avatarUrl={patient?.photo_url}
         notificationPath="/patient/notifications"
+        notificationHidCode={session.hidCode}
       >
         <PageLoader label="Loading your notifications..." />
       </PortalShell>
@@ -100,6 +108,7 @@ export default function PatientNotifications() {
       userName={patient?.full_name ?? session.fullName}
       avatarUrl={patient?.photo_url}
       notificationPath="/patient/notifications"
+      notificationHidCode={session.hidCode}
     >
       <Card>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>

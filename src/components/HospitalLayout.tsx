@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
 import { HIDLogo } from './HIDLogo'
+import { StaffNotificationWatcher } from './StaffNotificationWatcher'
 import {
   HOSPITAL_ACCESS_PATH,
   HOSPITAL_DASHBOARD_PATH,
@@ -67,6 +68,7 @@ export function HospitalLayout({
   onLogout,
   userName,
   organizationName,
+  onAccessRevoked,
 }: {
   activeSection: HospitalSection
   children: React.ReactNode
@@ -75,6 +77,7 @@ export function HospitalLayout({
   onLogout?: () => void
   userName?: string | null
   organizationName?: string | null
+  onAccessRevoked?: () => void
 }) {
   const navigate = useNavigate()
   const { pathname } = useLocation()
@@ -215,7 +218,10 @@ export function HospitalLayout({
           </div>
         </div>
 
-        <div style={{ flex: 1, padding: isCompact ? 16 : 32, background: '#f3f4f6' }}>{children}</div>
+        <div style={{ flex: 1, padding: isCompact ? 16 : 32, background: '#f3f4f6' }}>
+          <StaffNotificationWatcher onAccessRevoked={onAccessRevoked} />
+          {children}
+        </div>
       </main>
     </div>
   )

@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate, useLocation } from 'react-router-dom'
 import { HIDLogo } from './HIDLogo'
+import { PatientNotificationWatcher } from './PatientNotificationWatcher'
 import { getPersonInitials } from '../lib/utils'
 import { preloadPath } from '../lib/routePreload'
 import { supabase } from '../lib/supabase'
@@ -102,14 +103,21 @@ export function PortalShell({
     const unsubscribe = subscribeToNotifications(() => {
       void loadUnread()
     })
+    const handleVisibility = () => {
+      if (document.visibilityState === 'visible') {
+        void loadUnread()
+      }
+    }
     const interval = window.setInterval(() => {
       if (document.visibilityState === 'visible') {
         void loadUnread()
       }
     }, 15000)
+    document.addEventListener('visibilitychange', handleVisibility)
     return () => {
       active = false
       unsubscribe()
+      document.removeEventListener('visibilitychange', handleVisibility)
       window.clearInterval(interval)
     }
   }, [notificationPath])
@@ -210,6 +218,7 @@ export function PortalShell({
         </div>
 
         <div style={{ marginTop: 28 }}>
+          {notificationHidCode ? <PatientNotificationWatcher hidCode={notificationHidCode} /> : null}
           {(title || subtitle) && (
             <div style={{ marginBottom: 20 }}>
               <div style={{ fontSize: 28, fontWeight: 700, color: '#111827', letterSpacing: '-0.03em' }}>{title}</div>

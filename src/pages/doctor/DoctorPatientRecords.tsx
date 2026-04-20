@@ -1,7 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { HospitalLayout } from '../../components/HospitalLayout'
-import { StaffNotificationWatcher } from '../../components/StaffNotificationWatcher'
 import { Badge, Button, Card, EmptyState, Input, Modal, PageLoader, Textarea, showToast } from '../../components/ui'
 import { FileAttachmentPreview, MedicalRecordMarkdownView } from '../../components/RecordMarkdownView'
 import { VoiceToTextButton } from '../../components/VoiceToTextButton'
@@ -268,8 +267,8 @@ export default function DoctorPatientRecords() {
       onLogout={() => { void logout() }}
       userName={session.fullName}
       organizationName={session.hospitalName ?? null}
+      onAccessRevoked={handleRevokedAccess}
     >
-      <StaffNotificationWatcher onAccessRevoked={handleRevokedAccess} />
       <Card style={{ borderRadius: 24, marginBottom: 18, background: 'linear-gradient(180deg, #ffffff 0%, #f7fbff 100%)', borderColor: '#dbe8f8' }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', gap: 16, flexWrap: 'wrap', alignItems: 'flex-start' }}>
           <div>

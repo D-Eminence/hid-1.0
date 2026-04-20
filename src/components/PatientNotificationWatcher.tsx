@@ -34,14 +34,21 @@ export function PatientNotificationWatcher({ hidCode }: { hidCode: string }) {
         void flushUnreadSummary()
       }
     })
+    const handleVisibility = () => {
+      if (document.visibilityState === 'visible') {
+        void flushUnreadSummary()
+      }
+    }
     const interval = window.setInterval(() => {
       if (document.visibilityState === 'visible') {
         void flushUnreadSummary()
       }
     }, 15000)
+    document.addEventListener('visibilitychange', handleVisibility)
     return () => {
       cancelled = true
       unsubscribe()
+      document.removeEventListener('visibilitychange', handleVisibility)
       window.clearInterval(interval)
     }
   }, [hidCode])
