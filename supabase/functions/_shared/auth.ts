@@ -33,19 +33,77 @@ export function createAdminClient() {
   })
 }
 
-export async function requireUser(req: Request): Promise<{ client: ReturnType<typeof createUserClient>; user: User }> {
+type HidUserProfileRecord = {
+  active: boolean
+  app_role: string
+  display_name: string | null
+  id: string
+  mfa_required: boolean
+}
+
+type HidStaffAccountState = {
+  active: boolean
+  id: string
+}
+
+export async function requireUser(req: Request): Promise<{
+  client: ReturnType<typeof createUserClient>
+  user: User
+  profile: HidUserProfileRecord | null
+  staffAccount: HidStaffAccountState | null
+}> {
   const client = createUserClient(req)
   const { data, error } = await client.auth.getUser()
   if (error || !data.user) {
     throw new HttpError(401, 'Authentication required.')
   }
 
-  return { client, user: data.user }
+  const profileResult = await client
+    .from('hid_user_profiles')
+    .select('id, app_role, active, display_name, mfa_required')
+    .eq('auth_user_id', data.user.id)
+    .maybeSingle()
+
+  if (profileResult.error) {
+    throw new HttpError(400, 'We could not verify this account right now.', profileResult.error)
+  }
+
+  const profile = (profileResult.data ?? null) as HidUserProfileRecord | null
+  if (profile?.active === false) {
+    throw new HttpError(403, 'This account is inactive.')
+  }
+
+  const metadataRole = typeof data.user.app_metadata?.app_role === 'string' ? data.user.app_metadata.app_role as string : ''
+  const effectiveRole = typeof profile?.app_role === 'string' ? profile.app_role : metadataRole
+
+  let staffAccount: HidStaffAccountState | null = null
+  if (effectiveRole === 'clinician' || effectiveRole === 'org_admin') {
+    const staffResult = await client
+      .from('hid_staff_accounts')
+      .select('id, active')
+      .eq('auth_user_id', data.user.id)
+      .maybeSingle()
+
+    if (staffResult.error) {
+      throw new HttpError(400, 'We could not verify this account right now.', staffResult.error)
+    }
+
+    staffAccount = (staffResult.data ?? null) as HidStaffAccountState | null
+    if (staffAccount?.active === false) {
+      throw new HttpError(403, 'This account is not allowed to do that right now.')
+    }
+  }
+
+  return { client, user: data.user, profile, staffAccount }
 }
 
 export async function requireRole(req: Request, allowedRoles: string[]) {
   const auth = await requireUser(req)
-  let role = typeof auth.user.app_metadata?.app_role === 'string' ? auth.user.app_metadata.app_role as string : ''
+  let role = typeof auth.profile?.app_role === 'string'
+    ? auth.profile.app_role
+    : typeof auth.user.app_metadata?.app_role === 'string'
+      ? auth.user.app_metadata.app_role as string
+      : ''
 
   if (!allowedRoles.includes(role)) {
     const { data } = await auth.client

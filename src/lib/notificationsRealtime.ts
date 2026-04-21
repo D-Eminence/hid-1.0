@@ -1,14 +1,15 @@
 import { supabase } from './supabase'
 
-function makeChannelName(prefix: string) {
-  return `${prefix}-${Math.random().toString(36).slice(2)}`
-}
+type Listener = () => void
 
-export function subscribeToNotifications(onChange: () => void) {
-  let active = true
+const listeners = new Set<Listener>()
+let activeChannel: ReturnType<typeof supabase.channel> | null = null
 
-  const channel = supabase
-    .channel(makeChannelName('hid-notifications'))
+function ensureChannel() {
+  if (activeChannel) return activeChannel
+
+  activeChannel = supabase
+    .channel('hid-notifications-shared')
     .on(
       'postgres_changes',
       {
@@ -17,13 +18,28 @@ export function subscribeToNotifications(onChange: () => void) {
         table: 'hid_notifications',
       },
       () => {
-        if (active) onChange()
+        listeners.forEach(listener => {
+          listener()
+        })
       }
     )
     .subscribe()
 
+  return activeChannel
+}
+
+function teardownChannelIfIdle() {
+  if (listeners.size > 0 || !activeChannel) return
+  void supabase.removeChannel(activeChannel)
+  activeChannel = null
+}
+
+export function subscribeToNotifications(onChange: Listener) {
+  listeners.add(onChange)
+  ensureChannel()
+
   return () => {
-    active = false
-    void supabase.removeChannel(channel)
+    listeners.delete(onChange)
+    teardownChannelIfIdle()
   }
 }

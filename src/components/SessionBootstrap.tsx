@@ -1,7 +1,7 @@
 import React, { useEffect } from 'react'
 import { clearAllPortalSessions, getStaffSession, setPatientSession, setStaffSession } from '../lib/auth'
 import { fetchMyPatient, fetchMyStaffAccount } from '../lib/hidApi'
-import { clearObservabilityIdentity, identifyObservabilityUser } from '../lib/observability'
+import { clearObservabilityIdentity, identifyObservabilityUser } from '../lib/observabilityBridge'
 import { getSafeSession, safeSignOut, supabase } from '../lib/supabase'
 
 function isAuthFailure(reason: unknown) {
@@ -26,12 +26,24 @@ async function hydratePortalSession() {
     return
   }
 
+  const pathname = typeof window !== 'undefined' ? window.location.pathname : '/'
+  const requestedRole = `${session.user.user_metadata.requested_role ?? ''}`.trim().toLowerCase()
+  const shouldLoadPatient =
+    pathname.startsWith('/patient') ||
+    requestedRole === 'patient' ||
+    (!pathname.startsWith('/hospital') && !pathname.startsWith('/doctor') && !pathname.startsWith('/eminence'))
+  const shouldLoadStaff =
+    pathname.startsWith('/hospital') ||
+    pathname.startsWith('/doctor') ||
+    requestedRole === 'clinician' ||
+    requestedRole === 'org_admin'
+
   const [patient, staff] = await Promise.allSettled([
-    fetchMyPatient(),
-    fetchMyStaffAccount(),
+    shouldLoadPatient ? fetchMyPatient() : Promise.resolve(null),
+    shouldLoadStaff ? fetchMyStaffAccount() : Promise.resolve(null),
   ])
 
-  if (patient.status === 'fulfilled') {
+  if (patient.status === 'fulfilled' && patient.value) {
     setPatientSession({
       hidCode: patient.value.hid_code,
       phone: patient.value.phone ?? '',

@@ -11,16 +11,23 @@ export function useAdminDashboard(windowKey: AdminOverviewWindow) {
   const [refreshing, setRefreshing] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
-  const refresh = useCallback(async (silent = false) => {
+  const runRequest = useCallback(async ({
+    force,
+    silent,
+    toastOnError,
+  }: {
+    force: boolean
+    silent: boolean
+    toastOnError: boolean
+  }) => {
     if (silent) {
       setRefreshing(true)
     } else {
       setLoading(true)
       setRefreshing(true)
     }
-
     try {
-      const next = await fetchAdminDashboardOverview(windowKey, { force: true })
+      const next = await fetchAdminDashboardOverview(windowKey, { force })
       setData(next)
       setError(null)
       return next
@@ -38,7 +45,7 @@ export function useAdminDashboard(windowKey: AdminOverviewWindow) {
                 ? 'PostHog data is not available right now.'
                 : sanitizeUserFacingMessage(rawMessage, 'error')
       setError(message)
-      if (!silent) {
+      if (toastOnError) {
         showToast(message, 'error')
       }
       throw reason
@@ -48,13 +55,27 @@ export function useAdminDashboard(windowKey: AdminOverviewWindow) {
     }
   }, [windowKey])
 
+  const refresh = useCallback(async (silent = false) => (
+    runRequest({
+      force: true,
+      silent,
+      toastOnError: !silent,
+    })
+  ), [runRequest])
+
   useEffect(() => {
-    void refresh().catch(() => undefined)
-  }, [refresh])
+    void runRequest({
+      force: false,
+      silent: false,
+      toastOnError: true,
+    }).catch(() => undefined)
+  }, [runRequest])
 
   useEffect(() => {
     const timer = window.setInterval(() => {
-      void refresh(true).catch(() => undefined)
+      if (document.visibilityState === 'visible') {
+        void refresh(true).catch(() => undefined)
+      }
     }, REFRESH_INTERVAL_MS)
 
     return () => window.clearInterval(timer)

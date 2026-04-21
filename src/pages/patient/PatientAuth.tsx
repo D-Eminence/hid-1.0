@@ -16,7 +16,7 @@ import {
   verifyPatientSignupOtp,
   verifyPatientPasswordResetCode,
 } from '../../lib/hidApi'
-import { trackEvent } from '../../lib/observability'
+import { trackEvent } from '../../lib/observabilityBridge'
 import { preloadRoutesAfterDelay } from '../../lib/routePreload'
 import { PASSWORD_REQUIREMENTS_TEXT, isStrongPassword, maskEmailAddress } from '../../lib/utils'
 

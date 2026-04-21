@@ -33,11 +33,11 @@ export default function PatientNotifications() {
   useEffect(() => {
     if (!session) return
     const unsubscribe = subscribeToNotifications(() => {
-      void loadNotificationsPage()
+      void loadNotificationsPage(true)
     })
     const handleVisibility = () => {
       if (document.visibilityState === 'visible') {
-        void loadNotificationsPage()
+        void loadNotificationsPage(true)
       }
     }
     document.addEventListener('visibilitychange', handleVisibility)
@@ -48,9 +48,9 @@ export default function PatientNotifications() {
     }
   }, [session])
 
-  async function loadNotificationsPage() {
+  async function loadNotificationsPage(silent = false) {
     if (!session) return
-    setLoading(true)
+    if (!silent) setLoading(true)
     try {
       const [nextPatient, nextNotifications] = await Promise.all([
         fetchMyPatient(),
@@ -62,7 +62,7 @@ export default function PatientNotifications() {
       const message = error instanceof Error ? error.message : 'Unable to load notifications.'
       showToast(message, 'error')
     } finally {
-      setLoading(false)
+      if (!silent) setLoading(false)
     }
   }
 

@@ -1,6 +1,6 @@
 import React, { useEffect } from 'react'
 import { useLocation } from 'react-router-dom'
-import { updateObservabilityForRoute } from '../lib/observability'
+import { updateObservabilityForRoute } from '../lib/observabilityBridge'
 
 export function RouteObservability() {
   const location = useLocation()

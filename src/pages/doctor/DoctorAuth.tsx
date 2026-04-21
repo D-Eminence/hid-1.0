@@ -17,7 +17,7 @@ import {
   verifyStaffPasswordResetOtp,
   verifyStaffSignupOtp,
 } from '../../lib/hidApi'
-import { trackEvent } from '../../lib/observability'
+import { trackEvent } from '../../lib/observabilityBridge'
 import { preloadRoutesAfterDelay } from '../../lib/routePreload'
 import { supabase } from '../../lib/supabase'
 import { COUNTRIES, PASSWORD_REQUIREMENTS_TEXT, STATES_BY_COUNTRY, isStrongPassword, maskEmailAddress } from '../../lib/utils'

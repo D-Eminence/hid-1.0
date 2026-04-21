@@ -1,5 +1,4 @@
-import { initObservability } from './observability'
-import { registerAppServiceWorker } from './pwa'
+import { initObservability } from './observabilityBridge'
 
 function addHeadLink(rel: 'dns-prefetch' | 'preconnect', href: string, crossOrigin = false) {
   if (typeof document === 'undefined' || !href) return
@@ -69,8 +68,8 @@ export function scheduleNonCriticalStartup() {
 
   const start = () => {
     runWhenIdle(() => {
-      void initObservability()
-      void registerAppServiceWorker()
+      initObservability()
+      void import('./pwa').then(module => module.registerAppServiceWorker())
     })
   }
 

@@ -50,9 +50,9 @@ export default function PatientRecords() {
     void loadPageData()
   }, [navigate, session])
 
-  async function loadPageData() {
+  async function loadPageData(silent = false) {
     if (!session) return
-    setLoading(true)
+    if (!silent) setLoading(true)
     try {
       const nextPage = await fetchPatientRecordsView(session.hidCode)
       setPatient(nextPage.patient)
@@ -62,7 +62,7 @@ export default function PatientRecords() {
       const message = error instanceof Error ? error.message : 'Unable to load your records.'
       showToast(message, 'error')
     } finally {
-      setLoading(false)
+      if (!silent) setLoading(false)
     }
   }
 
@@ -131,7 +131,7 @@ export default function PatientRecords() {
         notes: recordForm.roleNote.trim() || null,
         uploads: recordForm.uploads,
       })
-      await loadPageData()
+      await loadPageData(true)
       setOpen(false)
       setRecordForm(createEmptyRecordForm())
       showToast('Medical record saved.', 'success')

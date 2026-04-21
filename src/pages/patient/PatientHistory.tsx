@@ -56,9 +56,9 @@ export default function PatientHistory() {
     void loadHistoryData()
   }, [navigate, session])
 
-  async function loadHistoryData() {
+  async function loadHistoryData(silent = false) {
     if (!session) return
-    setLoading(true)
+    if (!silent) setLoading(true)
     try {
       const [nextPatient, history] = await Promise.all([
         fetchMyPatient(),
@@ -71,7 +71,7 @@ export default function PatientHistory() {
       const message = error instanceof Error ? error.message : 'Unable to load your access history.'
       showToast(message, 'error')
     } finally {
-      setLoading(false)
+      if (!silent) setLoading(false)
     }
   }
 
@@ -86,7 +86,7 @@ export default function PatientHistory() {
       await revokeAccessGrant(grant.id)
       setActiveGrants(current => current.filter(item => item.id !== grant.id))
       showToast('Access revoked.', 'success')
-      await loadHistoryData()
+      void loadHistoryData(true)
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Unable to revoke access.'
       showToast(message, 'error')

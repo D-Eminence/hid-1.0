@@ -2,9 +2,9 @@ import React, { useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate, useLocation } from 'react-router-dom'
 import { HIDLogo } from './HIDLogo'
 import { PatientNotificationWatcher } from './PatientNotificationWatcher'
+import { countUnreadNotifications } from '../lib/hidApi'
 import { getPersonInitials } from '../lib/utils'
 import { preloadPath } from '../lib/routePreload'
-import { supabase } from '../lib/supabase'
 import { subscribeToNotifications } from '../lib/notificationsRealtime'
 
 interface NavItem {
@@ -92,11 +92,14 @@ export function PortalShell({
     let active = true
 
     async function loadUnread() {
-      const { count } = await ((supabase as unknown as { from: (name: string) => any }).from('hid_notifications') as any)
-        .select('id', { count: 'exact', head: true })
-        .is('read_at', null)
-      if (!active) return
-      setHasUnreadNotifications((count ?? 0) > 0)
+      try {
+        const count = await countUnreadNotifications()
+        if (!active) return
+        setHasUnreadNotifications(count > 0)
+      } catch {
+        if (!active) return
+        setHasUnreadNotifications(false)
+      }
     }
 
     void loadUnread()
@@ -112,7 +115,7 @@ export function PortalShell({
       if (document.visibilityState === 'visible') {
         void loadUnread()
       }
-    }, 15000)
+    }, 45000)
     document.addEventListener('visibilitychange', handleVisibility)
     return () => {
       active = false

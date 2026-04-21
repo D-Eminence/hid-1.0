@@ -43,7 +43,7 @@ export function PatientNotificationWatcher({ hidCode }: { hidCode: string }) {
       if (document.visibilityState === 'visible') {
         void flushUnreadSummary()
       }
-    }, 15000)
+    }, 45000)
     document.addEventListener('visibilitychange', handleVisibility)
     return () => {
       cancelled = true

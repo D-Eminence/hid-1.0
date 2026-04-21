@@ -60,7 +60,7 @@ export function StaffNotificationWatcher({ onAccessRevoked }: { onAccessRevoked?
       if (document.visibilityState === 'visible') {
         void flushUnreadSummary()
       }
-    }, 15000)
+    }, 45000)
     document.addEventListener('visibilitychange', handleVisibility)
 
     return () => {

@@ -23,6 +23,8 @@ import { formatDateTime } from '../../lib/utils'
 import type { MedicalRecord, MedicalRecordFile, Patient } from '../../types/database'
 import type { HidStaffDashboardRequest } from '../../types/hid'
 
+const ACCESS_GRANT_FALLBACK_POLL_MS = 15000
+
 export default function DoctorPatientRecords() {
   const navigate = useNavigate()
   const { hidCode = '' } = useParams()
@@ -94,7 +96,7 @@ export default function DoctorPatientRecords() {
       if (document.visibilityState === 'visible') {
         void verifyGrant()
       }
-    }, 5000)
+    }, ACCESS_GRANT_FALLBACK_POLL_MS)
 
     const handleVisibility = () => {
       if (document.visibilityState === 'visible') {
@@ -110,9 +112,9 @@ export default function DoctorPatientRecords() {
     }
   }, [activeRequest?.grant_id, navigate, normalizedHidCode, session])
 
-  async function loadPageData() {
+  async function loadPageData(silent = false) {
     if (!session || !normalizedHidCode) return
-    setLoading(true)
+    if (!silent) setLoading(true)
     try {
       const [dashboard, recordsView] = await Promise.all([
         fetchStaffDashboard(),
@@ -141,7 +143,7 @@ export default function DoctorPatientRecords() {
       showToast(message, 'error')
       navigate(HOSPITAL_ACCESS_PATH)
     } finally {
-      setLoading(false)
+      if (!silent) setLoading(false)
     }
   }
 
@@ -210,7 +212,7 @@ export default function DoctorPatientRecords() {
         notes: recordForm.roleNote.trim() || null,
         uploads: recordForm.uploads,
       })
-      await loadPageData()
+      await loadPageData(true)
       setOpen(false)
       setRecordForm(createEmptyRecordForm())
       showToast('Medical record saved.', 'success')

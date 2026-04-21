@@ -25,6 +25,8 @@ interface AccessedData {
   recordFiles: Record<string, MedicalRecordFile[]>
 }
 
+const ACCESS_GRANT_FALLBACK_POLL_MS = 15000
+
 export default function DoctorPortal() {
   const navigate = useNavigate()
   const session = useMemo(() => getStaffSession(), [])
@@ -134,7 +136,7 @@ export default function DoctorPortal() {
       if (document.visibilityState === 'visible') {
         void verifyGrant()
       }
-    }, 5000)
+    }, ACCESS_GRANT_FALLBACK_POLL_MS)
 
     const handleVisibility = () => {
       if (document.visibilityState === 'visible') {

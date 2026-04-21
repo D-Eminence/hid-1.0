@@ -6,6 +6,7 @@
     "dev": "vite",
     "build": "tsc && vite build",
     "preview": "vite preview",
+    "perf:load": "node ./scripts/load-test.mjs",
     "security:audit": "npm audit --audit-level=high",
     "security:deps": "npm outdated"
   },

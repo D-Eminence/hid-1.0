@@ -32,8 +32,11 @@ export default defineConfig({
           if (id.includes('@supabase/supabase-js')) {
             return 'vendor-supabase'
           }
-          if (id.includes('@sentry/') || id.includes('posthog-js')) {
-            return 'vendor-observability'
+          if (id.includes('@sentry/')) {
+            return 'vendor-sentry'
+          }
+          if (id.includes('posthog-js')) {
+            return 'vendor-posthog'
           }
           return undefined
         },

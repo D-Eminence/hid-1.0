@@ -169,6 +169,9 @@ function sanitizeErrorMessage(message: string, status: number) {
   ) {
     return 'This account cannot perform that action right now.'
   }
+  if (lower.includes('account is inactive') || lower.includes('account is not active') || lower.includes('account is locked')) {
+    return 'This account is not active right now. Contact support if you need help.'
+  }
   if (lower.includes('patient profile already exists')) {
     return 'An account with these details already exists. Sign in instead or enter the verification code sent to your email.'
   }

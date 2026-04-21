@@ -98,6 +98,55 @@ const VIEW_CACHE_TTL_MS = 12000
 const RECENT_RECORD_SAVE_TTL_MS = 5 * 60 * 1000
 const RECORD_UPLOAD_TIMEOUT_MS = 90000
 const RECORD_UPLOAD_RETRY_COUNT = 3
+const REQUEST_DEDUPE_ONLY_TTL_MS = 0
+const HID_PATIENT_COLUMNS = [
+  'id',
+  'user_profile_id',
+  'auth_user_id',
+  'hid_code',
+  'first_name',
+  'last_name',
+  'full_name',
+  'phone_e164',
+  'email',
+  'gender',
+  'dob',
+  'blood_group',
+  'genotype',
+  'country',
+  'state',
+  'allergies',
+  'chronic_conditions',
+  'current_medications',
+  'photo_url',
+  'emergency_contact_name',
+  'emergency_contact_relationship',
+  'emergency_contact_phone',
+  'emergency_contact_address',
+  'medical_notes',
+  'nin_last4',
+  'nin_hash',
+  'nin_ciphertext',
+  'notifications_enabled',
+  'profile_percent',
+  'created_at',
+  'updated_at',
+].join(', ')
+const HID_STAFF_ACCOUNT_COLUMNS = [
+  'id',
+  'user_profile_id',
+  'auth_user_id',
+  'full_name',
+  'email',
+  'phone_e164',
+  'hospital_name',
+  'verification_status',
+  'license_number',
+  'role',
+  'active',
+  'created_at',
+  'updated_at',
+].join(', ')
 const inflightRecordSaves = new Map<string, Promise<RecordCreationResponse>>()
 const recentRecordSaves = new Map<string, RecentRecordSaveEntry>()
 
@@ -113,7 +162,14 @@ type RecentRecordSaveEntry = {
   uploadedFileKeys: Set<string>
 }
 
+type SignedDownloadCacheEntry = {
+  expiresAt: number
+  promise?: Promise<string>
+  value?: string
+}
+
 const viewCache = new Map<string, ViewCacheEntry<unknown>>()
+const signedDownloadCache = new Map<string, SignedDownloadCacheEntry>()
 
 export class HidApiError extends Error {
   status: number
@@ -652,10 +708,42 @@ function toLegacyNotification(notification: HidNotification, hidCode: string): N
 }
 
 async function signRecordDownload(fileId: string) {
-  return edgeRequest<SignedDownloadResponse>('files-sign-download', {
+  const cacheKey = `${fileId}:180`
+  const now = Date.now()
+  const cached = signedDownloadCache.get(cacheKey)
+
+  if (cached?.value && cached.expiresAt > now) {
+    return { signedUrl: cached.value }
+  }
+
+  if (cached?.promise) {
+    const signedUrl = await cached.promise
+    return { signedUrl }
+  }
+
+  const request = edgeRequest<SignedDownloadResponse>('files-sign-download', {
     method: 'POST',
-    body: { fileId },
+    body: { fileId, expiresIn: 180 },
   })
+    .then(response => {
+      signedDownloadCache.set(cacheKey, {
+        expiresAt: Date.now() + 120_000,
+        value: response.signedUrl,
+      })
+      return response.signedUrl
+    })
+    .catch(error => {
+      signedDownloadCache.delete(cacheKey)
+      throw error
+    })
+
+  signedDownloadCache.set(cacheKey, {
+    expiresAt: now + 120_000,
+    promise: request,
+  })
+
+  const signedUrl = await request
+  return { signedUrl }
 }
 
 async function toLegacyRecordFiles(files: HidPatientRecordsResponse['records'][number]['files']): Promise<MedicalRecordFile[]> {
@@ -850,12 +938,13 @@ export async function ensurePatientProfileRegistered(override?: PendingPatientSi
 }
 
 export async function fetchMyPatient() {
-  const user = await getSafeUser()
-  if (!user) {
+  const session = await getSafeSession()
+  const userId = session?.user.id
+  if (!userId) {
     throw new HidApiError(401, 'Please sign in to continue.')
   }
 
-  return loadCachedView(`patient:${user.id}`, async () => {
+  return loadCachedView(`patient:${userId}`, async () => {
     const bundle = await ensurePatientProfileRegistered()
     return toLegacyPatient(bundle.patient)
   })
@@ -891,7 +980,7 @@ export async function updateMyPatientProfile(patch: Partial<Patient>) {
   const { data, error } = await dataTable('hid_patients')
     .update(payload)
     .eq('id', current.patient.id)
-    .select('*')
+    .select(HID_PATIENT_COLUMNS)
     .single()
 
   if (error) {
@@ -924,41 +1013,47 @@ export async function setMyPatientAccessPin(accessPin?: string | null) {
 }
 
 export async function countUnreadNotifications() {
-  const { count, error } = await dataTable('hid_notifications')
-    .select('id', { count: 'exact', head: true })
-    .is('read_at', null)
+  return loadCachedView('notifications:count:self', async () => {
+    const { count, error } = await dataTable('hid_notifications')
+      .select('id', { count: 'exact', head: true })
+      .is('read_at', null)
 
-  if (error) {
-    throw new HidApiError(400, error.message, error)
-  }
+    if (error) {
+      throw new HidApiError(400, error.message, error)
+    }
 
-  return count ?? 0
+    return count ?? 0
+  }, REQUEST_DEDUPE_ONLY_TTL_MS)
 }
 
 export async function listNotifications(hidCode: string) {
-  const { data, error } = await dataTable('hid_notifications')
-    .select('*')
-    .order('created_at', { ascending: false })
+  return loadCachedView(`notifications:list:${hidCode}`, async () => {
+    const { data, error } = await dataTable('hid_notifications')
+      .select('id,user_profile_id,patient_id,title,message,type,read_at,created_at')
+      .order('created_at', { ascending: false })
 
-  if (error) {
-    throw new HidApiError(400, error.message, error)
-  }
+    if (error) {
+      throw new HidApiError(400, error.message, error)
+    }
 
-  return ((data as HidNotification[] | null) ?? []).map(item => toLegacyNotification(item, hidCode))
+    return ((data as HidNotification[] | null) ?? []).map(item => toLegacyNotification(item, hidCode))
+  }, REQUEST_DEDUPE_ONLY_TTL_MS)
 }
 
 export async function listUnreadNotifications(hidCode: string, limit = 20) {
-  const { data, error } = await dataTable('hid_notifications')
-    .select('*')
-    .is('read_at', null)
-    .order('created_at', { ascending: false })
-    .limit(limit)
+  return loadCachedView(`notifications:unread:${hidCode}:${limit}`, async () => {
+    const { data, error } = await dataTable('hid_notifications')
+      .select('id,user_profile_id,patient_id,title,message,type,read_at,created_at')
+      .is('read_at', null)
+      .order('created_at', { ascending: false })
+      .limit(limit)
 
-  if (error) {
-    throw new HidApiError(400, error.message, error)
-  }
+    if (error) {
+      throw new HidApiError(400, error.message, error)
+    }
 
-  return ((data as HidNotification[] | null) ?? []).map(item => toLegacyNotification(item, hidCode))
+    return ((data as HidNotification[] | null) ?? []).map(item => toLegacyNotification(item, hidCode))
+  }, REQUEST_DEDUPE_ONLY_TTL_MS)
 }
 
 export async function markNotificationRead(id: string) {
@@ -969,6 +1064,8 @@ export async function markNotificationRead(id: string) {
   if (error) {
     throw new HidApiError(400, error.message, error)
   }
+
+  invalidateViewCache('notifications:')
 }
 
 export async function markAllNotificationsRead() {
@@ -979,6 +1076,8 @@ export async function markAllNotificationsRead() {
   if (error) {
     throw new HidApiError(400, error.message, error)
   }
+
+  invalidateViewCache('notifications:')
 }
 
 export async function fetchPatientRecordsView(patientIdentifier?: string, options: { forceRefresh?: boolean } = {}) {
@@ -1363,13 +1462,14 @@ export async function deleteMyAccount(challengeId: string, verificationToken: st
 }
 
 export async function fetchMyStaffAccount() {
-  const user = await getSafeUser()
-  if (!user) return null
+  const session = await getSafeSession()
+  const userId = session?.user.id
+  if (!userId) return null
 
-  return loadCachedView(`staff:${user.id}`, async () => {
+  return loadCachedView(`staff:${userId}`, async () => {
     const { data, error } = await dataTable('hid_staff_accounts')
-      .select('*')
-      .eq('auth_user_id', user.id)
+      .select(HID_STAFF_ACCOUNT_COLUMNS)
+      .eq('auth_user_id', userId)
       .maybeSingle()
 
     if (error) {

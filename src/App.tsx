@@ -5,7 +5,7 @@ import { HIDLogo } from './components/HIDLogo'
 import { RouteObservability } from './components/RouteObservability'
 import { SessionBootstrap } from './components/SessionBootstrap'
 import { ToastProvider } from './components/ui'
-import { captureException } from './lib/observability'
+import { captureException } from './lib/observabilityBridge'
 import {
   AdminDashboardPage,
   AdminLoginPage,

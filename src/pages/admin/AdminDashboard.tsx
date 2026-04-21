@@ -3,12 +3,13 @@ import { AdminLayout, type AdminSidebarSection } from '../../components/AdminLay
 import { AdminFunnelChart } from '../../components/admin/AdminFunnelChart'
 import { AdminMetricCard } from '../../components/admin/AdminMetricCard'
 import { AdminSeriesChart } from '../../components/admin/AdminSeriesChart'
-import { Badge, Button, EmptyState, PageLoader } from '../../components/ui'
+import { Badge, Button, EmptyState, PageLoader, showToast } from '../../components/ui'
 import { useAdminDashboard } from '../../hooks/useAdminDashboard'
 import { ADMIN_LOGIN_PATH, ADMIN_OVERVIEW_PATH } from '../../lib/adminRoutes'
 import { signOutAndClearSessions } from '../../lib/auth'
 import { getSafeUser } from '../../lib/supabase'
-import type { AdminAlert, AdminOverviewWindow } from '../../types/admin'
+import { applyAdminUserAction, searchAdminUsers } from '../../services/adminDashboard'
+import type { AdminAlert, AdminManagedUser, AdminOverviewWindow, AdminUserManagementAction } from '../../types/admin'
 
 const windowOptions: Array<{ key: AdminOverviewWindow; label: string }> = [
   { key: '24h', label: 'Today' },
@@ -67,6 +68,15 @@ function formatRelativeTime(value: string | null) {
   if (diffHours < 24) return `${diffHours} hr ago`
   const diffDays = Math.floor(diffHours / 24)
   return `${diffDays} day${diffDays === 1 ? '' : 's'} ago`
+}
+
+function formatLabelValue(value: string | number | null | undefined) {
+  if (value == null || value === '') return 'Not available'
+  return String(value)
+}
+
+function formatBool(value: boolean) {
+  return value ? 'Yes' : 'No'
 }
 
 function matchesQuery(values: Array<string | null | undefined>, query: string) {
@@ -221,6 +231,12 @@ export default function AdminDashboard() {
   const [viewerEmail, setViewerEmail] = useState<string | null>(null)
   const [windowKey, setWindowKey] = useState<AdminOverviewWindow>('7d')
   const [searchQuery, setSearchQuery] = useState('')
+  const [directoryQuery, setDirectoryQuery] = useState('')
+  const [directoryResults, setDirectoryResults] = useState<AdminManagedUser[]>([])
+  const [selectedDirectoryUserId, setSelectedDirectoryUserId] = useState<string | null>(null)
+  const [directoryLoading, setDirectoryLoading] = useState(false)
+  const [directoryError, setDirectoryError] = useState<string | null>(null)
+  const [actioning, setActioning] = useState<AdminUserManagementAction | null>(null)
   const [activeSection, setActiveSection] = useState('dashboard')
   const [viewportWidth, setViewportWidth] = useState(() => (typeof window !== 'undefined' ? window.innerWidth : 1440))
   const { data, error, loading, refreshing, refresh } = useAdminDashboard(windowKey)
@@ -259,6 +275,85 @@ export default function AdminDashboard() {
   async function logout() {
     await signOutAndClearSessions()
     window.location.assign(ADMIN_OVERVIEW_PATH)
+  }
+
+  const selectedDirectoryUser = useMemo(() => (
+    directoryResults.find(item => item.id === selectedDirectoryUserId) ?? null
+  ), [directoryResults, selectedDirectoryUserId])
+
+  async function runDirectorySearch(force = false) {
+    const trimmed = directoryQuery.trim()
+    if (!trimmed) {
+      setDirectoryResults([])
+      setSelectedDirectoryUserId(null)
+      setDirectoryError('Enter an HID code or email to search.')
+      return
+    }
+
+    setDirectoryLoading(true)
+    setDirectoryError(null)
+    try {
+      const matches = await searchAdminUsers(trimmed, { force })
+      setDirectoryResults(matches)
+      setSelectedDirectoryUserId(current => {
+        if (matches.length === 0) return null
+        if (current && matches.some(item => item.id === current)) return current
+        return matches[0].id
+      })
+      if (matches.length === 0) {
+        setDirectoryError('No user matched that HID code or email.')
+      }
+    } catch (reason) {
+      const message = reason instanceof Error ? reason.message : 'The user directory could not be loaded right now.'
+      setDirectoryError(message)
+      showToast(message, 'error')
+    } finally {
+      setDirectoryLoading(false)
+    }
+  }
+
+  async function handleDirectoryAction(action: AdminUserManagementAction) {
+    if (!selectedDirectoryUser) return
+
+    const actionLabels: Record<AdminUserManagementAction, string> = {
+      close_patient_access: 'close this patient access',
+      delete_account: 'delete this account permanently',
+      lock_profile: 'lock this profile',
+      restore_staff_access: 'restore this hospital access',
+      restrict_staff_access: 'restrict this hospital access',
+      unlock_profile: 'unlock this profile',
+    }
+
+    const confirmed = window.confirm(`Do you want to ${actionLabels[action]}?`)
+    if (!confirmed) return
+
+    setActioning(action)
+    try {
+      const result = await applyAdminUserAction(selectedDirectoryUser.id, action)
+      if (result.deleted) {
+        setDirectoryResults(current => current.filter(item => item.id !== result.targetAuthUserId))
+        setSelectedDirectoryUserId(current => (current === result.targetAuthUserId ? null : current))
+        showToast('Account deleted successfully.', 'success')
+      } else if (result.user) {
+        const nextUser = result.user
+        setDirectoryResults(current => current.map(item => item.id === nextUser.id ? nextUser : item))
+        setSelectedDirectoryUserId(nextUser.id)
+        const successMessage =
+          action === 'lock_profile' ? 'Profile locked successfully.'
+            : action === 'unlock_profile' ? 'Profile unlocked successfully.'
+              : action === 'restrict_staff_access' ? 'Hospital access restricted successfully.'
+                : action === 'restore_staff_access' ? 'Hospital access restored successfully.'
+                  : action === 'close_patient_access' ? 'Patient access closed successfully.'
+                    : 'Account updated successfully.'
+        showToast(successMessage, 'success')
+      }
+      await refresh(true)
+    } catch (reason) {
+      const message = reason instanceof Error ? reason.message : 'This admin action could not be completed right now.'
+      showToast(message, 'error')
+    } finally {
+      setActioning(null)
+    }
   }
 
   const filteredUsers = useMemo(() => (
@@ -465,14 +560,280 @@ export default function AdminDashboard() {
           </div>
         </section>
 
-        <section id="users" style={dualChartStyle}>
+        <section id="users" style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
           <div style={panelStyle()}>
-            {sectionTitle('User Growth')}
-            <AdminSeriesChart points={data?.users.growth ?? []} type="line" tone="#5b8def" />
+            {sectionLabel('User Controls')}
+            {sectionTitle('User Directory')}
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 10, alignItems: 'center', marginBottom: 12 }}>
+              <input
+                value={directoryQuery}
+                onChange={event => {
+                  setDirectoryQuery(event.target.value)
+                  if (directoryError) setDirectoryError(null)
+                }}
+                onKeyDown={event => {
+                  if (event.key === 'Enter') {
+                    event.preventDefault()
+                    void runDirectorySearch()
+                  }
+                }}
+                placeholder="Search by HID code or email"
+                style={{
+                  flex: '1 1 320px',
+                  minWidth: 240,
+                  height: 42,
+                  borderRadius: 10,
+                  border: '1px solid var(--admin-border)',
+                  padding: '0 14px',
+                  fontSize: 14,
+                  background: '#fff',
+                  color: 'var(--admin-text)',
+                  outline: 'none',
+                }}
+              />
+              <Button onClick={() => void runDirectorySearch()} loading={directoryLoading}>
+                Search
+              </Button>
+              <Button
+                variant="outline"
+                onClick={() => {
+                  setDirectoryQuery('')
+                  setDirectoryResults([])
+                  setSelectedDirectoryUserId(null)
+                  setDirectoryError(null)
+                }}
+              >
+                Clear
+              </Button>
+            </div>
+            <div style={{ fontSize: 11.5, color: 'var(--admin-muted)', marginBottom: 12 }}>
+              Search by HID code or email to inspect a user profile, lock or unlock the profile, manage staff access, close patient access, or delete the account.
+            </div>
+            {directoryError && (
+              <div style={{ ...alertToneStyle('warning'), borderRadius: 10, padding: '10px 12px', marginBottom: 12, fontSize: 11.5 }}>
+                {directoryError}
+              </div>
+            )}
+            <div style={{ display: 'grid', gridTemplateColumns: viewportWidth < 1180 ? '1fr' : 'minmax(280px, 360px) minmax(0, 1fr)', gap: 12 }}>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                {directoryResults.length === 0 ? (
+                  <EmptyState
+                    icon={<svg width="32" height="32" viewBox="0 0 32 32" fill="none"><circle cx="14" cy="14" r="7.5" stroke="currentColor" strokeWidth="1.5" /><path d="m19.5 19.5 6 6" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" /></svg>}
+                    title="Search for a user"
+                    description="Results will appear here after you search with a HID code or email."
+                  />
+                ) : (
+                  directoryResults.map(item => {
+                    const selected = selectedDirectoryUserId === item.id
+                    const primaryLabel = item.patient?.fullName ?? item.staff?.fullName ?? item.profile?.displayName ?? item.email ?? 'Unknown user'
+                    const secondaryLabel = item.patient?.hidCode ?? item.email ?? 'No email'
+                    return (
+                      <button
+                        key={item.id}
+                        type="button"
+                        onClick={() => setSelectedDirectoryUserId(item.id)}
+                        style={{
+                          border: `1px solid ${selected ? 'rgba(26, 111, 212, 0.28)' : 'var(--admin-border)'}`,
+                          borderRadius: 12,
+                          background: selected ? 'rgba(26, 111, 212, 0.06)' : '#fff',
+                          padding: '12px 14px',
+                          textAlign: 'left',
+                          cursor: 'pointer',
+                          display: 'flex',
+                          flexDirection: 'column',
+                          gap: 8,
+                        }}
+                      >
+                        <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 10 }}>
+                          <div style={{ minWidth: 0 }}>
+                            <div style={{ fontSize: 12.5, fontWeight: 700, color: 'var(--admin-text)' }}>{primaryLabel}</div>
+                            <div style={{ fontSize: 11, color: 'var(--admin-muted)', marginTop: 2, wordBreak: 'break-word' }}>{secondaryLabel}</div>
+                          </div>
+                          <Badge color={item.flags.locked ? 'red' : 'green'}>{item.flags.locked ? 'locked' : 'active'}</Badge>
+                        </div>
+                        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+                          {item.profile?.appRole && <Badge color="blue">{item.profile.appRole}</Badge>}
+                          {item.patient && <Badge color="green">patient</Badge>}
+                          {item.staff && <Badge color={item.flags.staffAccessRestricted ? 'amber' : 'green'}>{item.flags.staffAccessRestricted ? 'restricted staff' : 'staff'}</Badge>}
+                        </div>
+                      </button>
+                    )
+                  })
+                )}
+              </div>
+
+              <div style={{ border: '1px solid var(--admin-border)', borderRadius: 12, background: '#fbfdff', padding: 14 }}>
+                {!selectedDirectoryUser ? (
+                  <EmptyState
+                    icon={<svg width="32" height="32" viewBox="0 0 32 32" fill="none"><circle cx="16" cy="11" r="5" stroke="currentColor" strokeWidth="1.5" /><path d="M7 26c1-4 5-6 9-6s8 2 9 6" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" /></svg>}
+                    title="Choose a user"
+                    description="Select a result to inspect the profile and manage the account."
+                  />
+                ) : (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+                    <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap' }}>
+                      <div>
+                        <div style={{ fontSize: 17, fontWeight: 800, color: 'var(--admin-text)' }}>
+                          {selectedDirectoryUser.patient?.fullName ?? selectedDirectoryUser.staff?.fullName ?? selectedDirectoryUser.profile?.displayName ?? selectedDirectoryUser.email ?? 'Unknown user'}
+                        </div>
+                        <div style={{ fontSize: 12, color: 'var(--admin-muted)', marginTop: 4 }}>
+                          {selectedDirectoryUser.patient?.hidCode ? `${selectedDirectoryUser.patient.hidCode} • ` : ''}
+                          {selectedDirectoryUser.email ?? 'No email available'}
+                        </div>
+                      </div>
+                      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+                        {selectedDirectoryUser.profile?.appRole && <Badge color="blue">{selectedDirectoryUser.profile.appRole}</Badge>}
+                        <Badge color={selectedDirectoryUser.flags.locked ? 'red' : 'green'}>
+                          {selectedDirectoryUser.flags.locked ? 'Locked' : 'Active'}
+                        </Badge>
+                        {selectedDirectoryUser.staff && (
+                          <Badge color={selectedDirectoryUser.flags.staffAccessRestricted ? 'amber' : 'green'}>
+                            {selectedDirectoryUser.flags.staffAccessRestricted ? 'Access Restricted' : 'Access Open'}
+                          </Badge>
+                        )}
+                      </div>
+                    </div>
+
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: 10 }}>
+                      <div style={{ border: '1px solid var(--admin-border)', borderRadius: 10, padding: '10px 12px' }}>
+                        <div style={{ fontSize: 10.5, color: 'var(--admin-muted)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Unread Notifications</div>
+                        <div style={{ fontSize: 20, fontWeight: 800, marginTop: 4 }}>{formatCompact(selectedDirectoryUser.stats.unreadNotificationCount)}</div>
+                      </div>
+                      <div style={{ border: '1px solid var(--admin-border)', borderRadius: 10, padding: '10px 12px' }}>
+                        <div style={{ fontSize: 10.5, color: 'var(--admin-muted)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Active Grants</div>
+                        <div style={{ fontSize: 20, fontWeight: 800, marginTop: 4 }}>{formatCompact(selectedDirectoryUser.stats.activeGrantCount)}</div>
+                      </div>
+                      <div style={{ border: '1px solid var(--admin-border)', borderRadius: 10, padding: '10px 12px' }}>
+                        <div style={{ fontSize: 10.5, color: 'var(--admin-muted)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Pending Requests</div>
+                        <div style={{ fontSize: 20, fontWeight: 800, marginTop: 4 }}>{formatCompact(selectedDirectoryUser.stats.pendingRequestCount)}</div>
+                      </div>
+                      <div style={{ border: '1px solid var(--admin-border)', borderRadius: 10, padding: '10px 12px' }}>
+                        <div style={{ fontSize: 10.5, color: 'var(--admin-muted)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Records</div>
+                        <div style={{ fontSize: 20, fontWeight: 800, marginTop: 4 }}>{formatCompact(selectedDirectoryUser.stats.recordCount)}</div>
+                      </div>
+                    </div>
+
+                    <div style={{ display: 'grid', gridTemplateColumns: viewportWidth < 1180 ? '1fr' : 'minmax(0, 1fr) minmax(0, 1fr)', gap: 12 }}>
+                      <div style={{ border: '1px solid var(--admin-border)', borderRadius: 10, padding: '12px 14px' }}>
+                        <div style={{ fontSize: 12, fontWeight: 700, marginBottom: 10 }}>Profile</div>
+                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+                          <div><div style={{ fontSize: 10.5, color: 'var(--admin-muted)' }}>Role</div><div style={{ fontSize: 12.5, fontWeight: 700 }}>{formatLabelValue(selectedDirectoryUser.profile?.appRole)}</div></div>
+                          <div><div style={{ fontSize: 10.5, color: 'var(--admin-muted)' }}>MFA Required</div><div style={{ fontSize: 12.5, fontWeight: 700 }}>{selectedDirectoryUser.profile ? formatBool(selectedDirectoryUser.profile.mfaRequired) : 'Not available'}</div></div>
+                          <div><div style={{ fontSize: 10.5, color: 'var(--admin-muted)' }}>Email Confirmed</div><div style={{ fontSize: 12.5, fontWeight: 700 }}>{selectedDirectoryUser.emailConfirmedAt ? formatRelativeTime(selectedDirectoryUser.emailConfirmedAt) : 'No'}</div></div>
+                          <div><div style={{ fontSize: 10.5, color: 'var(--admin-muted)' }}>Last Sign In</div><div style={{ fontSize: 12.5, fontWeight: 700 }}>{formatRelativeTime(selectedDirectoryUser.lastSignInAt)}</div></div>
+                          <div><div style={{ fontSize: 10.5, color: 'var(--admin-muted)' }}>Created</div><div style={{ fontSize: 12.5, fontWeight: 700 }}>{formatRelativeTime(selectedDirectoryUser.profile?.createdAt ?? null)}</div></div>
+                          <div><div style={{ fontSize: 10.5, color: 'var(--admin-muted)' }}>Updated</div><div style={{ fontSize: 12.5, fontWeight: 700 }}>{formatRelativeTime(selectedDirectoryUser.profile?.updatedAt ?? null)}</div></div>
+                        </div>
+                      </div>
+
+                      <div style={{ border: '1px solid var(--admin-border)', borderRadius: 10, padding: '12px 14px' }}>
+                        <div style={{ fontSize: 12, fontWeight: 700, marginBottom: 10 }}>{selectedDirectoryUser.patient ? 'Patient Details' : selectedDirectoryUser.staff ? 'Staff Details' : 'Account Details'}</div>
+                        {selectedDirectoryUser.patient ? (
+                          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+                            <div><div style={{ fontSize: 10.5, color: 'var(--admin-muted)' }}>Phone</div><div style={{ fontSize: 12.5, fontWeight: 700 }}>{formatLabelValue(selectedDirectoryUser.patient.phone)}</div></div>
+                            <div><div style={{ fontSize: 10.5, color: 'var(--admin-muted)' }}>Gender</div><div style={{ fontSize: 12.5, fontWeight: 700 }}>{formatLabelValue(selectedDirectoryUser.patient.gender)}</div></div>
+                            <div><div style={{ fontSize: 10.5, color: 'var(--admin-muted)' }}>Date of Birth</div><div style={{ fontSize: 12.5, fontWeight: 700 }}>{formatLabelValue(selectedDirectoryUser.patient.dateOfBirth)}</div></div>
+                            <div><div style={{ fontSize: 10.5, color: 'var(--admin-muted)' }}>Profile Completion</div><div style={{ fontSize: 12.5, fontWeight: 700 }}>{selectedDirectoryUser.patient.profilePercent}%</div></div>
+                            <div><div style={{ fontSize: 10.5, color: 'var(--admin-muted)' }}>Country</div><div style={{ fontSize: 12.5, fontWeight: 700 }}>{formatLabelValue(selectedDirectoryUser.patient.country)}</div></div>
+                            <div><div style={{ fontSize: 10.5, color: 'var(--admin-muted)' }}>State</div><div style={{ fontSize: 12.5, fontWeight: 700 }}>{formatLabelValue(selectedDirectoryUser.patient.state)}</div></div>
+                            <div><div style={{ fontSize: 10.5, color: 'var(--admin-muted)' }}>Emergency Contact</div><div style={{ fontSize: 12.5, fontWeight: 700 }}>{formatLabelValue(selectedDirectoryUser.patient.emergencyContactName)}</div></div>
+                            <div><div style={{ fontSize: 10.5, color: 'var(--admin-muted)' }}>Emergency Phone</div><div style={{ fontSize: 12.5, fontWeight: 700 }}>{formatLabelValue(selectedDirectoryUser.patient.emergencyContactPhone)}</div></div>
+                          </div>
+                        ) : selectedDirectoryUser.staff ? (
+                          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+                            <div><div style={{ fontSize: 10.5, color: 'var(--admin-muted)' }}>Hospital Name</div><div style={{ fontSize: 12.5, fontWeight: 700 }}>{formatLabelValue(selectedDirectoryUser.staff.hospitalName)}</div></div>
+                            <div><div style={{ fontSize: 10.5, color: 'var(--admin-muted)' }}>Role</div><div style={{ fontSize: 12.5, fontWeight: 700 }}>{formatLabelValue(selectedDirectoryUser.staff.role)}</div></div>
+                            <div><div style={{ fontSize: 10.5, color: 'var(--admin-muted)' }}>Phone</div><div style={{ fontSize: 12.5, fontWeight: 700 }}>{formatLabelValue(selectedDirectoryUser.staff.phone)}</div></div>
+                            <div><div style={{ fontSize: 10.5, color: 'var(--admin-muted)' }}>Verification</div><div style={{ fontSize: 12.5, fontWeight: 700 }}>{formatLabelValue(selectedDirectoryUser.staff.verificationStatus)}</div></div>
+                            <div><div style={{ fontSize: 10.5, color: 'var(--admin-muted)' }}>License</div><div style={{ fontSize: 12.5, fontWeight: 700 }}>{formatLabelValue(selectedDirectoryUser.staff.licenseNumber)}</div></div>
+                            <div><div style={{ fontSize: 10.5, color: 'var(--admin-muted)' }}>Memberships</div><div style={{ fontSize: 12.5, fontWeight: 700 }}>{selectedDirectoryUser.staff.activeMembershipCount} active / {selectedDirectoryUser.staff.inactiveMembershipCount} inactive</div></div>
+                          </div>
+                        ) : (
+                          <div style={{ fontSize: 11.5, color: 'var(--admin-muted)' }}>
+                            No patient or hospital profile is attached to this account.
+                          </div>
+                        )}
+                      </div>
+                    </div>
+
+                    {selectedDirectoryUser.staff && selectedDirectoryUser.staff.memberships.length > 0 && (
+                      <div style={{ border: '1px solid var(--admin-border)', borderRadius: 10, padding: '12px 14px' }}>
+                        <div style={{ fontSize: 12, fontWeight: 700, marginBottom: 10 }}>Hospital Memberships</div>
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                          {selectedDirectoryUser.staff.memberships.map(membership => (
+                            <div key={membership.id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, border: '1px solid #eef2f7', borderRadius: 10, padding: '10px 12px' }}>
+                              <div>
+                                <div style={{ fontSize: 12, fontWeight: 700 }}>{membership.organizationName ?? 'Unknown organization'}</div>
+                                <div style={{ fontSize: 10.5, color: 'var(--admin-muted)' }}>
+                                  {membership.membershipRole} • {membership.appRole}{membership.isPrimary ? ' • primary' : ''}
+                                </div>
+                              </div>
+                              <Badge color={membership.active ? 'green' : 'amber'}>{membership.active ? 'active' : 'inactive'}</Badge>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+
+                    <div style={{ border: '1px solid var(--admin-border)', borderRadius: 10, padding: '12px 14px' }}>
+                      <div style={{ fontSize: 12, fontWeight: 700, marginBottom: 10 }}>Admin Actions</div>
+                      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 10 }}>
+                        <Button
+                          variant={selectedDirectoryUser.flags.locked ? 'secondary' : 'outline'}
+                          loading={actioning === (selectedDirectoryUser.flags.locked ? 'unlock_profile' : 'lock_profile')}
+                          onClick={() => void handleDirectoryAction(selectedDirectoryUser.flags.locked ? 'unlock_profile' : 'lock_profile')}
+                          disabled={!selectedDirectoryUser.flags.lockable}
+                        >
+                          {selectedDirectoryUser.flags.locked ? 'Unlock Profile' : 'Lock Profile'}
+                        </Button>
+                        {selectedDirectoryUser.staff && (
+                          <Button
+                            variant={selectedDirectoryUser.flags.staffAccessRestricted ? 'secondary' : 'outline'}
+                            loading={actioning === (selectedDirectoryUser.flags.staffAccessRestricted ? 'restore_staff_access' : 'restrict_staff_access')}
+                            onClick={() => void handleDirectoryAction(selectedDirectoryUser.flags.staffAccessRestricted ? 'restore_staff_access' : 'restrict_staff_access')}
+                            disabled={!selectedDirectoryUser.flags.restrictable}
+                          >
+                            {selectedDirectoryUser.flags.staffAccessRestricted ? 'Restore Access' : 'Restrict Access'}
+                          </Button>
+                        )}
+                        {selectedDirectoryUser.patient && (
+                          <Button
+                            variant="outline"
+                            loading={actioning === 'close_patient_access'}
+                            onClick={() => void handleDirectoryAction('close_patient_access')}
+                            disabled={!selectedDirectoryUser.flags.patientAccessOpen}
+                          >
+                            Close Active Access
+                          </Button>
+                        )}
+                        <Button
+                          variant="danger"
+                          loading={actioning === 'delete_account'}
+                          onClick={() => void handleDirectoryAction('delete_account')}
+                          disabled={!selectedDirectoryUser.flags.deletable}
+                        >
+                          Delete Account
+                        </Button>
+                      </div>
+                      <div style={{ fontSize: 11, color: 'var(--admin-muted)', marginTop: 10, lineHeight: 1.6 }}>
+                        Locking blocks the profile immediately. Restricting staff access disables hospital access and revokes active grants. Closing patient access revokes current provider access for that patient.
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
           </div>
-          <div id="records" style={panelStyle()}>
-            {sectionTitle('Records Uploaded')}
-            <AdminSeriesChart points={data?.records.uploads ?? []} type="bar" tone="#22c55e" />
+
+          <div style={dualChartStyle}>
+            <div style={panelStyle()}>
+              {sectionTitle('User Growth')}
+              <AdminSeriesChart points={data?.users.growth ?? []} type="line" tone="#5b8def" />
+            </div>
+            <div id="records" style={panelStyle()}>
+              {sectionTitle('Records Uploaded')}
+              <AdminSeriesChart points={data?.records.uploads ?? []} type="bar" tone="#22c55e" />
+            </div>
           </div>
         </section>
 

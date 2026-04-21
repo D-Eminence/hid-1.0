@@ -149,3 +149,110 @@ export interface AdminDashboardOverview {
   users: AdminUserMetrics
   window: AdminOverviewWindow
 }
+
+export type AdminUserManagementAction =
+  | 'lock_profile'
+  | 'unlock_profile'
+  | 'restrict_staff_access'
+  | 'restore_staff_access'
+  | 'close_patient_access'
+  | 'delete_account'
+
+export interface AdminManagedUserProfile {
+  id: string
+  authUserId: string
+  appRole: string | null
+  displayName: string | null
+  active: boolean
+  mfaRequired: boolean
+  createdAt: string
+  updatedAt: string
+}
+
+export interface AdminManagedPatient {
+  id: string
+  authUserId: string
+  userProfileId: string
+  hidCode: string
+  fullName: string
+  email: string | null
+  phone: string | null
+  gender: string | null
+  dateOfBirth: string | null
+  country: string | null
+  state: string | null
+  emergencyContactName: string | null
+  emergencyContactPhone: string | null
+  profilePercent: number
+  notificationsEnabled: boolean
+  createdAt: string
+  updatedAt: string
+}
+
+export interface AdminManagedStaffMembership {
+  id: string
+  organizationId: string
+  organizationName: string | null
+  membershipRole: string
+  appRole: string
+  isPrimary: boolean
+  active: boolean
+  createdAt: string
+}
+
+export interface AdminManagedStaff {
+  id: string
+  authUserId: string
+  userProfileId: string
+  fullName: string
+  email: string
+  phone: string | null
+  hospitalName: string | null
+  verificationStatus: string
+  licenseNumber: string | null
+  role: string
+  active: boolean
+  createdAt: string
+  updatedAt: string
+  memberships: AdminManagedStaffMembership[]
+  activeMembershipCount: number
+  inactiveMembershipCount: number
+}
+
+export interface AdminManagedUserStats {
+  activeGrantCount: number
+  pendingRequestCount: number
+  recordCount: number
+  unreadNotificationCount: number
+}
+
+export interface AdminManagedUserFlags {
+  locked: boolean
+  deletable: boolean
+  lockable: boolean
+  patientAccessOpen: boolean | null
+  restrictable: boolean
+  staffAccessRestricted: boolean | null
+}
+
+export interface AdminManagedUser {
+  id: string
+  email: string | null
+  emailConfirmedAt: string | null
+  lastSignInAt: string | null
+  profile: AdminManagedUserProfile | null
+  patient: AdminManagedPatient | null
+  staff: AdminManagedStaff | null
+  stats: AdminManagedUserStats
+  flags: AdminManagedUserFlags
+}
+
+export interface AdminUserDirectoryResponse {
+  matches: AdminManagedUser[]
+}
+
+export interface AdminUserActionResponse {
+  deleted: boolean
+  targetAuthUserId: string
+  user: AdminManagedUser | null
+}

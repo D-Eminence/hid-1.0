@@ -624,6 +624,48 @@ function isOnOrAfter(timestamp: string | null | undefined, threshold: Date) {
   return Number.isFinite(time) && time >= threshold.getTime()
 }
 
+async function loadStorageBytes(adminClient: ReturnType<typeof createAdminClient>) {
+  const aggregated = await adminClient.rpc('hid_total_record_file_bytes')
+  if (!aggregated.error) {
+    return parseNumeric(aggregated.data)
+  }
+
+  const lower = aggregated.error.message.toLowerCase()
+  const canFallback =
+    lower.includes('does not exist') ||
+    lower.includes('function') ||
+    lower.includes('schema cache')
+
+  if (!canFallback) {
+    throw new HttpError(400, aggregated.error.message, aggregated.error)
+  }
+
+  const fallback = await adminClient.from('hid_medical_record_files').select('size_bytes')
+  if (fallback.error) {
+    throw new HttpError(400, fallback.error.message, fallback.error)
+  }
+
+  return ((fallback.data ?? []) as Array<Record<string, unknown>>)
+    .reduce((sum, file) => sum + parseNumeric(file.size_bytes), 0)
+}
+
+async function loadRecentUserProfiles(adminClient: ReturnType<typeof createAdminClient>, authUserIds: string[]) {
+  if (authUserIds.length === 0) {
+    return []
+  }
+
+  const response = await adminClient
+    .from('hid_user_profiles')
+    .select('auth_user_id, app_role, display_name, created_at')
+    .in('auth_user_id', authUserIds)
+
+  if (response.error) {
+    throw new HttpError(400, response.error.message, response.error)
+  }
+
+  return (response.data ?? []) as Array<Record<string, unknown>>
+}
+
 Deno.serve(req => withErrorHandling(req, async () => {
   if (req.method !== 'GET') throw new HttpError(405, 'Method not allowed.')
 
@@ -645,58 +687,63 @@ Deno.serve(req => withErrorHandling(req, async () => {
     }
   })()
 
+  const storageBytesPromise = loadStorageBytes(adminClient)
+  const accountCreatedCountPromise = adminClient
+    .from('hid_user_profiles')
+    .select('id', { count: 'exact', head: true })
+    .gte('created_at', periodStart.toISOString())
+
   const [
     authUsers,
-    userProfilesResponse,
     totalRecordsResponse,
     windowRecordsResponse,
     providerRecordCountResponse,
     organizationsCountResponse,
     totalProvidersCountResponse,
     activeProvidersCountResponse,
-    recordFilesResponse,
     recentUploadsResponse,
     passwordFailuresResponse,
     mfaFailuresResponse,
     authChallengesResponse,
     breakGlassEventsResponse,
     responseTimeProbeResult,
+    storageBytes,
+    accountCreatedCountResponse,
     sentry,
     posthog,
   ] = await Promise.all([
     authUsersPromise,
-    adminClient.from('hid_user_profiles').select('id, auth_user_id, app_role, display_name, created_at'),
     adminClient.from('hid_medical_records').select('id', { count: 'exact', head: true }),
     adminClient.from('hid_medical_records').select('id, patient_id, created_at, created_by_staff_account_id').gte('created_at', periodStart.toISOString()),
     adminClient.from('hid_medical_records').select('id', { count: 'exact', head: true }).not('created_by_staff_account_id', 'is', null),
     adminClient.from('hid_organizations').select('id', { count: 'exact', head: true }),
     adminClient.from('hid_staff_accounts').select('id', { count: 'exact', head: true }),
     adminClient.from('hid_staff_accounts').select('id', { count: 'exact', head: true }).eq('active', true),
-    adminClient.from('hid_medical_record_files').select('size_bytes'),
     adminClient.from('hid_medical_record_files').select('id, original_file_name, mime_type, created_at, uploaded_by_user_profile_id, patient_id').order('created_at', { ascending: false }).limit(8),
     adminClient.from('hid_password_failed_verification_attempts').select('user_id, last_failed_at').gte('last_failed_at', periodStart.toISOString()),
     adminClient.from('hid_mfa_failed_verification_attempts').select('user_id, last_failed_at').gte('last_failed_at', periodStart.toISOString()),
     adminClient.from('hid_auth_challenges').select('id, created_at, verified_at').gte('created_at', periodStart.toISOString()),
     adminClient.from('hid_audit_events').select('event_id').gte('created_at', periodStart.toISOString()).ilike('action', '%break_glass%'),
     responseTimeProbe,
+    storageBytesPromise,
+    accountCreatedCountPromise,
     loadSentryOverview(windowKey),
     loadPosthogOverview(windowKey),
   ])
 
-  if (userProfilesResponse.error) throw new HttpError(400, userProfilesResponse.error.message, userProfilesResponse.error)
   if (totalRecordsResponse.error) throw new HttpError(400, totalRecordsResponse.error.message, totalRecordsResponse.error)
   if (windowRecordsResponse.error) throw new HttpError(400, windowRecordsResponse.error.message, windowRecordsResponse.error)
   if (providerRecordCountResponse.error) throw new HttpError(400, providerRecordCountResponse.error.message, providerRecordCountResponse.error)
   if (organizationsCountResponse.error) throw new HttpError(400, organizationsCountResponse.error.message, organizationsCountResponse.error)
   if (totalProvidersCountResponse.error) throw new HttpError(400, totalProvidersCountResponse.error.message, totalProvidersCountResponse.error)
   if (activeProvidersCountResponse.error) throw new HttpError(400, activeProvidersCountResponse.error.message, activeProvidersCountResponse.error)
-  if (recordFilesResponse.error) throw new HttpError(400, recordFilesResponse.error.message, recordFilesResponse.error)
   if (recentUploadsResponse.error) throw new HttpError(400, recentUploadsResponse.error.message, recentUploadsResponse.error)
   if (passwordFailuresResponse.error) throw new HttpError(400, passwordFailuresResponse.error.message, passwordFailuresResponse.error)
   if (mfaFailuresResponse.error) throw new HttpError(400, mfaFailuresResponse.error.message, mfaFailuresResponse.error)
   if (authChallengesResponse.error) throw new HttpError(400, authChallengesResponse.error.message, authChallengesResponse.error)
   if (breakGlassEventsResponse.error) throw new HttpError(400, breakGlassEventsResponse.error.message, breakGlassEventsResponse.error)
   if (responseTimeProbeResult.result.error) throw new HttpError(400, responseTimeProbeResult.result.error.message, responseTimeProbeResult.result.error)
+  if (accountCreatedCountResponse.error) throw new HttpError(400, accountCreatedCountResponse.error.message, accountCreatedCountResponse.error)
 
   const apiResponseTimeMs = responseTimeProbeResult.durationMs
   const totalUsers = authUsers.length
@@ -707,7 +754,13 @@ Deno.serve(req => withErrorHandling(req, async () => {
   const activeUsers24h = authUsers.filter(user => isOnOrAfter(user.last_sign_in_at as string | null, startOfWindow('24h'))).length
   const activeUsersWindow = authUsers.filter(user => isOnOrAfter(user.last_sign_in_at as string | null, periodStart)).length
 
-  const profileRows = (userProfilesResponse.data ?? []) as Array<Record<string, unknown>>
+  const recentAuthUsers = authUsers
+    .slice()
+    .sort((left, right) => new Date(String(right.created_at ?? 0)).getTime() - new Date(String(left.created_at ?? 0)).getTime())
+    .slice(0, 8)
+  const recentAuthUserIds = recentAuthUsers.map(user => String(user.id))
+  const profileRows = await loadRecentUserProfiles(adminClient, recentAuthUserIds)
+
   const profileByAuthId = new Map(profileRows.map(profile => [
     String(profile.auth_user_id),
     {
@@ -725,9 +778,8 @@ Deno.serve(req => withErrorHandling(req, async () => {
   )
 
   const recentUsers = authUsers
-    .slice()
+    .filter(user => recentAuthUserIds.includes(String(user.id)))
     .sort((left, right) => new Date(String(right.created_at ?? 0)).getTime() - new Date(String(left.created_at ?? 0)).getTime())
-    .slice(0, 8)
     .map(user => {
       const profile = profileByAuthId.get(String(user.id))
       const email = typeof user.email === 'string' ? user.email : null
@@ -756,8 +808,6 @@ Deno.serve(req => withErrorHandling(req, async () => {
 
   const uploadedToday = windowRecordRows.filter(record => isOnOrAfter(record.created_at as string | null, todayStart)).length
   const averagePerUser = totalUsers === 0 ? 0 : Number(((totalRecordsResponse.count ?? 0) / totalUsers).toFixed(1))
-  const storageBytes = ((recordFilesResponse.data ?? []) as Array<Record<string, unknown>>)
-    .reduce((sum, file) => sum + parseNumeric(file.size_bytes), 0)
 
   const recentUploadRows = (recentUploadsResponse.data ?? []) as Array<Record<string, unknown>>
   const uploadProfileIds = Array.from(new Set(recentUploadRows.map(row => row.uploaded_by_user_profile_id).filter(Boolean))) as string[]
@@ -800,7 +850,7 @@ Deno.serve(req => withErrorHandling(req, async () => {
     : null
   const otpSuccessRate = posthogOtpSuccessRate ?? (challenges.length === 0 ? null : Number(((otpCompleted / challenges.length) * 100).toFixed(1)))
 
-  const accountCreated = profileRows.filter(profile => isOnOrAfter(profile.created_at as string | null, periodStart)).length
+  const accountCreated = accountCreatedCountResponse.count ?? 0
   const firstRecordUploaded = new Set(windowRecordRows.map(record => String(record.patient_id ?? '')).filter(Boolean)).size
   const funnel = [
     buildFunnelStep('Signup started', 'signup_started', newSignupsWindow, null),

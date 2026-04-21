@@ -132,6 +132,9 @@ verify_jwt = false
 [functions.admin-dashboard-overview]
 verify_jwt = false
 
+[functions.admin-user-management]
+verify_jwt = false
+
 [functions.send-email]
 verify_jwt = false
 

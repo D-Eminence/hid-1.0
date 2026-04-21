@@ -28,6 +28,8 @@ interface SessionRecordEntry {
   attachments: MedicalRecordFile[]
 }
 
+const ACCESS_GRANT_FALLBACK_POLL_MS = 15000
+
 export default function DoctorEmergency() {
   const navigate = useNavigate()
   const session = useMemo(() => getStaffSession(), [])
@@ -132,7 +134,7 @@ export default function DoctorEmergency() {
       if (document.visibilityState === 'visible') {
         void verifyGrant()
       }
-    }, 5000)
+    }, ACCESS_GRANT_FALLBACK_POLL_MS)
 
     const handleVisibility = () => {
       if (document.visibilityState === 'visible') {

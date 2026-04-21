@@ -1,11 +1,25 @@
-import type { AdminDashboardOverview, AdminOverviewWindow } from '../types/admin'
+import type {
+  AdminDashboardOverview,
+  AdminManagedUser,
+  AdminOverviewWindow,
+  AdminUserActionResponse,
+  AdminUserDirectoryResponse,
+  AdminUserManagementAction,
+} from '../types/admin'
 import { HidApiError } from '../lib/hidApi'
 import { clearAllPortalSessions } from '../lib/auth'
-import { NETWORK_TIMEOUT_MESSAGE, fetchWithTimeout, getSafeSession, safeSignOut, supabase } from '../lib/supabase'
+import { NETWORK_TIMEOUT_MESSAGE, fetchWithTimeout, getSafeSession, safeSignOut } from '../lib/supabase'
 
 type EdgeEnvelope<T> = {
   data: T
 }
+
+const inflightOverviewRequests = new Map<AdminOverviewWindow, Promise<AdminDashboardOverview>>()
+const overviewCache = new Map<AdminOverviewWindow, { expiresAt: number; value: AdminDashboardOverview }>()
+const inflightUserSearchRequests = new Map<string, Promise<AdminManagedUser[]>>()
+const userSearchCache = new Map<string, { expiresAt: number; value: AdminManagedUser[] }>()
+const OVERVIEW_CACHE_TTL_MS = 30000
+const USER_SEARCH_CACHE_TTL_MS = 15000
 
 function fallbackErrorMessage(raw: string, status: number) {
   const lower = raw.toLowerCase()
@@ -55,6 +69,27 @@ function sanitizeAdminDashboardMessage(raw: string, status: number) {
   if (lower.includes('provider request failed with status 403') || status === 403) {
     return 'Admin access is limited to platform admins.'
   }
+  if (lower.includes('query is required') || lower.includes('hid code or email')) {
+    return 'Enter an HID code or email to search.'
+  }
+  if (lower.includes('platform admin accounts cannot be deleted')) {
+    return 'Platform admin accounts cannot be deleted from the dashboard.'
+  }
+  if (lower.includes('platform admin accounts cannot be locked')) {
+    return 'Platform admin accounts cannot be locked from the dashboard.'
+  }
+  if (lower.includes('platform admin accounts cannot be modified')) {
+    return 'Platform admin accounts cannot be changed from the dashboard.'
+  }
+  if (lower.includes('staff account could not be found')) {
+    return 'We could not find that hospital account right now.'
+  }
+  if (lower.includes('patient account could not be found')) {
+    return 'We could not find that patient account right now.'
+  }
+  if (lower.includes('account was already deleted')) {
+    return 'This account has already been removed.'
+  }
   if (lower.includes('sentry')) return 'Sentry data is not available right now.'
   if (lower.includes('posthog')) return 'PostHog data is not available right now.'
   return fallbackErrorMessage(raw, status)
@@ -82,26 +117,45 @@ async function getAccessToken() {
   }
 }
 
-export async function fetchAdminDashboardOverview(window: AdminOverviewWindow = '7d', options: { force?: boolean } = {}) {
+function requireSupabaseFunctionUrl(name: string) {
+  return `${requireSupabaseUrl()}/functions/v1/${name}`
+}
+
+function getCachedUserSearch(query: string) {
+  const cached = userSearchCache.get(query)
+  if (cached && cached.expiresAt > Date.now()) {
+    return cached.value
+  }
+  if (cached) {
+    userSearchCache.delete(query)
+  }
+  return null
+}
+
+export function invalidateAdminDashboardCaches() {
+  overviewCache.clear()
+  inflightOverviewRequests.clear()
+  userSearchCache.clear()
+  inflightUserSearchRequests.clear()
+}
+
+async function callAdminUserManagement<T>(path: string, init: RequestInit, statusFallback: number) {
   const accessToken = await getAccessToken()
   if (!accessToken) {
     throw new HidApiError(401, 'Please sign in to continue.')
   }
 
-  const url = new URL(`${requireSupabaseUrl()}/functions/v1/admin-dashboard-overview`)
-  url.searchParams.set('window', window)
-  if (options.force) {
-    url.searchParams.set('_ts', `${Date.now()}`)
-  }
-
   let response: Response
   try {
-    response = await fetchWithTimeout(url.toString(), {
+    response = await fetchWithTimeout(path, {
       cache: 'no-store',
       headers: {
         Authorization: `Bearer ${accessToken}`,
         apikey: requireSupabaseAnonKey(),
+        ...(init.body ? { 'Content-Type': 'application/json' } : {}),
+        ...(init.headers ?? {}),
       },
+      ...init,
     })
   } catch (error) {
     if (error instanceof Error && error.message.toLowerCase().includes('too long')) {
@@ -112,14 +166,14 @@ export async function fetchAdminDashboardOverview(window: AdminOverviewWindow = 
 
   const rawBody = await response.text()
   let parsedPayload = null as
-    | (EdgeEnvelope<AdminDashboardOverview> & { error?: string; details?: unknown })
+    | (EdgeEnvelope<T> & { error?: string; details?: unknown })
     | { error?: string; details?: unknown }
     | null
 
   if (rawBody) {
     try {
       parsedPayload = JSON.parse(rawBody) as
-        | (EdgeEnvelope<AdminDashboardOverview> & { error?: string; details?: unknown })
+        | (EdgeEnvelope<T> & { error?: string; details?: unknown })
         | { error?: string; details?: unknown }
     } catch {
       parsedPayload = null
@@ -131,9 +185,7 @@ export async function fetchAdminDashboardOverview(window: AdminOverviewWindow = 
       parsedPayload && typeof parsedPayload === 'object' && 'error' in parsedPayload && typeof parsedPayload.error === 'string'
         ? parsedPayload.error
         : rawBody || response.statusText || ''
-    const message = rawMessage && !isLowSignalErrorMessage(rawMessage)
-      ? sanitizeAdminDashboardMessage(rawMessage, response.status)
-      : sanitizeAdminDashboardMessage(rawMessage, response.status)
+    const message = sanitizeAdminDashboardMessage(rawMessage || fallbackErrorMessage('', statusFallback), response.status || statusFallback)
 
     if (response.status === 401 || message.toLowerCase().includes('please sign in again')) {
       try {
@@ -145,7 +197,7 @@ export async function fetchAdminDashboardOverview(window: AdminOverviewWindow = 
     }
 
     throw new HidApiError(
-      response.status,
+      response.status || statusFallback,
       message,
       parsedPayload && typeof parsedPayload === 'object' && 'details' in parsedPayload ? parsedPayload.details : rawBody || parsedPayload
     )
@@ -155,5 +207,165 @@ export async function fetchAdminDashboardOverview(window: AdminOverviewWindow = 
     return parsedPayload.data
   }
 
-  throw new HidApiError(500, 'Admin dashboard returned an unexpected response.')
+  throw new HidApiError(statusFallback, 'Admin controls returned an unexpected response.')
+}
+
+export async function fetchAdminDashboardOverview(window: AdminOverviewWindow = '7d', options: { force?: boolean } = {}) {
+  const cached = overviewCache.get(window)
+  if (!options.force && cached && cached.expiresAt > Date.now()) {
+    return cached.value
+  }
+
+  const existingRequest = inflightOverviewRequests.get(window)
+  if (existingRequest) {
+    return existingRequest
+  }
+
+  const request = (async () => {
+    const accessToken = await getAccessToken()
+    if (!accessToken) {
+      throw new HidApiError(401, 'Please sign in to continue.')
+    }
+
+    const url = new URL(`${requireSupabaseUrl()}/functions/v1/admin-dashboard-overview`)
+    url.searchParams.set('window', window)
+    if (options.force) {
+      url.searchParams.set('_ts', `${Date.now()}`)
+    }
+
+    let response: Response
+    try {
+      response = await fetchWithTimeout(url.toString(), {
+        cache: 'no-store',
+        headers: {
+          Authorization: `Bearer ${accessToken}`,
+          apikey: requireSupabaseAnonKey(),
+        },
+      })
+    } catch (error) {
+      if (error instanceof Error && error.message.toLowerCase().includes('too long')) {
+        throw new HidApiError(408, NETWORK_TIMEOUT_MESSAGE, error)
+      }
+      throw error
+    }
+
+    const rawBody = await response.text()
+    let parsedPayload = null as
+      | (EdgeEnvelope<AdminDashboardOverview> & { error?: string; details?: unknown })
+      | { error?: string; details?: unknown }
+      | null
+
+    if (rawBody) {
+      try {
+        parsedPayload = JSON.parse(rawBody) as
+          | (EdgeEnvelope<AdminDashboardOverview> & { error?: string; details?: unknown })
+          | { error?: string; details?: unknown }
+      } catch {
+        parsedPayload = null
+      }
+    }
+
+    if (!response.ok) {
+      const rawMessage =
+        parsedPayload && typeof parsedPayload === 'object' && 'error' in parsedPayload && typeof parsedPayload.error === 'string'
+          ? parsedPayload.error
+          : rawBody || response.statusText || ''
+      const message = rawMessage && !isLowSignalErrorMessage(rawMessage)
+        ? sanitizeAdminDashboardMessage(rawMessage, response.status)
+        : sanitizeAdminDashboardMessage(rawMessage, response.status)
+
+      if (response.status === 401 || message.toLowerCase().includes('please sign in again')) {
+        try {
+          await safeSignOut()
+        } catch {
+          // Best effort only.
+        }
+        clearAllPortalSessions()
+      }
+
+      throw new HidApiError(
+        response.status,
+        message,
+        parsedPayload && typeof parsedPayload === 'object' && 'details' in parsedPayload ? parsedPayload.details : rawBody || parsedPayload
+      )
+    }
+
+    if (parsedPayload && typeof parsedPayload === 'object' && 'data' in parsedPayload) {
+      overviewCache.set(window, {
+        expiresAt: Date.now() + OVERVIEW_CACHE_TTL_MS,
+        value: parsedPayload.data,
+      })
+      return parsedPayload.data
+    }
+
+    throw new HidApiError(500, 'Admin dashboard returned an unexpected response.')
+  })()
+
+  inflightOverviewRequests.set(window, request)
+
+  try {
+    return await request
+  } finally {
+    if (inflightOverviewRequests.get(window) === request) {
+      inflightOverviewRequests.delete(window)
+    }
+  }
+}
+
+export async function searchAdminUsers(query: string, options: { force?: boolean } = {}) {
+  const trimmed = query.trim()
+  if (!trimmed) {
+    return [] as AdminManagedUser[]
+  }
+
+  const cacheKey = trimmed.toLowerCase()
+  if (!options.force) {
+    const cached = getCachedUserSearch(cacheKey)
+    if (cached) {
+      return cached
+    }
+  }
+
+  const existingRequest = inflightUserSearchRequests.get(cacheKey)
+  if (existingRequest) {
+    return existingRequest
+  }
+
+  const request = (async () => {
+    const url = new URL(requireSupabaseFunctionUrl('admin-user-management'))
+    url.searchParams.set('query', trimmed)
+    const data = await callAdminUserManagement<AdminUserDirectoryResponse>(url.toString(), {
+      method: 'GET',
+    }, 500)
+
+    const matches = data.matches ?? []
+    userSearchCache.set(cacheKey, {
+      expiresAt: Date.now() + USER_SEARCH_CACHE_TTL_MS,
+      value: matches,
+    })
+    return matches
+  })()
+
+  inflightUserSearchRequests.set(cacheKey, request)
+
+  try {
+    return await request
+  } finally {
+    if (inflightUserSearchRequests.get(cacheKey) === request) {
+      inflightUserSearchRequests.delete(cacheKey)
+    }
+  }
+}
+
+export async function applyAdminUserAction(targetAuthUserId: string, action: AdminUserManagementAction) {
+  const data = await callAdminUserManagement<AdminUserActionResponse>(requireSupabaseFunctionUrl('admin-user-management'), {
+    method: 'POST',
+    body: JSON.stringify({
+      action,
+      targetAuthUserId,
+    }),
+  }, 500)
+
+  invalidateAdminDashboardCaches()
+  return data
 }
