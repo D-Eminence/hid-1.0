@@ -1,7 +1,7 @@
 import type { AdminDashboardOverview, AdminOverviewWindow } from '../types/admin'
 import { HidApiError } from '../lib/hidApi'
 import { clearAllPortalSessions } from '../lib/auth'
-import { NETWORK_TIMEOUT_MESSAGE, fetchWithTimeout, supabase } from '../lib/supabase'
+import { NETWORK_TIMEOUT_MESSAGE, fetchWithTimeout, getSafeSession, safeSignOut, supabase } from '../lib/supabase'
 
 type EdgeEnvelope<T> = {
   data: T
@@ -74,8 +74,8 @@ function requireSupabaseAnonKey() {
 
 async function getAccessToken() {
   try {
-    const { data } = await supabase.auth.getSession()
-    return data.session?.access_token ?? null
+    const session = await getSafeSession()
+    return session?.access_token ?? null
   } catch (error) {
     const rawMessage = error instanceof Error ? error.message : 'Unable to read the current session.'
     throw new HidApiError(401, sanitizeAdminDashboardMessage(rawMessage, 401), error)
@@ -137,7 +137,7 @@ export async function fetchAdminDashboardOverview(window: AdminOverviewWindow = 
 
     if (response.status === 401 || message.toLowerCase().includes('please sign in again')) {
       try {
-        await supabase.auth.signOut()
+        await safeSignOut()
       } catch {
         // Best effort only.
       }

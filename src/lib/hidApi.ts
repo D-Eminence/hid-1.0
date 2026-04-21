@@ -15,7 +15,7 @@ import type {
 } from '../types/hid'
 import type { UploadDraft } from './medicalRecordUtils'
 import { clearAllPortalSessions } from './auth'
-import { fetchWithTimeout, NETWORK_TIMEOUT_MESSAGE, supabase } from './supabase'
+import { fetchWithTimeout, getSafeSession, getSafeUser, NETWORK_TIMEOUT_MESSAGE, safeSignOut, supabase } from './supabase'
 
 type PendingPatientSignup = {
   email?: string | null
@@ -249,21 +249,19 @@ function looksLikeEmailIdentifier(value: string) {
 
 async function clearConflictingAuthSession(targetEmail?: string | null) {
   const normalizedTargetEmail = targetEmail?.trim().toLowerCase() ?? null
-  const { data } = await supabase.auth.getUser()
-  const currentUser = data.user
+  const currentUser = await getSafeUser()
 
   if (!currentUser) return
 
   const currentEmail = currentUser.email?.trim().toLowerCase() ?? null
   if (normalizedTargetEmail && currentEmail === normalizedTargetEmail) return
 
-  await supabase.auth.signOut()
+  await safeSignOut()
   clearAllPortalSessions()
 }
 
 async function assertHospitalAccountCompatibleEmail() {
-  const { data } = await supabase.auth.getUser()
-  const user = data.user
+  const user = await getSafeUser()
   if (!user) return
 
   const requestedRole = `${user.user_metadata.requested_role ?? ''}`.trim().toLowerCase()
@@ -271,7 +269,7 @@ async function assertHospitalAccountCompatibleEmail() {
   const hasPendingStaffOnboarding = isPendingStaffOnboarding(user.user_metadata.pending_staff_onboarding)
 
   if (requestedRole === 'patient' && !hasPendingStaffOnboarding) {
-    await supabase.auth.signOut()
+    await safeSignOut()
     clearAllPortalSessions()
     throw new HidApiError(
       409,
@@ -317,13 +315,13 @@ function isPendingStaffOnboarding(value: unknown): value is PendingStaffOnboardi
 }
 
 async function getAccessToken() {
-  const { data } = await supabase.auth.getSession()
-  return data.session?.access_token ?? null
+  const session = await getSafeSession()
+  return session?.access_token ?? null
 }
 
 async function resetAuthState() {
   try {
-    await supabase.auth.signOut()
+    await safeSignOut()
   } catch {
     // Best effort only.
   }
@@ -426,8 +424,7 @@ async function edgeRequest<T>(functionName: string, options: EdgeRequestOptions 
 }
 
 async function clearPendingMetadata(key: 'pending_patient_signup' | 'pending_staff_onboarding') {
-  const { data } = await supabase.auth.getUser()
-  const user = data.user
+  const user = await getSafeUser()
   if (!user) return
   if (!(key in user.user_metadata)) return
 
@@ -450,8 +447,7 @@ function authRedirectUrl(path: 'patient' | 'hospital') {
 }
 
 async function getCurrentUserAppRole() {
-  const { data } = await supabase.auth.getUser()
-  const user = data.user
+  const user = await getSafeUser()
   if (!user) return null
 
   const { data: profile, error } = await supabase
@@ -817,8 +813,7 @@ export async function ensurePatientProfileRegistered(override?: PendingPatientSi
     if (!(error instanceof HidApiError) || error.status !== 404) throw error
   }
 
-  const { data } = await supabase.auth.getUser()
-  const user = data.user
+  const user = await getSafeUser()
   if (!user) {
     throw new HidApiError(401, 'Please sign in to continue.')
   }
@@ -855,8 +850,7 @@ export async function ensurePatientProfileRegistered(override?: PendingPatientSi
 }
 
 export async function fetchMyPatient() {
-  const { data } = await supabase.auth.getUser()
-  const user = data.user
+  const user = await getSafeUser()
   if (!user) {
     throw new HidApiError(401, 'Please sign in to continue.')
   }
@@ -1369,8 +1363,7 @@ export async function deleteMyAccount(challengeId: string, verificationToken: st
 }
 
 export async function fetchMyStaffAccount() {
-  const { data: authData } = await supabase.auth.getUser()
-  const user = authData.user
+  const user = await getSafeUser()
   if (!user) return null
 
   return loadCachedView(`staff:${user.id}`, async () => {
@@ -1405,8 +1398,7 @@ export async function ensureStaffAccountReady(override?: PendingStaffOnboarding)
   const existing = await fetchMyStaffAccountWithRetry(2, 120)
   if (existing) return existing
 
-  const { data } = await supabase.auth.getUser()
-  const user = data.user
+  const user = await getSafeUser()
   if (!user) {
     throw new HidApiError(401, 'Please sign in to continue.')
   }
@@ -1557,7 +1549,7 @@ export async function providerSignUp(params: {
     const actualHospital = normalizeComparableText(staffAccount.hospital_name)
 
     if (expectedHospital && actualHospital && expectedHospital !== actualHospital) {
-      await supabase.auth.signOut()
+      await safeSignOut()
       throw new HidApiError(409, error.message, error)
     }
 
@@ -1614,7 +1606,7 @@ export async function providerSignIn(hospitalName: string, email: string, passwo
   const actualHospital = normalizeComparableText(staffAccount.hospital_name)
 
   if (!expectedHospital || !actualHospital || expectedHospital !== actualHospital) {
-    await supabase.auth.signOut()
+    await safeSignOut()
     throw new HidApiError(401, 'Invalid hospital credentials.')
   }
 
@@ -1632,7 +1624,7 @@ export async function verifyStaffPasswordResetOtp(email: string, code: string) {
 
   const staffAccount = await fetchMyStaffAccount()
   if (!staffAccount) {
-    await supabase.auth.signOut().catch(() => undefined)
+    await safeSignOut().catch(() => undefined)
     clearAllPortalSessions()
     throw new HidApiError(403, 'This email is not linked to a hospital account.')
   }
@@ -1649,15 +1641,14 @@ export async function verifyAdminPasswordResetOtp(email: string, code: string) {
 
   const role = await getCurrentUserAppRole()
   if (role !== 'platform_admin') {
-    await supabase.auth.signOut().catch(() => undefined)
+    await safeSignOut().catch(() => undefined)
     clearAllPortalSessions()
     throw new HidApiError(403, 'Admin access is limited to platform admins.')
   }
 }
 
 export async function fetchStaffDashboard(options: { forceRefresh?: boolean } = {}) {
-  const { data } = await supabase.auth.getUser()
-  const user = data.user
+  const user = await getSafeUser()
   if (!user) {
     throw new HidApiError(401, 'Please sign in to continue.')
   }

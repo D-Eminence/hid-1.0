@@ -64,6 +64,34 @@ function redactSentryEvent(event: Record<string, any>) {
   return event
 }
 
+function getSentryEventText(event: Record<string, any>) {
+  const exceptionValues = Array.isArray(event.exception?.values) ? event.exception.values : []
+  return [
+    typeof event.message === 'string' ? event.message : '',
+    typeof event.culprit === 'string' ? event.culprit : '',
+    ...exceptionValues.flatMap((value: Record<string, unknown>) => [
+      typeof value.type === 'string' ? value.type : '',
+      typeof value.value === 'string' ? value.value : '',
+    ]),
+  ]
+    .join(' ')
+    .toLowerCase()
+}
+
+function shouldIgnoreSentryEvent(event: Record<string, any>) {
+  const text = getSentryEventText(event)
+  return (
+    text.includes('lock broken by another request') ||
+    text.includes('lock request is aborted') ||
+    text.includes("steal' option") ||
+    text.includes('lock was stolen by another request') ||
+    text.includes('another request stole it') ||
+    (text.includes('serviceworker') && text.includes('service-worker.js')) ||
+    text.includes('failed to update a serviceworker') ||
+    text.includes('unknown error occurred when fetching the script')
+  )
+}
+
 async function initSentry() {
   const dsn = import.meta.env.VITE_SENTRY_DSN as string | undefined
   if (!dsn) return
@@ -81,7 +109,11 @@ async function initSentry() {
 
   Sentry.init({
     beforeSend(event) {
-      return redactSentryEvent(event as Record<string, any>) as typeof event
+      const redactedEvent = redactSentryEvent(event as Record<string, any>)
+      if (shouldIgnoreSentryEvent(redactedEvent)) {
+        return null
+      }
+      return redactedEvent as typeof event
     },
     dsn,
     environment: (import.meta.env.VITE_SENTRY_ENVIRONMENT as string | undefined) ?? import.meta.env.MODE,

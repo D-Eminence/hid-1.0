@@ -58,7 +58,13 @@ function isIgnoredSentryIssue(issue: SentryIssue) {
     text.includes('invalid login credentials') ||
     text.includes('token has expired or is invalid') ||
     text.includes('authapierror') ||
+    text.includes('lock broken by another request') ||
+    text.includes('lock request is aborted') ||
     text.includes('lock was stolen by another request') ||
+    text.includes('serviceworker') ||
+    text.includes('service-worker.js') ||
+    text.includes('failed to update a serviceworker') ||
+    text.includes('unknown error occurred when fetching the script') ||
     text.includes('importing a module script failed') ||
     text.includes('typeerror: load failed') ||
     text.includes('failed to fetch dynamically imported module')

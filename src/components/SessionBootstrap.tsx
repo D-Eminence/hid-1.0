@@ -2,7 +2,7 @@ import React, { useEffect } from 'react'
 import { clearAllPortalSessions, getStaffSession, setPatientSession, setStaffSession } from '../lib/auth'
 import { fetchMyPatient, fetchMyStaffAccount } from '../lib/hidApi'
 import { clearObservabilityIdentity, identifyObservabilityUser } from '../lib/observability'
-import { supabase } from '../lib/supabase'
+import { getSafeSession, safeSignOut, supabase } from '../lib/supabase'
 
 function isAuthFailure(reason: unknown) {
   if (!(reason instanceof Error)) return false
@@ -18,8 +18,7 @@ function isAuthFailure(reason: unknown) {
 }
 
 async function hydratePortalSession() {
-  const { data } = await supabase.auth.getSession()
-  const session = data.session
+  const session = await getSafeSession()
 
   if (!session) {
     clearAllPortalSessions()
@@ -66,7 +65,7 @@ async function hydratePortalSession() {
     const staffReason = staff.status === 'rejected' ? staff.reason : null
 
     if (isAuthFailure(patientReason) || isAuthFailure(staffReason)) {
-      await supabase.auth.signOut().catch(() => {})
+      await safeSignOut().catch(() => {})
       clearAllPortalSessions()
     }
   }

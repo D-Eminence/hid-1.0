@@ -3,11 +3,13 @@ export async function registerAppServiceWorker() {
   if (import.meta.env.DEV) return
 
   try {
-    const registration = await navigator.serviceWorker.register('/service-worker.js', {
+    const existingRegistration = await navigator.serviceWorker.getRegistration('/')
+    const registration = existingRegistration ?? await navigator.serviceWorker.register('/service-worker.js', {
       scope: '/',
       updateViaCache: 'none',
     })
-    void registration.update()
+
+    await registration.update().catch(() => undefined)
   } catch {
     // Service worker registration is best effort only.
   }

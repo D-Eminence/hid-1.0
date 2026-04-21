@@ -1,4 +1,4 @@
-import { supabase } from './supabase'
+import { safeSignOut } from './supabase'
 
 const PATIENT_SESSION_KEY = 'hid_patient_session'
 const STAFF_SESSION_KEY = 'hid_staff_session'
@@ -59,6 +59,6 @@ export function clearAllPortalSessions() {
 }
 
 export async function signOutAndClearSessions() {
-  await supabase.auth.signOut()
+  await safeSignOut()
   clearAllPortalSessions()
 }

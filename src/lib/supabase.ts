@@ -7,6 +7,7 @@ export const NETWORK_TIMEOUT_MS = 15000
 export const NETWORK_TIMEOUT_MESSAGE = 'The request took too long. Check your internet connection and try again.'
 
 export const isConfigured = !!(supabaseUrl && supabaseKey)
+const AUTH_LOCK_RETRY_MS = 80
 
 function isRequest(input: RequestInfo | URL): input is Request {
   return typeof Request !== 'undefined' && input instanceof Request
@@ -59,3 +60,53 @@ export const supabase = createClient<Database>(
     },
   }
 )
+
+function sleep(ms: number) {
+  return new Promise(resolve => globalThis.setTimeout(resolve, ms))
+}
+
+export function isSupabaseAuthLockContentionError(error: unknown) {
+  if (!(error instanceof Error) && !(error instanceof DOMException)) return false
+  const lower = `${error.message ?? ''}`.toLowerCase()
+  return (
+    lower.includes('lock broken by another request') ||
+    lower.includes('lock request is aborted') ||
+    lower.includes("steal' option") ||
+    lower.includes('lock was stolen by another request') ||
+    lower.includes('another request stole it') ||
+    lower.includes('auth-token') ||
+    lower.includes('navigatorlock')
+  )
+}
+
+let authOperationQueue = Promise.resolve()
+
+function queueAuthOperation<T>(operation: () => Promise<T>) {
+  const run = authOperationQueue.then(operation, operation)
+  authOperationQueue = run.then(() => undefined, () => undefined)
+  return run
+}
+
+async function runAuthOperationWithRetry<T>(operation: () => Promise<T>) {
+  try {
+    return await queueAuthOperation(operation)
+  } catch (error) {
+    if (!isSupabaseAuthLockContentionError(error)) throw error
+    await sleep(AUTH_LOCK_RETRY_MS)
+    return queueAuthOperation(operation)
+  }
+}
+
+export async function getSafeSession() {
+  const { data } = await runAuthOperationWithRetry(() => supabase.auth.getSession())
+  return data.session ?? null
+}
+
+export async function getSafeUser() {
+  const { data } = await runAuthOperationWithRetry(() => supabase.auth.getUser())
+  return data.user ?? null
+}
+
+export async function safeSignOut() {
+  await runAuthOperationWithRetry(() => supabase.auth.signOut())
+}

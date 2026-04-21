@@ -7,7 +7,7 @@ import { Badge, Button, EmptyState, PageLoader } from '../../components/ui'
 import { useAdminDashboard } from '../../hooks/useAdminDashboard'
 import { ADMIN_LOGIN_PATH, ADMIN_OVERVIEW_PATH } from '../../lib/adminRoutes'
 import { signOutAndClearSessions } from '../../lib/auth'
-import { supabase } from '../../lib/supabase'
+import { getSafeUser } from '../../lib/supabase'
 import type { AdminAlert, AdminOverviewWindow } from '../../types/admin'
 
 const windowOptions: Array<{ key: AdminOverviewWindow; label: string }> = [
@@ -252,8 +252,8 @@ export default function AdminDashboard() {
   }, [])
 
   async function loadViewer() {
-    const { data } = await supabase.auth.getUser()
-    setViewerEmail(data.user?.email ?? null)
+    const user = await getSafeUser()
+    setViewerEmail(user?.email ?? null)
   }
 
   async function logout() {

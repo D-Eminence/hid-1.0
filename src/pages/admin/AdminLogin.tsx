@@ -6,12 +6,11 @@ import { Button, Input, showToast } from '../../components/ui'
 import { clearAllPortalSessions, signOutAndClearSessions } from '../../lib/auth'
 import { ADMIN_LOGIN_PATH, ADMIN_OVERVIEW_PATH } from '../../lib/adminRoutes'
 import { startAdminPasswordResetOtp, updateCurrentUserPassword, verifyAdminPasswordResetOtp } from '../../lib/hidApi'
-import { supabase } from '../../lib/supabase'
+import { getSafeUser, safeSignOut, supabase } from '../../lib/supabase'
 import { isStrongPassword, maskEmailAddress, PASSWORD_REQUIREMENTS_TEXT } from '../../lib/utils'
 
 async function getCurrentAppRole() {
-  const { data } = await supabase.auth.getUser()
-  const user = data.user
+  const user = await getSafeUser()
   if (!user) return null
 
   const { data: profile, error } = await supabase
@@ -155,7 +154,7 @@ export default function AdminLogin() {
 
       const role = await getCurrentAppRole()
       if (role !== 'platform_admin') {
-        await supabase.auth.signOut().catch(() => undefined)
+        await safeSignOut().catch(() => undefined)
         clearAllPortalSessions()
         showToast('Admin access is limited to platform admins.', 'error')
         return
