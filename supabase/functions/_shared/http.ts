@@ -172,8 +172,20 @@ function sanitizeErrorMessage(message: string, status: number) {
   if (lower.includes('account is inactive') || lower.includes('account is not active') || lower.includes('account is locked')) {
     return 'This account is not active right now. Contact support if you need help.'
   }
+  if (lower.includes('patient account is locked')) {
+    return 'This patient account is locked right now and cannot be opened by a hospital.'
+  }
   if (lower.includes('patient profile already exists')) {
     return 'An account with these details already exists. Sign in instead or enter the verification code sent to your email.'
+  }
+  if (lower.includes('email address is already linked to an hid account')) {
+    return 'That email address is already linked to an HID account. Sign in instead.'
+  }
+  if (lower.includes('phone number is already linked to another hid account')) {
+    return 'That phone number is already linked to another HID account.'
+  }
+  if (lower.includes('email address and phone number are already linked')) {
+    return 'That email address and phone number are already linked to HID accounts.'
   }
   if (lower.includes('already linked to a patient account')) {
     return 'This email address is already linked to a patient account. Use a different email for the hospital account.'

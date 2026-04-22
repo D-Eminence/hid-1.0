@@ -87,6 +87,13 @@ type RecordCreationResponse = {
   version_id: string
 }
 
+type SignupAvailabilityResponse = {
+  accountType: 'patient' | 'hospital'
+  emailInUse: boolean
+  emailOwner: 'patient' | 'hospital' | 'unknown' | null
+  phoneInUse: boolean
+}
+
 type HistoryView = {
   pendingRequests: AccessRequest[]
   activeGrants: AccessRequest[]
@@ -336,11 +343,6 @@ async function assertHospitalAccountCompatibleEmail() {
   }
 }
 
-function isEmailNotConfirmedError(error: unknown) {
-  if (!(error instanceof Error)) return false
-  return error.message.toLowerCase().includes('email not confirmed')
-}
-
 function isAbortError(error: unknown) {
   return error instanceof DOMException && error.name === 'AbortError'
 }
@@ -540,13 +542,57 @@ async function requestSignupVerificationEmail(email: string, path: 'patient' | '
   }
 }
 
-async function bestEffortRequestSignupVerificationEmail(email: string, path: 'patient' | 'hospital', captchaToken?: string | null) {
-  try {
-    await requestSignupVerificationEmail(email, path, captchaToken)
-    return true
-  } catch {
-    return false
+async function checkSignupAvailability(params: {
+  accountType: 'patient' | 'hospital'
+  email: string
+  phone?: string | null
+}) {
+  return edgeRequest<SignupAvailabilityResponse>('signup-availability', {
+    method: 'POST',
+    requireAuth: false,
+    body: {
+      accountType: params.accountType,
+      email: params.email,
+      phone: params.phone ?? null,
+    },
+  })
+}
+
+async function ensurePatientSignupAvailability(email: string, phone?: string | null) {
+  const availability = await checkSignupAvailability({
+    accountType: 'patient',
+    email,
+    phone,
+  })
+
+  if (availability.emailInUse && availability.phoneInUse) {
+    throw new HidApiError(409, 'That email address and phone number are already linked to HID accounts.')
   }
+  if (availability.emailInUse) {
+    throw new HidApiError(409, 'That email address is already linked to an HID account. Sign in instead.')
+  }
+  if (availability.phoneInUse) {
+    throw new HidApiError(409, 'That phone number is already linked to another HID account.')
+  }
+}
+
+async function ensureHospitalSignupAvailability(email: string) {
+  const availability = await checkSignupAvailability({
+    accountType: 'hospital',
+    email,
+  })
+
+  if (!availability.emailInUse) return
+
+  if (availability.emailOwner === 'patient') {
+    throw new HidApiError(409, 'This email address is already linked to a patient account. Use a different email for the hospital account.')
+  }
+
+  if (availability.emailOwner === 'hospital') {
+    throw new HidApiError(409, 'An account with this email already exists. Sign in instead.')
+  }
+
+  throw new HidApiError(409, 'This email address is already linked to an HID account. Sign in instead or use a different email.')
 }
 
 async function requestEmailOtp(email: string, captchaToken?: string | null) {
@@ -1283,14 +1329,17 @@ export async function revokeAccessGrant(grantId: string, reason?: string) {
 
 export async function patientSignUpWithPassword(params: PendingPatientSignup & { password: string; captchaToken?: string | null }) {
   const normalizedEmail = params.email?.trim().toLowerCase() ?? ''
+  const normalizedPhone = normalizeOptionalText(normalizePhone(params.phone ?? ''))
   const pendingData: PendingPatientSignup = {
     email: normalizeOptionalText(normalizedEmail),
     firstName: params.firstName.trim(),
     lastName: params.lastName.trim(),
     gender: normalizeOptionalText(params.gender),
     dob: normalizeOptionalText(params.dob),
-    phone: normalizeOptionalText(normalizePhone(params.phone ?? '')),
+    phone: normalizedPhone,
   }
+
+  await ensurePatientSignupAvailability(normalizedEmail, normalizedPhone)
 
   const redirectTo = authRedirectUrl('patient')
   const { data, error } = await supabase.auth.signUp({
@@ -1308,31 +1357,7 @@ export async function patientSignUpWithPassword(params: PendingPatientSignup & {
 
   if (error) {
     if (isExistingAccountError(error)) {
-      const { error: signInError } = await supabase.auth.signInWithPassword({
-        email: normalizedEmail,
-        password: params.password,
-        options: {
-          captchaToken: params.captchaToken ?? undefined,
-        },
-      })
-
-      if (!signInError) {
-        const profile = await ensurePatientProfileRegistered(pendingData)
-        return {
-          requiresVerification: false,
-          profile,
-        }
-      }
-
-      if (isEmailNotConfirmedError(signInError)) {
-        await bestEffortRequestSignupVerificationEmail(normalizedEmail, 'patient', params.captchaToken)
-        return {
-          requiresVerification: true,
-          profile: null,
-        }
-      }
-
-      throw new HidApiError(409, 'An account with this email already exists. Sign in instead.', error)
+      throw new HidApiError(409, 'That email address is already linked to an HID account. Sign in instead.', error)
     }
 
     throw new HidApiError(400, error.message, error)
@@ -1594,6 +1619,7 @@ export async function providerSignUp(params: {
   const hospitalName = params.hospitalName.trim()
   const normalizedEmail = params.email.trim().toLowerCase()
   await clearConflictingAuthSession(normalizedEmail)
+  await ensureHospitalSignupAvailability(normalizedEmail)
 
   const pendingData: PendingStaffOnboarding = {
     country: normalizeOptionalText(params.country),
@@ -1623,40 +1649,7 @@ export async function providerSignUp(params: {
     if (!isExistingAccountError(error)) {
       throw new HidApiError(400, error.message, error)
     }
-
-    const { error: signInError } = await supabase.auth.signInWithPassword({
-      email: normalizedEmail,
-      password: params.password,
-      options: {
-        captchaToken: params.captchaToken ?? undefined,
-      },
-    })
-
-    if (signInError) {
-      if (isEmailNotConfirmedError(signInError)) {
-        await bestEffortRequestSignupVerificationEmail(normalizedEmail, 'hospital', params.captchaToken)
-        return {
-          requiresVerification: true,
-          staffAccount: null,
-        }
-      }
-      throw new HidApiError(409, 'An account with this email already exists. Sign in instead.', error)
-    }
-
-    await assertHospitalAccountCompatibleEmail()
-    const staffAccount = await ensureStaffAccountReady(pendingData)
-    const expectedHospital = normalizeComparableText(pendingData.hospitalName)
-    const actualHospital = normalizeComparableText(staffAccount.hospital_name)
-
-    if (expectedHospital && actualHospital && expectedHospital !== actualHospital) {
-      await safeSignOut()
-      throw new HidApiError(409, error.message, error)
-    }
-
-    return {
-      requiresVerification: false,
-      staffAccount,
-    }
+    throw new HidApiError(409, 'An account with this email already exists. Sign in instead.', error)
   }
 
   if (data.session) {

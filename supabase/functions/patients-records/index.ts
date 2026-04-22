@@ -1,5 +1,6 @@
-import { requireUser } from '../_shared/auth.ts'
+import { createAdminClient, requireUser } from '../_shared/auth.ts'
 import { HttpError, json, withErrorHandling } from '../_shared/http.ts'
+import { resolvePatientAccessState } from '../_shared/patient-identifiers.ts'
 
 Deno.serve(req => withErrorHandling(req, async () => {
   if (req.method !== 'GET') throw new HttpError(405, 'Method not allowed.')
@@ -7,6 +8,15 @@ Deno.serve(req => withErrorHandling(req, async () => {
   const { client } = await requireUser(req)
   const url = new URL(req.url)
   const patientIdentifier = url.searchParams.get('patientIdentifier')
+
+  if (patientIdentifier?.trim()) {
+    const adminClient = createAdminClient()
+    const patientState = await resolvePatientAccessState(adminClient, patientIdentifier)
+
+    if (patientState?.profileActive === false) {
+      throw new HttpError(403, 'This patient account is locked right now.')
+    }
+  }
 
   const { data, error } = await client.rpc('hid_get_patient_records', {
     p_patient_identifier: patientIdentifier,

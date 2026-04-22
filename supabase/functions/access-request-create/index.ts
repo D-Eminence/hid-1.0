@@ -1,5 +1,6 @@
-import { requireUser } from '../_shared/auth.ts'
+import { createAdminClient, requireUser } from '../_shared/auth.ts'
 import { HttpError, json, readJson, withErrorHandling } from '../_shared/http.ts'
+import { resolvePatientAccessState } from '../_shared/patient-identifiers.ts'
 import { asPositiveInt, asTrimmedString } from '../_shared/validation.ts'
 
 type Payload = {
@@ -19,6 +20,12 @@ Deno.serve(req => withErrorHandling(req, async () => {
   const patientIdentifier = asTrimmedString(body.patientIdentifier, 'patientIdentifier')
   const durationMinutes = asPositiveInt(body.durationMinutes, 'durationMinutes', 60)
   const accessPin = typeof body.accessPin === 'string' && body.accessPin.trim() ? body.accessPin.trim() : null
+  const adminClient = createAdminClient()
+  const patientState = await resolvePatientAccessState(adminClient, patientIdentifier)
+
+  if (patientState?.profileActive === false) {
+    throw new HttpError(403, 'This patient account is locked right now.')
+  }
 
   const { data, error } = accessPin
     ? await client.rpc('hid_access_patient_with_pin', {

@@ -1,5 +1,6 @@
 import { requireUser } from '../_shared/auth.ts'
 import { HttpError, json, readJson, withErrorHandling } from '../_shared/http.ts'
+import { sendPatientRegistrationConfirmation } from '../_shared/notifications.ts'
 import { asTrimmedString, normalizePhone, optionalTrimmedString } from '../_shared/validation.ts'
 
 type Payload = {
@@ -13,7 +14,7 @@ type Payload = {
 Deno.serve(req => withErrorHandling(req, async () => {
   if (req.method !== 'POST') throw new HttpError(405, 'Method not allowed.')
 
-  const { client } = await requireUser(req)
+  const { client, user } = await requireUser(req)
   const body = await readJson<Payload>(req)
   const firstName = asTrimmedString(body.firstName, 'firstName')
   const lastName = asTrimmedString(body.lastName, 'lastName')
@@ -27,5 +28,15 @@ Deno.serve(req => withErrorHandling(req, async () => {
   })
 
   if (error) throw new HttpError(400, error.message, error)
+
+  const patientRecord = data as { hid_code?: string | null } | null
+  if (patientRecord?.hid_code) {
+    void sendPatientRegistrationConfirmation({
+      email: user.email ?? null,
+      hidCode: patientRecord.hid_code,
+      patientName: `${firstName} ${lastName}`.trim(),
+    })
+  }
+
   return json({ data }, 201)
 }))

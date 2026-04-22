@@ -21,6 +21,12 @@ type PasswordResetConfirmationInput = {
   patientName: string
 }
 
+type PatientRegistrationDeliveryInput = {
+  email: string | null
+  hidCode: string
+  patientName: string
+}
+
 type AccountDeletionDeliveryInput = {
   accountLabel: string
   code: string
@@ -94,6 +100,38 @@ function renderPasswordResetConfirmationEmail({
           </p>
           <p style="margin:0;font-size:14px;line-height:1.7">
             If this was not you, contact support immediately and secure your phone and email accounts.
+          </p>
+        </div>
+      </div>
+    </div>
+  `
+}
+
+function renderPatientRegistrationEmail({
+  hidCode,
+  patientName,
+}: {
+  hidCode: string
+  patientName: string
+}) {
+  return `
+    <div style="font-family:Arial,sans-serif;background:#f5f7fb;padding:24px;color:#111827">
+      <div style="max-width:560px;margin:0 auto;background:#ffffff;border:1px solid #e5e7eb;border-radius:16px;overflow:hidden">
+        <div style="padding:24px 28px;background:#1a6fd4;color:#ffffff">
+          <div style="font-size:24px;font-weight:700">Welcome to HID</div>
+          <div style="font-size:12px;opacity:0.85;margin-top:4px">Health Identity Directory</div>
+        </div>
+        <div style="padding:28px">
+          <p style="margin:0 0 12px;font-size:14px">Hello ${patientName || 'there'},</p>
+          <p style="margin:0 0 18px;font-size:14px;line-height:1.7">
+            Your HID account is ready. Keep your Health ID safe and use it whenever you sign in or share access with a hospital.
+          </p>
+          <div style="margin:0 0 18px;padding:18px;border:1px dashed #93c5fd;border-radius:12px;background:#eff6ff;text-align:center">
+            <div style="font-size:12px;color:#6b7280;letter-spacing:0.08em;text-transform:uppercase;margin-bottom:8px">Your HID Code</div>
+            <div style="font-size:30px;font-weight:700;letter-spacing:0.12em;color:#1a6fd4">${hidCode}</div>
+          </div>
+          <p style="margin:0;font-size:14px;line-height:1.7">
+            You can also sign in with your email address and password, but keep this HID code available for quick access and hospital verification.
           </p>
         </div>
       </div>
@@ -186,6 +224,29 @@ export async function sendPatientPasswordResetConfirmation(input: PasswordResetC
       const message = error instanceof Error ? error.message : 'Unable to send the email confirmation.'
       errors.push(message)
       console.error('password reset confirmation email failed', message)
+    }
+  }
+
+  return errors
+}
+
+export async function sendPatientRegistrationConfirmation(input: PatientRegistrationDeliveryInput) {
+  const errors: string[] = []
+
+  if (input.email) {
+    try {
+      await sendTransactionalEmail(
+        input.email,
+        'Your HID code is ready',
+        renderPatientRegistrationEmail({
+          hidCode: input.hidCode,
+          patientName: input.patientName,
+        }),
+      )
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Unable to send the registration email.'
+      errors.push(message)
+      console.error('patient registration email failed', message)
     }
   }
 

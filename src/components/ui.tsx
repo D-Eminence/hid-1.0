@@ -471,6 +471,15 @@ function normalizeToastMessage(message: string, type: ToastType) {
     if (lower.includes('phone number is already linked') || lower.includes('email address or phone number is already linked')) {
       return 'That email address or phone number is already linked to another HID account.'
     }
+    if (lower.includes('email address is already linked to an hid account')) {
+      return 'That email address is already linked to an HID account. Sign in instead.'
+    }
+    if (lower.includes('phone number is already linked to another hid account')) {
+      return 'That phone number is already linked to another HID account.'
+    }
+    if (lower.includes('email address and phone number are already linked')) {
+      return 'That email address and phone number are already linked to HID accounts.'
+    }
     if (lower.includes('idx_hid_patients_phone') || lower.includes('idx_hid_patients_email')) {
       return 'That email address or phone number is already linked to another HID account.'
     }
@@ -528,6 +537,9 @@ function normalizeToastMessage(message: string, type: ToastType) {
     }
     if (lower.includes('unable to access this patient right now')) {
       return 'We could not open this patient right now. Check the HID code and Access PIN and try again.'
+    }
+    if (lower.includes('patient account is locked')) {
+      return 'This patient account is locked right now and cannot be opened by a hospital.'
     }
     if (lower.includes('unable to save the medical record')) {
       return 'We could not save the medical record right now. Please try again.'

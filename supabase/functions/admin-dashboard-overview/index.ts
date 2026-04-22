@@ -680,7 +680,7 @@ Deno.serve(req => withErrorHandling(req, async () => {
 
   const responseTimeProbe = (async () => {
     const startedAt = Date.now()
-    const result = await adminClient.from('hid_user_profiles').select('id', { count: 'exact', head: true }).limit(1)
+    const result = await adminClient.from('hid_user_profiles').select('id').limit(1)
     return {
       durationMs: Date.now() - startedAt,
       result,

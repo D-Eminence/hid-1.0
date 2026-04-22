@@ -702,7 +702,45 @@ async function performUserAction(
   }
 
   if (action === 'lock_profile') {
-    const [profileUpdate, userUpdate] = await Promise.all([
+    const [activeGrantsResult, pendingRequestsResult] = target.patient
+      ? await Promise.all([
+          adminClient
+            .from('hid_access_grants')
+            .select('id, patient_id, staff_account_id')
+            .eq('patient_id', target.patient.id)
+            .eq('status', 'active'),
+          adminClient
+            .from('hid_access_requests')
+            .select('id, patient_id, requester_staff_account_id')
+            .eq('patient_id', target.patient.id)
+            .eq('status', 'pending'),
+        ])
+      : [{ data: [], error: null }, { data: [], error: null }]
+
+    if (activeGrantsResult.error) throw new HttpError(400, activeGrantsResult.error.message, activeGrantsResult.error)
+    if (pendingRequestsResult.error) throw new HttpError(400, pendingRequestsResult.error.message, pendingRequestsResult.error)
+
+    const grantRows = (activeGrantsResult.data ?? []) as ActiveGrantRow[]
+    const pendingRows = (pendingRequestsResult.data ?? []) as PendingRequestRow[]
+    const affectedStaffIds = unique([
+      ...grantRows.map(item => item.staff_account_id),
+      ...pendingRows.map(item => item.requester_staff_account_id),
+    ])
+
+    const affectedStaffProfilesResult = affectedStaffIds.length > 0
+      ? await adminClient
+          .from('hid_staff_accounts')
+          .select('id, user_profile_id')
+          .in('id', affectedStaffIds)
+      : { data: [], error: null }
+
+    if (affectedStaffProfilesResult.error) {
+      throw new HttpError(400, affectedStaffProfilesResult.error.message, affectedStaffProfilesResult.error)
+    }
+
+    const affectedStaffProfiles = (affectedStaffProfilesResult.data ?? []) as StaffProfileRow[]
+
+    const [profileUpdate, userUpdate, grantUpdate, requestUpdate] = await Promise.all([
       adminClient
         .from('hid_user_profiles')
         .update({ active: false })
@@ -710,17 +748,48 @@ async function performUserAction(
       adminClient.auth.admin.updateUserById(targetAuthUserId, {
         ban_duration: LOCK_BAN_DURATION,
       }),
+      grantRows.length > 0
+        ? adminClient
+            .from('hid_access_grants')
+            .update({
+              status: 'revoked',
+              revoked_at: new Date().toISOString(),
+              revoked_by_user_profile_id: actor.profileId,
+              revoked_reason: 'Patient account locked by HID admin.',
+            })
+            .in('id', grantRows.map(item => item.id))
+        : Promise.resolve({ error: null }),
+      pendingRows.length > 0
+        ? adminClient
+            .from('hid_access_requests')
+            .update({
+              status: 'denied',
+              denied_at: new Date().toISOString(),
+              denied_reason: 'Patient account locked by HID admin.',
+            })
+            .in('id', pendingRows.map(item => item.id))
+        : Promise.resolve({ error: null }),
     ])
 
     if (profileUpdate.error) throw new HttpError(400, profileUpdate.error.message, profileUpdate.error)
     if (userUpdate.error) throw new HttpError(400, userUpdate.error.message, userUpdate.error)
+    if ('error' in grantUpdate && grantUpdate.error) throw new HttpError(400, grantUpdate.error.message, grantUpdate.error)
+    if ('error' in requestUpdate && requestUpdate.error) throw new HttpError(400, requestUpdate.error.message, requestUpdate.error)
 
-    await insertNotifications(adminClient, [{
-      userProfileId: target.profile.id,
-      patientId: target.patient?.id ?? null,
-      title: 'Account locked',
-      message: 'An HID administrator locked this account. Contact support if you need help.',
-    }])
+    await insertNotifications(adminClient, [
+      {
+        userProfileId: target.profile.id,
+        patientId: target.patient?.id ?? null,
+        title: 'Account locked',
+        message: 'An HID administrator locked this account. Contact support if you need help.',
+      },
+      ...affectedStaffProfiles.map(staffProfile => ({
+        userProfileId: staffProfile.user_profile_id,
+        patientId: target.patient?.id ?? null,
+        title: 'Patient access closed',
+        message: 'This patient account was locked by an HID administrator, so your access has been closed.',
+      })),
+    ])
     await logAdminAuditEvent(adminClient, actor, {
       action: 'admin_lock_profile',
       patientId: target.patient?.id ?? null,
@@ -728,6 +797,8 @@ async function performUserAction(
       resourceId: target.profile.id,
       resourceType: 'user_profile',
       metadata: {
+        denied_requests: pendingRows.length,
+        revoked_grants: grantRows.length,
         target_auth_user_id: targetAuthUserId,
       },
     })

@@ -217,6 +217,7 @@ export default function PatientAuth() {
         phone: result.profile.patient.phone_e164 ?? '',
         fullName: result.profile.patient.full_name,
       })
+      showToast('Your HID is ready and has been sent to your email.', 'success')
       setStep('success')
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Unable to create the account right now.'
@@ -280,7 +281,7 @@ export default function PatientAuth() {
         phone: profile.patient.phone_e164 ?? '',
         fullName: profile.patient.full_name,
       })
-      showToast('Email verified. Your HID is ready.', 'success')
+      showToast('Email verified. Your HID is ready and has been sent to your email.', 'success')
       setStep('success')
     } catch (error) {
       const message = error instanceof Error ? error.message : 'The verification code is not correct.'

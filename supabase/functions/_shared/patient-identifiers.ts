@@ -18,6 +18,10 @@ export type ResolvedPatientAuthIdentity = {
   userProfileId: string
 }
 
+export type ResolvedPatientAccessState = ResolvedPatientAuthIdentity & {
+  profileActive: boolean
+}
+
 export async function resolvePatientAuthIdentity(
   adminClient: SupabaseClient,
   rawIdentifier: string
@@ -99,6 +103,29 @@ export async function resolvePatientAuthIdentity(
     phone: patientRow.phone_e164,
     email: patientRow.email,
     userProfileId: patientRow.user_profile_id,
+  }
+}
+
+export async function resolvePatientAccessState(
+  adminClient: SupabaseClient,
+  rawIdentifier: string,
+): Promise<ResolvedPatientAccessState | null> {
+  const identity = await resolvePatientAuthIdentity(adminClient, rawIdentifier)
+  if (!identity) return null
+
+  const { data, error } = await adminClient
+    .from('hid_user_profiles')
+    .select('active')
+    .eq('id', identity.userProfileId)
+    .maybeSingle()
+
+  if (error) {
+    throw error
+  }
+
+  return {
+    ...identity,
+    profileActive: data?.active !== false,
   }
 }
 
