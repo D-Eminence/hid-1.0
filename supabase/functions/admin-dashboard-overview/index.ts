@@ -619,6 +619,14 @@ async function listAllAuthUsers(adminClient: ReturnType<typeof createAdminClient
   return users
 }
 
+function isConfirmedAuthUser(user: Record<string, unknown>) {
+  return Boolean(user.email_confirmed_at ?? user.phone_confirmed_at)
+}
+
+function filterReportableAuthUsers(authUsers: Array<Record<string, unknown>>, profiledAuthUserIds: Set<string>) {
+  return authUsers.filter(user => isConfirmedAuthUser(user) || profiledAuthUserIds.has(String(user.id)))
+}
+
 function isOnOrAfter(timestamp: string | null | undefined, threshold: Date) {
   if (!timestamp) return false
   const time = new Date(timestamp).getTime()
@@ -678,6 +686,9 @@ Deno.serve(req => withErrorHandling(req, async () => {
   const todayStart = startOfToday()
 
   const authUsersPromise = listAllAuthUsers(adminClient)
+  const profiledAuthUsersPromise = adminClient
+    .from('hid_user_profiles')
+    .select('auth_user_id')
 
   const responseTimeProbe = (async () => {
     const startedAt = Date.now()
@@ -696,6 +707,7 @@ Deno.serve(req => withErrorHandling(req, async () => {
 
   const [
     authUsers,
+    profiledAuthUsersResponse,
     totalRecordsResponse,
     windowRecordsResponse,
     providerRecordCountResponse,
@@ -714,6 +726,7 @@ Deno.serve(req => withErrorHandling(req, async () => {
     posthog,
   ] = await Promise.all([
     authUsersPromise,
+    profiledAuthUsersPromise,
     adminClient.from('hid_medical_records').select('id', { count: 'exact', head: true }),
     adminClient.from('hid_medical_records').select('id, patient_id, created_at, created_by_staff_account_id').gte('created_at', periodStart.toISOString()),
     adminClient.from('hid_medical_records').select('id', { count: 'exact', head: true }).not('created_by_staff_account_id', 'is', null),
@@ -733,6 +746,7 @@ Deno.serve(req => withErrorHandling(req, async () => {
   ])
 
   if (totalRecordsResponse.error) throw new HttpError(400, totalRecordsResponse.error.message, totalRecordsResponse.error)
+  if (profiledAuthUsersResponse.error) throw new HttpError(400, profiledAuthUsersResponse.error.message, profiledAuthUsersResponse.error)
   if (windowRecordsResponse.error) throw new HttpError(400, windowRecordsResponse.error.message, windowRecordsResponse.error)
   if (providerRecordCountResponse.error) throw new HttpError(400, providerRecordCountResponse.error.message, providerRecordCountResponse.error)
   if (organizationsCountResponse.error) throw new HttpError(400, organizationsCountResponse.error.message, organizationsCountResponse.error)
@@ -746,16 +760,23 @@ Deno.serve(req => withErrorHandling(req, async () => {
   if (responseTimeProbeResult.result.error) throw new HttpError(400, responseTimeProbeResult.result.error.message, responseTimeProbeResult.result.error)
   if (accountCreatedCountResponse.error) throw new HttpError(400, accountCreatedCountResponse.error.message, accountCreatedCountResponse.error)
 
-  const apiResponseTimeMs = responseTimeProbeResult.durationMs
-  const totalUsers = authUsers.length
-  const verifiedUsers = authUsers.filter(user => Boolean(user.email_confirmed_at ?? user.phone_confirmed_at)).length
-  const unverifiedUsers = Math.max(totalUsers - verifiedUsers, 0)
-  const newSignupsToday = authUsers.filter(user => isOnOrAfter(user.created_at as string | null, todayStart)).length
-  const newSignupsWindow = authUsers.filter(user => isOnOrAfter(user.created_at as string | null, periodStart)).length
-  const activeUsers24h = authUsers.filter(user => isOnOrAfter(user.last_sign_in_at as string | null, startOfWindow('24h'))).length
-  const activeUsersWindow = authUsers.filter(user => isOnOrAfter(user.last_sign_in_at as string | null, periodStart)).length
+  const profiledAuthUserIds = new Set(
+    ((profiledAuthUsersResponse.data ?? []) as Array<Record<string, unknown>>)
+      .map(row => `${row.auth_user_id ?? ''}`.trim())
+      .filter(Boolean)
+  )
+  const reportableAuthUsers = filterReportableAuthUsers(authUsers, profiledAuthUserIds)
 
-  const recentAuthUsers = authUsers
+  const apiResponseTimeMs = responseTimeProbeResult.durationMs
+  const totalUsers = reportableAuthUsers.length
+  const verifiedUsers = reportableAuthUsers.filter(isConfirmedAuthUser).length
+  const unverifiedUsers = Math.max(totalUsers - verifiedUsers, 0)
+  const newSignupsToday = reportableAuthUsers.filter(user => isOnOrAfter(user.created_at as string | null, todayStart)).length
+  const newSignupsWindow = reportableAuthUsers.filter(user => isOnOrAfter(user.created_at as string | null, periodStart)).length
+  const activeUsers24h = reportableAuthUsers.filter(user => isOnOrAfter(user.last_sign_in_at as string | null, startOfWindow('24h'))).length
+  const activeUsersWindow = reportableAuthUsers.filter(user => isOnOrAfter(user.last_sign_in_at as string | null, periodStart)).length
+
+  const recentAuthUsers = reportableAuthUsers
     .slice()
     .sort((left, right) => new Date(String(right.created_at ?? 0)).getTime() - new Date(String(left.created_at ?? 0)).getTime())
     .slice(0, 8)
@@ -772,13 +793,13 @@ Deno.serve(req => withErrorHandling(req, async () => {
   ]))
 
   const userGrowth = aggregateTimeline(
-    authUsers
+    reportableAuthUsers
       .map(user => typeof user.created_at === 'string' ? user.created_at : null)
       .filter((value): value is string => Boolean(value) && isOnOrAfter(value, periodStart)),
     windowKey
   )
 
-  const recentUsers = authUsers
+  const recentUsers = reportableAuthUsers
     .filter(user => recentAuthUserIds.includes(String(user.id)))
     .sort((left, right) => new Date(String(right.created_at ?? 0)).getTime() - new Date(String(left.created_at ?? 0)).getTime())
     .map(user => {

@@ -10,6 +10,13 @@ type Payload = {
 
 type EmailOwner = 'patient' | 'hospital' | 'unknown' | null
 
+type AuthEmailSignupStateRow = {
+  auth_user_id: string
+  email_confirmed: boolean
+  has_profile: boolean
+  phone_confirmed: boolean
+}
+
 function normalizePhone(value: string | null | undefined) {
   return `${value ?? ''}`.replace(/[^0-9+]/g, '').trim()
 }
@@ -36,12 +43,14 @@ Deno.serve(req => withErrorHandling(req, async () => {
   }
 
   const [
-    authEmailExistsResult,
+    authEmailStateResult,
     patientEmailResult,
     staffEmailResult,
     patientPhoneResult,
   ] = await Promise.all([
-    email ? adminClient.rpc('hid_auth_email_exists', { p_email: email }) : Promise.resolve({ data: false, error: null }),
+    email
+      ? adminClient.rpc('hid_auth_email_signup_state', { p_email: email })
+      : Promise.resolve({ data: null, error: null }),
     email
       ? adminClient.from('hid_patients').select('id').eq('email', email).limit(1).maybeSingle()
       : Promise.resolve({ data: null, error: null }),
@@ -53,14 +62,32 @@ Deno.serve(req => withErrorHandling(req, async () => {
       : Promise.resolve({ data: null, error: null }),
   ])
 
-  if (authEmailExistsResult.error) throw new HttpError(400, authEmailExistsResult.error.message, authEmailExistsResult.error)
+  if (authEmailStateResult.error) throw new HttpError(400, authEmailStateResult.error.message, authEmailStateResult.error)
   if (patientEmailResult.error) throw new HttpError(400, patientEmailResult.error.message, patientEmailResult.error)
   if (staffEmailResult.error) throw new HttpError(400, staffEmailResult.error.message, staffEmailResult.error)
   if (patientPhoneResult.error) throw new HttpError(400, patientPhoneResult.error.message, patientPhoneResult.error)
 
   const patientEmailInUse = Boolean(patientEmailResult.data)
   const staffEmailInUse = Boolean(staffEmailResult.data)
-  const authEmailInUse = Boolean(authEmailExistsResult.data)
+  const authEmailState = Array.isArray(authEmailStateResult.data)
+    ? (authEmailStateResult.data[0] as AuthEmailSignupStateRow | undefined) ?? null
+    : (authEmailStateResult.data as AuthEmailSignupStateRow | null)
+  const shouldRecycleOrphanedSignup =
+    Boolean(authEmailState?.auth_user_id) &&
+    !authEmailState?.email_confirmed &&
+    !authEmailState?.phone_confirmed &&
+    !authEmailState?.has_profile &&
+    !patientEmailInUse &&
+    !staffEmailInUse
+
+  if (shouldRecycleOrphanedSignup && authEmailState?.auth_user_id) {
+    const { error } = await adminClient.auth.admin.deleteUser(authEmailState.auth_user_id)
+    if (error) {
+      throw new HttpError(500, 'We could not refresh this unfinished signup right now. Please try again.', error)
+    }
+  }
+
+  const authEmailInUse = Boolean(authEmailState?.auth_user_id) && !shouldRecycleOrphanedSignup
 
   let emailOwner: EmailOwner = null
   if (patientEmailInUse) emailOwner = 'patient'
