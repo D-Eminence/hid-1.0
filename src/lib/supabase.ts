@@ -1,4 +1,5 @@
 import { createClient } from '@supabase/supabase-js'
+import type { Session, User } from '@supabase/supabase-js'
 import type { Database } from '../types/database'
 
 const supabaseUrl = import.meta.env.VITE_SUPABASE_URL as string | undefined
@@ -80,6 +81,8 @@ export function isSupabaseAuthLockContentionError(error: unknown) {
 }
 
 let authOperationQueue = Promise.resolve()
+let inflightSessionRequest: Promise<Session | null> | null = null
+let inflightUserRequest: Promise<User | null> | null = null
 
 function queueAuthOperation<T>(operation: () => Promise<T>) {
   const run = authOperationQueue.then(operation, operation)
@@ -98,13 +101,27 @@ async function runAuthOperationWithRetry<T>(operation: () => Promise<T>) {
 }
 
 export async function getSafeSession() {
-  const { data } = await runAuthOperationWithRetry(() => supabase.auth.getSession())
-  return data.session ?? null
+  if (!inflightSessionRequest) {
+    inflightSessionRequest = runAuthOperationWithRetry(() => supabase.auth.getSession())
+      .then(({ data }) => data.session ?? null)
+      .finally(() => {
+        inflightSessionRequest = null
+      })
+  }
+
+  return inflightSessionRequest
 }
 
 export async function getSafeUser() {
-  const { data } = await runAuthOperationWithRetry(() => supabase.auth.getUser())
-  return data.user ?? null
+  if (!inflightUserRequest) {
+    inflightUserRequest = runAuthOperationWithRetry(() => supabase.auth.getUser())
+      .then(({ data }) => data.user ?? null)
+      .finally(() => {
+        inflightUserRequest = null
+      })
+  }
+
+  return inflightUserRequest
 }
 
 export async function safeSignOut() {

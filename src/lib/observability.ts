@@ -85,6 +85,7 @@ function shouldIgnoreSentryEvent(event: Record<string, any>) {
     text.includes('lock request is aborted') ||
     text.includes("steal' option") ||
     text.includes('lock was stolen by another request') ||
+    text.includes('lock "') && text.includes('was released because another request stole it') ||
     text.includes('another request stole it') ||
     (text.includes('serviceworker') && text.includes('service-worker.js')) ||
     text.includes('failed to update a serviceworker') ||
