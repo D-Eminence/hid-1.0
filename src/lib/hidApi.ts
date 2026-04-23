@@ -1339,6 +1339,7 @@ export async function patientSignUpWithPassword(params: PendingPatientSignup & {
     phone: normalizedPhone,
   }
 
+  await clearConflictingAuthSession(normalizedEmail)
   await ensurePatientSignupAvailability(normalizedEmail, normalizedPhone)
 
   const redirectTo = authRedirectUrl('patient')

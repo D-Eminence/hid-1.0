@@ -686,8 +686,11 @@ Deno.serve(req => withErrorHandling(req, async () => {
   const todayStart = startOfToday()
 
   const authUsersPromise = listAllAuthUsers(adminClient)
-  const profiledAuthUsersPromise = adminClient
-    .from('hid_user_profiles')
+  const patientAuthUsersPromise = adminClient
+    .from('hid_patients')
+    .select('auth_user_id')
+  const staffAuthUsersPromise = adminClient
+    .from('hid_staff_accounts')
     .select('auth_user_id')
 
   const responseTimeProbe = (async () => {
@@ -707,7 +710,8 @@ Deno.serve(req => withErrorHandling(req, async () => {
 
   const [
     authUsers,
-    profiledAuthUsersResponse,
+    patientAuthUsersResponse,
+    staffAuthUsersResponse,
     totalRecordsResponse,
     windowRecordsResponse,
     providerRecordCountResponse,
@@ -726,7 +730,8 @@ Deno.serve(req => withErrorHandling(req, async () => {
     posthog,
   ] = await Promise.all([
     authUsersPromise,
-    profiledAuthUsersPromise,
+    patientAuthUsersPromise,
+    staffAuthUsersPromise,
     adminClient.from('hid_medical_records').select('id', { count: 'exact', head: true }),
     adminClient.from('hid_medical_records').select('id, patient_id, created_at, created_by_staff_account_id').gte('created_at', periodStart.toISOString()),
     adminClient.from('hid_medical_records').select('id', { count: 'exact', head: true }).not('created_by_staff_account_id', 'is', null),
@@ -746,7 +751,8 @@ Deno.serve(req => withErrorHandling(req, async () => {
   ])
 
   if (totalRecordsResponse.error) throw new HttpError(400, totalRecordsResponse.error.message, totalRecordsResponse.error)
-  if (profiledAuthUsersResponse.error) throw new HttpError(400, profiledAuthUsersResponse.error.message, profiledAuthUsersResponse.error)
+  if (patientAuthUsersResponse.error) throw new HttpError(400, patientAuthUsersResponse.error.message, patientAuthUsersResponse.error)
+  if (staffAuthUsersResponse.error) throw new HttpError(400, staffAuthUsersResponse.error.message, staffAuthUsersResponse.error)
   if (windowRecordsResponse.error) throw new HttpError(400, windowRecordsResponse.error.message, windowRecordsResponse.error)
   if (providerRecordCountResponse.error) throw new HttpError(400, providerRecordCountResponse.error.message, providerRecordCountResponse.error)
   if (organizationsCountResponse.error) throw new HttpError(400, organizationsCountResponse.error.message, organizationsCountResponse.error)
@@ -760,12 +766,15 @@ Deno.serve(req => withErrorHandling(req, async () => {
   if (responseTimeProbeResult.result.error) throw new HttpError(400, responseTimeProbeResult.result.error.message, responseTimeProbeResult.result.error)
   if (accountCreatedCountResponse.error) throw new HttpError(400, accountCreatedCountResponse.error.message, accountCreatedCountResponse.error)
 
-  const profiledAuthUserIds = new Set(
-    ((profiledAuthUsersResponse.data ?? []) as Array<Record<string, unknown>>)
+  const reportableAuthUserIds = new Set(
+    [
+      ...((patientAuthUsersResponse.data ?? []) as Array<Record<string, unknown>>),
+      ...((staffAuthUsersResponse.data ?? []) as Array<Record<string, unknown>>),
+    ]
       .map(row => `${row.auth_user_id ?? ''}`.trim())
       .filter(Boolean)
   )
-  const reportableAuthUsers = filterReportableAuthUsers(authUsers, profiledAuthUserIds)
+  const reportableAuthUsers = filterReportableAuthUsers(authUsers, reportableAuthUserIds)
 
   const apiResponseTimeMs = responseTimeProbeResult.durationMs
   const totalUsers = reportableAuthUsers.length
