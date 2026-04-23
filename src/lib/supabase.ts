@@ -10,6 +10,18 @@ export const NETWORK_TIMEOUT_MESSAGE = 'The request took too long. Check your in
 export const isConfigured = !!(supabaseUrl && supabaseKey)
 const AUTH_LOCK_RETRY_MS = 80
 
+function getSupabaseStorageKey() {
+  if (!supabaseUrl) return null
+
+  try {
+    const projectRef = new URL(supabaseUrl).hostname.split('.')[0]?.trim()
+    if (!projectRef) return null
+    return `sb-${projectRef}-auth-token`
+  } catch {
+    return null
+  }
+}
+
 function isRequest(input: RequestInfo | URL): input is Request {
   return typeof Request !== 'undefined' && input instanceof Request
 }
@@ -126,4 +138,17 @@ export async function getSafeUser() {
 
 export async function safeSignOut() {
   await runAuthOperationWithRetry(() => supabase.auth.signOut())
+}
+
+export function hasStoredSupabaseAuthSession() {
+  if (typeof window === 'undefined') return false
+
+  const storageKey = getSupabaseStorageKey()
+  if (!storageKey) return false
+
+  const storedValue = window.localStorage.getItem(storageKey)
+  if (!storedValue) return false
+
+  const trimmedValue = storedValue.trim()
+  return trimmedValue !== '' && trimmedValue !== 'null'
 }

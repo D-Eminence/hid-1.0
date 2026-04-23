@@ -81,6 +81,9 @@ function getSentryEventText(event: Record<string, any>) {
 function shouldIgnoreSentryEvent(event: Record<string, any>) {
   const text = getSentryEventText(event)
   return (
+    text.includes('networkerror when attempting to fetch resource') ||
+    text.includes('authretryablefetcherror') ||
+    (text.includes('request took too long') && text.includes('check your internet connection')) ||
     text.includes('lock broken by another request') ||
     text.includes('lock request is aborted') ||
     text.includes("steal' option") ||

@@ -19,7 +19,7 @@ import {
 } from '../../lib/hidApi'
 import { trackEvent } from '../../lib/observabilityBridge'
 import { preloadRoutesAfterDelay } from '../../lib/routePreload'
-import { supabase } from '../../lib/supabase'
+import { hasStoredSupabaseAuthSession, supabase } from '../../lib/supabase'
 import { COUNTRIES, PASSWORD_REQUIREMENTS_TEXT, STATES_BY_COUNTRY, isStrongPassword, maskEmailAddress } from '../../lib/utils'
 
 type DoctorStep = 'login' | 'signup' | 'verify' | 'forgot' | 'reset'
@@ -90,6 +90,10 @@ export default function DoctorAuth() {
 
   useEffect(() => {
     if (inRecoveryMode) return
+    if (!existingSession && !hasStoredSupabaseAuthSession()) {
+      clearStaffSession()
+      return
+    }
 
     let active = true
     void (async () => {

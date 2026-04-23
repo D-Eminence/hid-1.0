@@ -18,6 +18,7 @@ import {
 } from '../../lib/hidApi'
 import { trackEvent } from '../../lib/observabilityBridge'
 import { preloadRoutesAfterDelay } from '../../lib/routePreload'
+import { hasStoredSupabaseAuthSession } from '../../lib/supabase'
 import { PASSWORD_REQUIREMENTS_TEXT, isStrongPassword, maskEmailAddress } from '../../lib/utils'
 
 type Step = 'signup' | 'password' | 'verify' | 'success' | 'signin' | 'forgot'
@@ -123,6 +124,12 @@ export default function PatientAuth() {
   const canResetPassword = forgotOtpVerified && isStrongPassword(forgot.password) && forgot.password === forgot.confirmPassword
 
   useEffect(() => {
+    if (!existingSession && !hasStoredSupabaseAuthSession()) {
+      clearPatientSession()
+      setStep('signup')
+      return
+    }
+
     let active = true
 
     void (async () => {

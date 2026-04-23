@@ -55,6 +55,9 @@ function isIgnoredSentryIssue(issue: SentryIssue) {
   const text = normalizeIssueText(issue.title, issue.culprit, issue.status, issue.level)
 
   return (
+    text.includes('networkerror when attempting to fetch resource') ||
+    text.includes('authretryablefetcherror') ||
+    (text.includes('request took too long') && text.includes('check your internet connection')) ||
     text.includes('invalid login credentials') ||
     text.includes('token has expired or is invalid') ||
     text.includes('authapierror') ||
