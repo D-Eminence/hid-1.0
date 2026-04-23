@@ -1,3 +1,5 @@
+drop function if exists public.hid_auth_email_signup_state(text);
+
 create or replace function public.hid_auth_email_signup_state(p_email text)
 returns table (
   auth_user_id uuid,
