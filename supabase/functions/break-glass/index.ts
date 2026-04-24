@@ -18,6 +18,9 @@ Deno.serve(req => withErrorHandling(req, async () => {
   const adminClient = createAdminClient()
   const patientState = await resolvePatientAccessState(adminClient, patientIdentifier)
 
+  if (patientState?.profileDeleted || patientState?.patientDeleted) {
+    throw new HttpError(403, 'This patient account has been deleted and cannot be opened by a hospital.')
+  }
   if (patientState?.profileActive === false) {
     throw new HttpError(403, 'This patient account is locked right now.')
   }

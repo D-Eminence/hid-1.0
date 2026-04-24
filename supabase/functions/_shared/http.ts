@@ -172,6 +172,9 @@ function sanitizeErrorMessage(message: string, status: number) {
   if (lower.includes('account is inactive') || lower.includes('account is not active') || lower.includes('account is locked')) {
     return 'This account is not active right now. Contact support if you need help.'
   }
+  if (lower.includes('account has been deleted') || lower.includes('patient account has been deleted')) {
+    return 'This account has been deleted. Contact HID support if you need it restored.'
+  }
   if (lower.includes('patient account is locked')) {
     return 'This patient account is locked right now and cannot be opened by a hospital.'
   }

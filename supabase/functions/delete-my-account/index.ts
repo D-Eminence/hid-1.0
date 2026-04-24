@@ -3,68 +3,11 @@ import { HttpError, json, readJson, withErrorHandling } from '../_shared/http.ts
 import { consumeAccountDeletionChallenge } from '../_shared/otp.ts'
 import { asTrimmedString } from '../_shared/validation.ts'
 
-const RECORD_FILE_BUCKET = 'medical-record-files'
-const STORAGE_CHUNK_SIZE = 100
+const DELETE_BAN_DURATION = '876000h'
 
 type Payload = {
   challengeId: string
   verificationToken: string
-}
-
-async function listStoragePathsForPatient(adminClient: ReturnType<typeof createAdminClient>, patientId: string) {
-  const { data, error } = await adminClient
-    .from('hid_medical_record_files')
-    .select('storage_path')
-    .eq('patient_id', patientId)
-
-  if (error) throw new HttpError(400, error.message, error)
-  return ((data ?? []) as Array<{ storage_path: string | null }>).map(item => item.storage_path).filter((value): value is string => Boolean(value))
-}
-
-async function listStoragePathsForProfile(adminClient: ReturnType<typeof createAdminClient>, profileId: string) {
-  const paths = new Set<string>()
-
-  const uploadedFiles = await adminClient
-    .from('hid_medical_record_files')
-    .select('storage_path')
-    .eq('uploaded_by_user_profile_id', profileId)
-
-  if (uploadedFiles.error) throw new HttpError(400, uploadedFiles.error.message, uploadedFiles.error)
-  for (const row of ((uploadedFiles.data ?? []) as Array<{ storage_path: string | null }>)) {
-    if (row.storage_path) paths.add(row.storage_path)
-  }
-
-  const authoredRecords = await adminClient
-    .from('hid_medical_records')
-    .select('id')
-    .eq('created_by_user_profile_id', profileId)
-
-  if (authoredRecords.error) throw new HttpError(400, authoredRecords.error.message, authoredRecords.error)
-  const recordIds = ((authoredRecords.data ?? []) as Array<{ id: string }>).map(item => item.id)
-
-  if (recordIds.length > 0) {
-    const recordFiles = await adminClient
-      .from('hid_medical_record_files')
-      .select('storage_path')
-      .in('record_id', recordIds)
-
-    if (recordFiles.error) throw new HttpError(400, recordFiles.error.message, recordFiles.error)
-    for (const row of ((recordFiles.data ?? []) as Array<{ storage_path: string | null }>)) {
-      if (row.storage_path) paths.add(row.storage_path)
-    }
-  }
-
-  return [...paths]
-}
-
-async function removeStoragePaths(adminClient: ReturnType<typeof createAdminClient>, paths: string[]) {
-  if (paths.length === 0) return
-
-  for (let index = 0; index < paths.length; index += STORAGE_CHUNK_SIZE) {
-    const chunk = paths.slice(index, index + STORAGE_CHUNK_SIZE)
-    const { error } = await adminClient.storage.from(RECORD_FILE_BUCKET).remove(chunk)
-    if (error) throw new HttpError(400, error.message, error)
-  }
 }
 
 Deno.serve(req => withErrorHandling(req, async () => {
@@ -88,14 +31,6 @@ Deno.serve(req => withErrorHandling(req, async () => {
     throw new HttpError(403, 'Platform admin accounts cannot be deleted here.')
   }
 
-  await consumeAccountDeletionChallenge(adminClient, {
-    authUserId: user.id,
-    challengeId,
-    verificationToken,
-  })
-
-  const profileId = profileResult.data.id
-
   const patientResult = await adminClient
     .from('hid_patients')
     .select('id')
@@ -104,32 +39,49 @@ Deno.serve(req => withErrorHandling(req, async () => {
 
   if (patientResult.error) throw new HttpError(400, patientResult.error.message, patientResult.error)
 
-  const staffResult = await adminClient
-    .from('hid_staff_accounts')
-    .select('id')
-    .eq('auth_user_id', user.id)
-    .maybeSingle()
+  await consumeAccountDeletionChallenge(adminClient, {
+    authUserId: user.id,
+    challengeId,
+    verificationToken,
+  })
 
-  if (staffResult.error) throw new HttpError(400, staffResult.error.message, staffResult.error)
-
-  const storagePaths = new Set<string>()
-
-  if (patientResult.data?.id) {
-    for (const path of await listStoragePathsForPatient(adminClient, patientResult.data.id)) {
-      storagePaths.add(path)
-    }
-  }
-
-  for (const path of await listStoragePathsForProfile(adminClient, profileId)) {
-    storagePaths.add(path)
-  }
-
-  await removeStoragePaths(adminClient, [...storagePaths])
-
-  const { data, error } = await adminClient.rpc('hid_delete_account_by_auth_user_id', {
+  const { data, error } = await adminClient.rpc('hid_soft_delete_account_by_auth_user_id', {
     p_auth_user_id: user.id,
+    p_reason: 'Account deleted by user.',
+    p_actor_profile_id: profileResult.data.id,
   })
 
   if (error) throw new HttpError(400, error.message, error)
+
+  const banResult = await adminClient.auth.admin.updateUserById(user.id, {
+    ban_duration: DELETE_BAN_DURATION,
+  })
+  if (banResult.error) {
+    throw new HttpError(400, banResult.error.message, banResult.error)
+  }
+
+  await adminClient.from('hid_notifications').insert({
+    user_profile_id: profileResult.data.id,
+    patient_id: patientResult.data?.id ?? null,
+    title: 'Account deleted',
+    message: 'This HID account was deleted and is no longer accessible unless restored by an administrator.',
+    type: 'security',
+  })
+
+  await adminClient.from('hid_audit_events').insert({
+    actor_user_id: user.id,
+    actor_profile_id: profileResult.data.id,
+    actor_role: profileResult.data.app_role,
+    patient_id: patientResult.data?.id ?? null,
+    resource_type: 'user_profile',
+    resource_id: profileResult.data.id,
+    action: 'account_soft_deleted',
+    reason: 'Account deleted by user.',
+    metadata: {
+      challenge_id: challengeId,
+      target_auth_user_id: user.id,
+    },
+  })
+
   return json({ data: data ?? { deleted: true } })
 }))

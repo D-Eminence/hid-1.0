@@ -692,13 +692,15 @@ Deno.serve(req => withErrorHandling(req, async () => {
   const patientAuthUsersPromise = adminClient
     .from('hid_patients')
     .select('auth_user_id')
+    .is('deleted_at', null)
   const staffAuthUsersPromise = adminClient
     .from('hid_staff_accounts')
     .select('auth_user_id')
+    .is('deleted_at', null)
 
   const responseTimeProbe = (async () => {
     const startedAt = Date.now()
-    const result = await adminClient.from('hid_user_profiles').select('id').limit(1)
+    const result = await adminClient.from('hid_user_profiles').select('id', { head: true }).limit(1)
     return {
       durationMs: Date.now() - startedAt,
       result,
@@ -709,6 +711,7 @@ Deno.serve(req => withErrorHandling(req, async () => {
   const accountCreatedCountPromise = adminClient
     .from('hid_user_profiles')
     .select('id', { count: 'exact', head: true })
+    .is('deleted_at', null)
     .gte('created_at', periodStart.toISOString())
 
   const [

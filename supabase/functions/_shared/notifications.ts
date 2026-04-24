@@ -158,7 +158,7 @@ function renderAccountDeletionEmail({
         <div style="padding:28px">
           <p style="margin:0 0 12px;font-size:14px">Hello,</p>
           <p style="margin:0 0 18px;font-size:14px;line-height:1.7">
-            We received a request to permanently delete your ${accountLabel}. Use the code below to confirm this action.
+            We received a request to delete your ${accountLabel}. Use the code below to confirm this action.
           </p>
           <div style="margin:0 0 18px;padding:18px;border:1px dashed #fca5a5;border-radius:12px;background:#fef2f2;text-align:center">
             <div style="font-size:12px;color:#6b7280;letter-spacing:0.08em;text-transform:uppercase;margin-bottom:8px">Deletion Code</div>

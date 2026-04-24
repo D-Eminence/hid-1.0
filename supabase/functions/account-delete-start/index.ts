@@ -72,7 +72,7 @@ Deno.serve(req => withErrorHandling(req, async () => {
     user_profile_id: profileResult.data.id,
     patient_id: patient?.id ?? null,
     title: 'Account deletion code requested',
-    message: 'A verification code was sent to your email address to confirm permanent account deletion.',
+    message: 'A verification code was sent to your email address to confirm account deletion.',
     type: 'security',
   })
 

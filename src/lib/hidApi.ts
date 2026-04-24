@@ -372,6 +372,11 @@ function isPendingStaffOnboarding(value: unknown): value is PendingStaffOnboardi
   return typeof candidate.fullName === 'string'
 }
 
+function isDeletedAccountMessage(message: string) {
+  const lower = message.toLowerCase()
+  return lower.includes('account has been deleted') || lower.includes('patient account has been deleted')
+}
+
 async function getAccessToken() {
   const session = await getSafeSession()
   return session?.access_token ?? null
@@ -452,9 +457,11 @@ async function edgeRequest<T>(functionName: string, options: EdgeRequestOptions 
       parsedPayload && typeof parsedPayload === 'object' && 'error' in parsedPayload && typeof parsedPayload.error === 'string'
         ? parsedPayload.error
         : fallbackMessage || response.statusText || ''
-    const responseMessage = rawResponseMessage && !isLowSignalErrorMessage(rawResponseMessage)
-      ? rawResponseMessage
-      : fallbackErrorMessageForStatus(response.status)
+    const responseMessage = isDeletedAccountMessage(rawResponseMessage)
+      ? 'This account has been deleted. Contact HID support if you need it restored.'
+      : rawResponseMessage && !isLowSignalErrorMessage(rawResponseMessage)
+        ? rawResponseMessage
+        : fallbackErrorMessageForStatus(response.status)
 
     const lowered = responseMessage.toLowerCase()
     if (
@@ -510,7 +517,7 @@ async function getCurrentUserAppRole() {
 
   const { data: profile, error } = await supabase
     .from('hid_user_profiles')
-    .select('app_role')
+    .select('app_role, deleted_at')
     .eq('auth_user_id', user.id)
     .maybeSingle()
 
@@ -518,8 +525,9 @@ async function getCurrentUserAppRole() {
     throw new HidApiError(400, error.message, error)
   }
 
-  const role = (profile as { app_role?: unknown } | null)?.app_role
-  return typeof role === 'string' ? role : null
+  const profileRow = profile as { app_role?: unknown; deleted_at?: unknown } | null
+  if (profileRow?.deleted_at) return null
+  return typeof profileRow?.app_role === 'string' ? profileRow.app_role : null
 }
 
 async function requestSignupVerificationEmail(email: string, path: 'patient' | 'hospital', captchaToken?: string | null) {
@@ -1742,16 +1750,17 @@ export async function verifyAdminPasswordResetOtp(email: string, code: string) {
 }
 
 export async function fetchStaffDashboard(options: { forceRefresh?: boolean } = {}) {
-  const user = await getSafeUser()
-  if (!user) {
+  const session = await getSafeSession()
+  const authUserId = session?.user?.id ?? null
+  if (!authUserId) {
     throw new HidApiError(401, 'Please sign in to continue.')
   }
 
   if (options.forceRefresh) {
-    viewCache.delete(`staff-dashboard:${user.id}`)
+    viewCache.delete(`staff-dashboard:${authUserId}`)
   }
 
-  return loadCachedView(`staff-dashboard:${user.id}`, async () => edgeRequest<HidStaffDashboardResponse>('staff-dashboard'))
+  return loadCachedView(`staff-dashboard:${authUserId}`, async () => edgeRequest<HidStaffDashboardResponse>('staff-dashboard'))
 }
 
 export async function createAccessRequest(patientIdentifier: string, reason: string, durationMinutes = 60) {

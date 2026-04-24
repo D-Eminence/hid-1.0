@@ -8,7 +8,7 @@ import { useAdminDashboard } from '../../hooks/useAdminDashboard'
 import { ADMIN_LOGIN_PATH, ADMIN_OVERVIEW_PATH } from '../../lib/adminRoutes'
 import { signOutAndClearSessions } from '../../lib/auth'
 import { getSafeUser } from '../../lib/supabase'
-import { applyAdminUserAction, searchAdminUsers } from '../../services/adminDashboard'
+import { applyAdminUserAction, fetchDeletedAdminUsers, searchAdminUsers } from '../../services/adminDashboard'
 import type { AdminAlert, AdminManagedUser, AdminOverviewWindow, AdminUserManagementAction } from '../../types/admin'
 
 const windowOptions: Array<{ key: AdminOverviewWindow; label: string }> = [
@@ -233,9 +233,12 @@ export default function AdminDashboard() {
   const [searchQuery, setSearchQuery] = useState('')
   const [directoryQuery, setDirectoryQuery] = useState('')
   const [directoryResults, setDirectoryResults] = useState<AdminManagedUser[]>([])
+  const [deletedDirectoryResults, setDeletedDirectoryResults] = useState<AdminManagedUser[]>([])
   const [selectedDirectoryUserId, setSelectedDirectoryUserId] = useState<string | null>(null)
   const [directoryLoading, setDirectoryLoading] = useState(false)
+  const [deletedDirectoryLoading, setDeletedDirectoryLoading] = useState(false)
   const [directoryError, setDirectoryError] = useState<string | null>(null)
+  const [deletedDirectoryError, setDeletedDirectoryError] = useState<string | null>(null)
   const [actioning, setActioning] = useState<AdminUserManagementAction | null>(null)
   const [activeSection, setActiveSection] = useState('dashboard')
   const [viewportWidth, setViewportWidth] = useState(() => (typeof window !== 'undefined' ? window.innerWidth : 1440))
@@ -243,6 +246,7 @@ export default function AdminDashboard() {
 
   useEffect(() => {
     void loadViewer()
+    void loadDeletedDirectory()
   }, [])
 
   useEffect(() => {
@@ -278,8 +282,33 @@ export default function AdminDashboard() {
   }
 
   const selectedDirectoryUser = useMemo(() => (
-    directoryResults.find(item => item.id === selectedDirectoryUserId) ?? null
-  ), [directoryResults, selectedDirectoryUserId])
+    directoryResults.find(item => item.id === selectedDirectoryUserId)
+    ?? deletedDirectoryResults.find(item => item.id === selectedDirectoryUserId)
+    ?? null
+  ), [deletedDirectoryResults, directoryResults, selectedDirectoryUserId])
+  const visibleDeletedDirectoryResults = useMemo(() => (
+    deletedDirectoryResults.filter(item => !directoryResults.some(directoryItem => directoryItem.id === item.id))
+  ), [deletedDirectoryResults, directoryResults])
+
+  async function loadDeletedDirectory(force = false) {
+    setDeletedDirectoryLoading(true)
+    setDeletedDirectoryError(null)
+    try {
+      const matches = await fetchDeletedAdminUsers({ force })
+      setDeletedDirectoryResults(matches)
+      setSelectedDirectoryUserId(current => {
+        if (current && (directoryResults.some(item => item.id === current) || matches.some(item => item.id === current))) {
+          return current
+        }
+        return current
+      })
+    } catch (reason) {
+      const message = reason instanceof Error ? reason.message : 'Deleted accounts could not be loaded right now.'
+      setDeletedDirectoryError(message)
+    } finally {
+      setDeletedDirectoryLoading(false)
+    }
+  }
 
   async function runDirectorySearch(force = false) {
     const trimmed = directoryQuery.trim()
@@ -317,8 +346,9 @@ export default function AdminDashboard() {
 
     const actionLabels: Record<AdminUserManagementAction, string> = {
       close_patient_access: 'close this patient access',
-      delete_account: 'delete this account permanently',
+      delete_account: 'delete this account',
       lock_profile: 'lock this profile',
+      restore_account: 'restore this account',
       restore_staff_access: 'restore this hospital access',
       restrict_staff_access: 'restrict this hospital access',
       unlock_profile: 'unlock this profile',
@@ -331,23 +361,46 @@ export default function AdminDashboard() {
     try {
       const result = await applyAdminUserAction(selectedDirectoryUser.id, action)
       if (result.deleted) {
-        setDirectoryResults(current => current.filter(item => item.id !== result.targetAuthUserId))
-        setSelectedDirectoryUserId(current => (current === result.targetAuthUserId ? null : current))
+        if (result.user) {
+          const nextUser = result.user
+          setDirectoryResults(current => current.map(item => item.id === nextUser.id ? nextUser : item))
+          setDeletedDirectoryResults(current => {
+            const existingIndex = current.findIndex(item => item.id === nextUser.id)
+            if (existingIndex >= 0) {
+              return current.map(item => item.id === nextUser.id ? nextUser : item)
+            }
+            return [nextUser, ...current].slice(0, 20)
+          })
+          setSelectedDirectoryUserId(nextUser.id)
+        }
         showToast('Account deleted successfully.', 'success')
       } else if (result.user) {
         const nextUser = result.user
-        setDirectoryResults(current => current.map(item => item.id === nextUser.id ? nextUser : item))
+        setDirectoryResults(current => {
+          const existingIndex = current.findIndex(item => item.id === nextUser.id)
+          if (existingIndex >= 0) {
+            return current.map(item => item.id === nextUser.id ? nextUser : item)
+          }
+          return action === 'restore_account' ? [nextUser, ...current] : current
+        })
+        setDeletedDirectoryResults(current => {
+          if (action === 'restore_account') {
+            return current.filter(item => item.id !== nextUser.id)
+          }
+          return current.map(item => item.id === nextUser.id ? nextUser : item)
+        })
         setSelectedDirectoryUserId(nextUser.id)
         const successMessage =
           action === 'lock_profile' ? 'Profile locked successfully.'
             : action === 'unlock_profile' ? 'Profile unlocked successfully.'
+              : action === 'restore_account' ? 'Account restored successfully.'
               : action === 'restrict_staff_access' ? 'Hospital access restricted successfully.'
                 : action === 'restore_staff_access' ? 'Hospital access restored successfully.'
                   : action === 'close_patient_access' ? 'Patient access closed successfully.'
                     : 'Account updated successfully.'
         showToast(successMessage, 'success')
       }
-      await refresh(true)
+      await Promise.all([refresh(true), loadDeletedDirectory(true)])
     } catch (reason) {
       const message = reason instanceof Error ? reason.message : 'This admin action could not be completed right now.'
       showToast(message, 'error')
@@ -607,11 +660,16 @@ export default function AdminDashboard() {
               </Button>
             </div>
             <div style={{ fontSize: 11.5, color: 'var(--admin-muted)', marginBottom: 12 }}>
-              Search by HID code or email to inspect a user profile, lock or unlock the profile, manage staff access, close patient access, or delete the account.
+              Search by HID code or email to inspect a user profile, lock or unlock the profile, manage staff access, close patient access, delete the account, or restore a deleted account.
             </div>
             {directoryError && (
               <div style={{ ...alertToneStyle('warning'), borderRadius: 10, padding: '10px 12px', marginBottom: 12, fontSize: 11.5 }}>
                 {directoryError}
+              </div>
+            )}
+            {deletedDirectoryError && (
+              <div style={{ ...alertToneStyle('warning'), borderRadius: 10, padding: '10px 12px', marginBottom: 12, fontSize: 11.5 }}>
+                {deletedDirectoryError}
               </div>
             )}
             <div style={{ display: 'grid', gridTemplateColumns: viewportWidth < 1180 ? '1fr' : 'minmax(280px, 360px) minmax(0, 1fr)', gap: 12 }}>
@@ -649,7 +707,9 @@ export default function AdminDashboard() {
                             <div style={{ fontSize: 12.5, fontWeight: 700, color: 'var(--admin-text)' }}>{primaryLabel}</div>
                             <div style={{ fontSize: 11, color: 'var(--admin-muted)', marginTop: 2, wordBreak: 'break-word' }}>{secondaryLabel}</div>
                           </div>
-                          <Badge color={item.flags.locked ? 'red' : 'green'}>{item.flags.locked ? 'locked' : 'active'}</Badge>
+                          <Badge color={item.flags.deleted ? 'amber' : item.flags.locked ? 'red' : 'green'}>
+                            {item.flags.deleted ? 'deleted' : item.flags.locked ? 'locked' : 'active'}
+                          </Badge>
                         </div>
                         <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
                           {item.profile?.appRole && <Badge color="blue">{item.profile.appRole}</Badge>}
@@ -660,6 +720,58 @@ export default function AdminDashboard() {
                     )
                   })
                 )}
+                <div style={{ borderTop: '1px solid var(--admin-border)', marginTop: 6, paddingTop: 10, display: 'flex', flexDirection: 'column', gap: 8 }}>
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
+                    <div style={{ fontSize: 11.5, fontWeight: 700, color: 'var(--admin-text)' }}>Deleted Accounts</div>
+                    <Button size="sm" variant="outline" loading={deletedDirectoryLoading} onClick={() => { void loadDeletedDirectory(true) }}>
+                      Refresh
+                    </Button>
+                  </div>
+                  {visibleDeletedDirectoryResults.length === 0 ? (
+                    <div style={{ fontSize: 11.5, color: 'var(--admin-muted)', border: '1px dashed var(--admin-border)', borderRadius: 10, padding: '12px 14px' }}>
+                      No deleted accounts are waiting in the admin directory.
+                    </div>
+                  ) : (
+                    visibleDeletedDirectoryResults.map(item => {
+                      const selected = selectedDirectoryUserId === item.id
+                      const primaryLabel = item.patient?.fullName ?? item.staff?.fullName ?? item.profile?.displayName ?? item.email ?? 'Unknown user'
+                      const deletedAt = item.profile?.deletedAt ?? null
+                      return (
+                        <button
+                          key={`deleted-${item.id}`}
+                          type="button"
+                          onClick={() => setSelectedDirectoryUserId(item.id)}
+                          style={{
+                            border: `1px solid ${selected ? 'rgba(245, 158, 11, 0.30)' : 'var(--admin-border)'}`,
+                            borderRadius: 12,
+                            background: selected ? 'rgba(245, 158, 11, 0.06)' : '#fffdf8',
+                            padding: '12px 14px',
+                            textAlign: 'left',
+                            cursor: 'pointer',
+                            display: 'flex',
+                            flexDirection: 'column',
+                            gap: 8,
+                          }}
+                        >
+                          <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 10 }}>
+                            <div style={{ minWidth: 0 }}>
+                              <div style={{ fontSize: 12.5, fontWeight: 700, color: 'var(--admin-text)' }}>{primaryLabel}</div>
+                              <div style={{ fontSize: 11, color: 'var(--admin-muted)', marginTop: 2, wordBreak: 'break-word' }}>
+                                {item.patient?.hidCode ?? item.email ?? 'No email'}{deletedAt ? ` • deleted ${formatRelativeTime(deletedAt)}` : ''}
+                              </div>
+                            </div>
+                            <Badge color="amber">deleted</Badge>
+                          </div>
+                          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+                            {item.profile?.appRole && <Badge color="blue">{item.profile.appRole}</Badge>}
+                            {item.patient && <Badge color="green">patient</Badge>}
+                            {item.staff && <Badge color="amber">staff</Badge>}
+                          </div>
+                        </button>
+                      )
+                    })
+                  )}
+                </div>
               </div>
 
               <div style={{ border: '1px solid var(--admin-border)', borderRadius: 12, background: '#fbfdff', padding: 14 }}>
@@ -683,8 +795,8 @@ export default function AdminDashboard() {
                       </div>
                       <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
                         {selectedDirectoryUser.profile?.appRole && <Badge color="blue">{selectedDirectoryUser.profile.appRole}</Badge>}
-                        <Badge color={selectedDirectoryUser.flags.locked ? 'red' : 'green'}>
-                          {selectedDirectoryUser.flags.locked ? 'Locked' : 'Active'}
+                        <Badge color={selectedDirectoryUser.flags.deleted ? 'amber' : selectedDirectoryUser.flags.locked ? 'red' : 'green'}>
+                          {selectedDirectoryUser.flags.deleted ? 'Deleted' : selectedDirectoryUser.flags.locked ? 'Locked' : 'Active'}
                         </Badge>
                         {selectedDirectoryUser.staff && (
                           <Badge color={selectedDirectoryUser.flags.staffAccessRestricted ? 'amber' : 'green'}>
@@ -718,11 +830,14 @@ export default function AdminDashboard() {
                         <div style={{ fontSize: 12, fontWeight: 700, marginBottom: 10 }}>Profile</div>
                         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
                           <div><div style={{ fontSize: 10.5, color: 'var(--admin-muted)' }}>Role</div><div style={{ fontSize: 12.5, fontWeight: 700 }}>{formatLabelValue(selectedDirectoryUser.profile?.appRole)}</div></div>
+                          <div><div style={{ fontSize: 10.5, color: 'var(--admin-muted)' }}>Deleted</div><div style={{ fontSize: 12.5, fontWeight: 700 }}>{selectedDirectoryUser.profile?.deletedAt ? formatRelativeTime(selectedDirectoryUser.profile.deletedAt) : 'No'}</div></div>
                           <div><div style={{ fontSize: 10.5, color: 'var(--admin-muted)' }}>MFA Required</div><div style={{ fontSize: 12.5, fontWeight: 700 }}>{selectedDirectoryUser.profile ? formatBool(selectedDirectoryUser.profile.mfaRequired) : 'Not available'}</div></div>
                           <div><div style={{ fontSize: 10.5, color: 'var(--admin-muted)' }}>Email Confirmed</div><div style={{ fontSize: 12.5, fontWeight: 700 }}>{selectedDirectoryUser.emailConfirmedAt ? formatRelativeTime(selectedDirectoryUser.emailConfirmedAt) : 'No'}</div></div>
                           <div><div style={{ fontSize: 10.5, color: 'var(--admin-muted)' }}>Last Sign In</div><div style={{ fontSize: 12.5, fontWeight: 700 }}>{formatRelativeTime(selectedDirectoryUser.lastSignInAt)}</div></div>
                           <div><div style={{ fontSize: 10.5, color: 'var(--admin-muted)' }}>Created</div><div style={{ fontSize: 12.5, fontWeight: 700 }}>{formatRelativeTime(selectedDirectoryUser.profile?.createdAt ?? null)}</div></div>
                           <div><div style={{ fontSize: 10.5, color: 'var(--admin-muted)' }}>Updated</div><div style={{ fontSize: 12.5, fontWeight: 700 }}>{formatRelativeTime(selectedDirectoryUser.profile?.updatedAt ?? null)}</div></div>
+                          <div><div style={{ fontSize: 10.5, color: 'var(--admin-muted)' }}>Delete Reason</div><div style={{ fontSize: 12.5, fontWeight: 700 }}>{formatLabelValue(selectedDirectoryUser.profile?.deletedReason)}</div></div>
+                          <div><div style={{ fontSize: 10.5, color: 'var(--admin-muted)' }}>Restored</div><div style={{ fontSize: 12.5, fontWeight: 700 }}>{selectedDirectoryUser.profile?.restoredAt ? formatRelativeTime(selectedDirectoryUser.profile.restoredAt) : 'Not yet'}</div></div>
                         </div>
                       </div>
 
@@ -778,45 +893,49 @@ export default function AdminDashboard() {
                     <div style={{ border: '1px solid var(--admin-border)', borderRadius: 10, padding: '12px 14px' }}>
                       <div style={{ fontSize: 12, fontWeight: 700, marginBottom: 10 }}>Admin Actions</div>
                       <div style={{ display: 'flex', flexWrap: 'wrap', gap: 10 }}>
-                        <Button
-                          variant={selectedDirectoryUser.flags.locked ? 'secondary' : 'outline'}
-                          loading={actioning === (selectedDirectoryUser.flags.locked ? 'unlock_profile' : 'lock_profile')}
-                          onClick={() => void handleDirectoryAction(selectedDirectoryUser.flags.locked ? 'unlock_profile' : 'lock_profile')}
-                          disabled={!selectedDirectoryUser.flags.lockable}
-                        >
-                          {selectedDirectoryUser.flags.locked ? 'Unlock Profile' : 'Lock Profile'}
-                        </Button>
-                        {selectedDirectoryUser.staff && (
-                          <Button
-                            variant={selectedDirectoryUser.flags.staffAccessRestricted ? 'secondary' : 'outline'}
-                            loading={actioning === (selectedDirectoryUser.flags.staffAccessRestricted ? 'restore_staff_access' : 'restrict_staff_access')}
-                            onClick={() => void handleDirectoryAction(selectedDirectoryUser.flags.staffAccessRestricted ? 'restore_staff_access' : 'restrict_staff_access')}
-                            disabled={!selectedDirectoryUser.flags.restrictable}
-                          >
-                            {selectedDirectoryUser.flags.staffAccessRestricted ? 'Restore Access' : 'Restrict Access'}
-                          </Button>
+                        {!selectedDirectoryUser.flags.deleted && (
+                          <>
+                            <Button
+                              variant={selectedDirectoryUser.flags.locked ? 'secondary' : 'outline'}
+                              loading={actioning === (selectedDirectoryUser.flags.locked ? 'unlock_profile' : 'lock_profile')}
+                              onClick={() => void handleDirectoryAction(selectedDirectoryUser.flags.locked ? 'unlock_profile' : 'lock_profile')}
+                              disabled={!selectedDirectoryUser.flags.lockable}
+                            >
+                              {selectedDirectoryUser.flags.locked ? 'Unlock Profile' : 'Lock Profile'}
+                            </Button>
+                            {selectedDirectoryUser.staff && (
+                              <Button
+                                variant={selectedDirectoryUser.flags.staffAccessRestricted ? 'secondary' : 'outline'}
+                                loading={actioning === (selectedDirectoryUser.flags.staffAccessRestricted ? 'restore_staff_access' : 'restrict_staff_access')}
+                                onClick={() => void handleDirectoryAction(selectedDirectoryUser.flags.staffAccessRestricted ? 'restore_staff_access' : 'restrict_staff_access')}
+                                disabled={!selectedDirectoryUser.flags.restrictable}
+                              >
+                                {selectedDirectoryUser.flags.staffAccessRestricted ? 'Restore Access' : 'Restrict Access'}
+                              </Button>
+                            )}
+                            {selectedDirectoryUser.patient && (
+                              <Button
+                                variant="outline"
+                                loading={actioning === 'close_patient_access'}
+                                onClick={() => void handleDirectoryAction('close_patient_access')}
+                                disabled={!selectedDirectoryUser.flags.patientAccessOpen}
+                              >
+                                Close Active Access
+                              </Button>
+                            )}
+                          </>
                         )}
-                        {selectedDirectoryUser.patient && (
-                          <Button
-                            variant="outline"
-                            loading={actioning === 'close_patient_access'}
-                            onClick={() => void handleDirectoryAction('close_patient_access')}
-                            disabled={!selectedDirectoryUser.flags.patientAccessOpen}
-                          >
-                            Close Active Access
-                          </Button>
-                        )}
                         <Button
-                          variant="danger"
-                          loading={actioning === 'delete_account'}
-                          onClick={() => void handleDirectoryAction('delete_account')}
-                          disabled={!selectedDirectoryUser.flags.deletable}
+                          variant={selectedDirectoryUser.flags.deleted ? 'secondary' : 'danger'}
+                          loading={actioning === (selectedDirectoryUser.flags.deleted ? 'restore_account' : 'delete_account')}
+                          onClick={() => void handleDirectoryAction(selectedDirectoryUser.flags.deleted ? 'restore_account' : 'delete_account')}
+                          disabled={selectedDirectoryUser.flags.deleted ? !selectedDirectoryUser.flags.restorable : !selectedDirectoryUser.flags.deletable}
                         >
-                          Delete Account
+                          {selectedDirectoryUser.flags.deleted ? 'Restore Account' : 'Delete Account'}
                         </Button>
                       </div>
                       <div style={{ fontSize: 11, color: 'var(--admin-muted)', marginTop: 10, lineHeight: 1.6 }}>
-                        Locking blocks the profile immediately. Restricting staff access disables hospital access and revokes active grants. Closing patient access revokes current provider access for that patient.
+                        Locking blocks the profile immediately. Restricting staff access disables hospital access and revokes active grants. Closing patient access revokes current provider access for that patient. Deleting keeps the account for admin recovery while removing user access.
                       </div>
                     </div>
                   </div>

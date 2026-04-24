@@ -17,7 +17,9 @@ type EdgeEnvelope<T> = {
 const inflightOverviewRequests = new Map<AdminOverviewWindow, Promise<AdminDashboardOverview>>()
 const overviewCache = new Map<AdminOverviewWindow, { expiresAt: number; value: AdminDashboardOverview }>()
 const inflightUserSearchRequests = new Map<string, Promise<AdminManagedUser[]>>()
+const inflightDeletedUserRequests = new Map<string, Promise<AdminManagedUser[]>>()
 const userSearchCache = new Map<string, { expiresAt: number; value: AdminManagedUser[] }>()
+const deletedUserCache = new Map<string, { expiresAt: number; value: AdminManagedUser[] }>()
 const OVERVIEW_CACHE_TTL_MS = 30000
 const USER_SEARCH_CACHE_TTL_MS = 15000
 
@@ -88,7 +90,10 @@ function sanitizeAdminDashboardMessage(raw: string, status: number) {
     return 'We could not find that patient account right now.'
   }
   if (lower.includes('account was already deleted')) {
-    return 'This account has already been removed.'
+    return 'This account has already been deleted.'
+  }
+  if (lower.includes('account has been deleted')) {
+    return 'This account has been deleted. Restore it before making changes.'
   }
   if (lower.includes('sentry')) return 'Sentry data is not available right now.'
   if (lower.includes('posthog')) return 'PostHog data is not available right now.'
@@ -137,6 +142,8 @@ export function invalidateAdminDashboardCaches() {
   inflightOverviewRequests.clear()
   userSearchCache.clear()
   inflightUserSearchRequests.clear()
+  deletedUserCache.clear()
+  inflightDeletedUserRequests.clear()
 }
 
 async function callAdminUserManagement<T>(path: string, init: RequestInit, statusFallback: number) {
@@ -353,6 +360,49 @@ export async function searchAdminUsers(query: string, options: { force?: boolean
   } finally {
     if (inflightUserSearchRequests.get(cacheKey) === request) {
       inflightUserSearchRequests.delete(cacheKey)
+    }
+  }
+}
+
+export async function fetchDeletedAdminUsers(options: { force?: boolean } = {}) {
+  const cacheKey = 'deleted'
+  if (!options.force) {
+    const cached = deletedUserCache.get(cacheKey)
+    if (cached && cached.expiresAt > Date.now()) {
+      return cached.value
+    }
+    if (cached) {
+      deletedUserCache.delete(cacheKey)
+    }
+  }
+
+  const existingRequest = inflightDeletedUserRequests.get(cacheKey)
+  if (existingRequest) {
+    return existingRequest
+  }
+
+  const request = (async () => {
+    const url = new URL(requireSupabaseFunctionUrl('admin-user-management'))
+    url.searchParams.set('deleted', '1')
+    const data = await callAdminUserManagement<AdminUserDirectoryResponse>(url.toString(), {
+      method: 'GET',
+    }, 500)
+
+    const matches = data.matches ?? []
+    deletedUserCache.set(cacheKey, {
+      expiresAt: Date.now() + USER_SEARCH_CACHE_TTL_MS,
+      value: matches,
+    })
+    return matches
+  })()
+
+  inflightDeletedUserRequests.set(cacheKey, request)
+
+  try {
+    return await request
+  } finally {
+    if (inflightDeletedUserRequests.get(cacheKey) === request) {
+      inflightDeletedUserRequests.delete(cacheKey)
     }
   }
 }

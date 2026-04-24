@@ -36,6 +36,7 @@ export function createAdminClient() {
 type HidUserProfileRecord = {
   active: boolean
   app_role: string
+  deleted_at: string | null
   display_name: string | null
   id: string
   mfa_required: boolean
@@ -43,6 +44,7 @@ type HidUserProfileRecord = {
 
 type HidStaffAccountState = {
   active: boolean
+  deleted_at: string | null
   id: string
 }
 
@@ -60,7 +62,7 @@ export async function requireUser(req: Request): Promise<{
 
   const profileResult = await client
     .from('hid_user_profiles')
-    .select('id, app_role, active, display_name, mfa_required')
+    .select('id, app_role, active, deleted_at, display_name, mfa_required')
     .eq('auth_user_id', data.user.id)
     .maybeSingle()
 
@@ -69,6 +71,9 @@ export async function requireUser(req: Request): Promise<{
   }
 
   const profile = (profileResult.data ?? null) as HidUserProfileRecord | null
+  if (profile?.deleted_at) {
+    throw new HttpError(403, 'This account has been deleted.')
+  }
   if (profile?.active === false) {
     throw new HttpError(403, 'This account is inactive.')
   }
@@ -80,7 +85,7 @@ export async function requireUser(req: Request): Promise<{
   if (effectiveRole === 'clinician' || effectiveRole === 'org_admin') {
     const staffResult = await client
       .from('hid_staff_accounts')
-      .select('id, active')
+      .select('id, active, deleted_at')
       .eq('auth_user_id', data.user.id)
       .maybeSingle()
 
@@ -89,6 +94,9 @@ export async function requireUser(req: Request): Promise<{
     }
 
     staffAccount = (staffResult.data ?? null) as HidStaffAccountState | null
+    if (staffAccount?.deleted_at) {
+      throw new HttpError(403, 'This account has been deleted.')
+    }
     if (staffAccount?.active === false) {
       throw new HttpError(403, 'This account is not allowed to do that right now.')
     }

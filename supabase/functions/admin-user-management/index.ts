@@ -2,10 +2,7 @@ import { createAdminClient, requireRole } from '../_shared/auth.ts'
 import { HttpError, json, readJson, withErrorHandling } from '../_shared/http.ts'
 import { asTrimmedString } from '../_shared/validation.ts'
 
-const RECORD_FILE_BUCKET = 'medical-record-files'
-const STORAGE_CHUNK_SIZE = 100
 const USER_LIST_PAGE_SIZE = 200
-const USER_LIST_MAX_PAGES = 5
 const LOCK_BAN_DURATION = '876000h'
 
 type AdminUserManagementAction =
@@ -14,6 +11,7 @@ type AdminUserManagementAction =
   | 'restrict_staff_access'
   | 'restore_staff_access'
   | 'close_patient_access'
+  | 'restore_account'
   | 'delete_account'
 
 type SearchPayload = {
@@ -27,8 +25,13 @@ type ProfileRow = {
   app_role: string
   display_name: string | null
   active: boolean
+  deleted_at: string | null
+  deleted_reason: string | null
+  deleted_by_user_profile_id: string | null
   mfa_required: boolean
   created_at: string
+  restored_at: string | null
+  restored_by_user_profile_id: string | null
   updated_at: string
 }
 
@@ -49,6 +52,9 @@ type PatientRow = {
   profile_percent: number
   notifications_enabled: boolean
   created_at: string
+  deleted_at: string | null
+  deleted_reason: string | null
+  restored_at: string | null
   updated_at: string
 }
 
@@ -65,6 +71,9 @@ type StaffRow = {
   role: string
   active: boolean
   created_at: string
+  deleted_at: string | null
+  deleted_reason: string | null
+  restored_at: string | null
   updated_at: string
 }
 
@@ -143,8 +152,13 @@ type ManagedUser = {
     appRole: string | null
     displayName: string | null
     active: boolean
+    deletedAt: string | null
+    deletedByUserProfileId: string | null
+    deletedReason: string | null
     mfaRequired: boolean
     createdAt: string
+    restoredAt: string | null
+    restoredByUserProfileId: string | null
     updatedAt: string
   } | null
   patient: {
@@ -200,11 +214,13 @@ type ManagedUser = {
     unreadNotificationCount: number
   }
   flags: {
+    deleted: boolean
     locked: boolean
     deletable: boolean
     lockable: boolean
     patientAccessOpen: boolean | null
     restrictable: boolean
+    restorable: boolean
     staffAccessRestricted: boolean | null
   }
 }
@@ -222,91 +238,24 @@ function countByKey<T extends string>(rows: Array<Record<T, string>>, key: T) {
   return counts
 }
 
-async function listStoragePathsForPatient(adminClient: ReturnType<typeof createAdminClient>, patientId: string) {
-  const { data, error } = await adminClient
-    .from('hid_medical_record_files')
-    .select('storage_path')
-    .eq('patient_id', patientId)
+async function lookupAuthUsersByEmail(adminClient: ReturnType<typeof createAdminClient>, query: string) {
+  const matches = new Map<string, MatchedAuthUser>()
+  const { data, error } = await adminClient.rpc('hid_admin_auth_user_search', {
+    p_limit: Math.min(USER_LIST_PAGE_SIZE, 20),
+    p_query: query,
+  })
 
   if (error) throw new HttpError(400, error.message, error)
-  return ((data ?? []) as Array<{ storage_path: string | null }>)
-    .map(item => item.storage_path)
-    .filter((value): value is string => Boolean(value))
-}
 
-async function listStoragePathsForProfile(adminClient: ReturnType<typeof createAdminClient>, profileId: string) {
-  const paths = new Set<string>()
-
-  const uploadedFiles = await adminClient
-    .from('hid_medical_record_files')
-    .select('storage_path')
-    .eq('uploaded_by_user_profile_id', profileId)
-
-  if (uploadedFiles.error) throw new HttpError(400, uploadedFiles.error.message, uploadedFiles.error)
-  for (const row of ((uploadedFiles.data ?? []) as Array<{ storage_path: string | null }>)) {
-    if (row.storage_path) paths.add(row.storage_path)
-  }
-
-  const authoredRecords = await adminClient
-    .from('hid_medical_records')
-    .select('id')
-    .eq('created_by_user_profile_id', profileId)
-
-  if (authoredRecords.error) throw new HttpError(400, authoredRecords.error.message, authoredRecords.error)
-  const recordIds = ((authoredRecords.data ?? []) as Array<{ id: string }>).map(item => item.id)
-
-  if (recordIds.length > 0) {
-    const recordFiles = await adminClient
-      .from('hid_medical_record_files')
-      .select('storage_path')
-      .in('record_id', recordIds)
-
-    if (recordFiles.error) throw new HttpError(400, recordFiles.error.message, recordFiles.error)
-    for (const row of ((recordFiles.data ?? []) as Array<{ storage_path: string | null }>)) {
-      if (row.storage_path) paths.add(row.storage_path)
-    }
-  }
-
-  return [...paths]
-}
-
-async function removeStoragePaths(adminClient: ReturnType<typeof createAdminClient>, paths: string[]) {
-  if (paths.length === 0) return
-
-  for (let index = 0; index < paths.length; index += STORAGE_CHUNK_SIZE) {
-    const chunk = paths.slice(index, index + STORAGE_CHUNK_SIZE)
-    const { error } = await adminClient.storage.from(RECORD_FILE_BUCKET).remove(chunk)
-    if (error) throw new HttpError(400, error.message, error)
-  }
-}
-
-async function lookupAuthUsersByEmail(adminClient: ReturnType<typeof createAdminClient>, query: string) {
-  const normalized = query.trim().toLowerCase()
-  const matches = new Map<string, MatchedAuthUser>()
-
-  for (let page = 1; page <= USER_LIST_MAX_PAGES; page += 1) {
-    const { data, error } = await adminClient.auth.admin.listUsers({
-      page,
-      perPage: USER_LIST_PAGE_SIZE,
+  for (const row of ((data ?? []) as Array<Record<string, unknown>>)) {
+    const authUserId = `${row.auth_user_id ?? ''}`.trim()
+    if (!authUserId) continue
+    matches.set(authUserId, {
+      id: authUserId,
+      email: typeof row.email === 'string' ? row.email : null,
+      emailConfirmedAt: typeof row.email_confirmed_at === 'string' ? row.email_confirmed_at : null,
+      lastSignInAt: typeof row.last_sign_in_at === 'string' ? row.last_sign_in_at : null,
     })
-
-    if (error) throw new HttpError(400, error.message, error)
-
-    const users = data.users ?? []
-    for (const user of users) {
-      const email = user.email?.toLowerCase() ?? ''
-      if (!email.includes(normalized)) continue
-      matches.set(user.id, {
-        id: user.id,
-        email: user.email ?? null,
-        emailConfirmedAt: user.email_confirmed_at ?? null,
-        lastSignInAt: user.last_sign_in_at ?? null,
-      })
-    }
-
-    if (users.length < USER_LIST_PAGE_SIZE) {
-      break
-    }
   }
 
   return matches
@@ -346,15 +295,15 @@ async function loadManagedUsersByAuthIds(
   const [profilesResult, patientsResult, staffResult, authUsers] = await Promise.all([
     adminClient
       .from('hid_user_profiles')
-      .select('id, auth_user_id, app_role, display_name, active, mfa_required, created_at, updated_at')
+      .select('id, auth_user_id, app_role, display_name, active, deleted_at, deleted_reason, deleted_by_user_profile_id, mfa_required, created_at, restored_at, restored_by_user_profile_id, updated_at')
       .in('auth_user_id', uniqueAuthUserIds),
     adminClient
       .from('hid_patients')
-      .select('id, auth_user_id, user_profile_id, hid_code, full_name, email, phone_e164, gender, dob, country, state, emergency_contact_name, emergency_contact_phone, profile_percent, notifications_enabled, created_at, updated_at')
+      .select('id, auth_user_id, user_profile_id, hid_code, full_name, email, phone_e164, gender, dob, country, state, emergency_contact_name, emergency_contact_phone, profile_percent, notifications_enabled, created_at, deleted_at, deleted_reason, restored_at, updated_at')
       .in('auth_user_id', uniqueAuthUserIds),
     adminClient
       .from('hid_staff_accounts')
-      .select('id, auth_user_id, user_profile_id, full_name, email, phone_e164, hospital_name, verification_status, license_number, role, active, created_at, updated_at')
+      .select('id, auth_user_id, user_profile_id, full_name, email, phone_e164, hospital_name, verification_status, license_number, role, active, created_at, deleted_at, deleted_reason, restored_at, updated_at')
       .in('auth_user_id', uniqueAuthUserIds),
     getAuthUsersByIds(adminClient, uniqueAuthUserIds, authUserSeed),
   ])
@@ -476,6 +425,7 @@ async function loadManagedUsersByAuthIds(
     const inactiveMembershipCount = staffMemberships.length - activeMembershipCount
     const activeGrantCount = (patient ? (activePatientGrantsByPatient.get(patient.id) ?? 0) : 0) + (staff ? (activeStaffGrantsByStaff.get(staff.id) ?? 0) : 0)
     const pendingRequestCount = (patient ? (pendingPatientRequestsByPatient.get(patient.id) ?? 0) : 0) + (staff ? (pendingStaffRequestsByStaff.get(staff.id) ?? 0) : 0)
+    const deleted = Boolean(profile?.deleted_at || patient?.deleted_at || staff?.deleted_at)
 
     return {
       id: authUserId,
@@ -488,8 +438,13 @@ async function loadManagedUsersByAuthIds(
         appRole: profile.app_role,
         displayName: profile.display_name,
         active: profile.active,
+        deletedAt: profile.deleted_at,
+        deletedByUserProfileId: profile.deleted_by_user_profile_id,
+        deletedReason: profile.deleted_reason,
         mfaRequired: profile.mfa_required,
         createdAt: profile.created_at,
+        restoredAt: profile.restored_at,
+        restoredByUserProfileId: profile.restored_by_user_profile_id,
         updatedAt: profile.updated_at,
       } : null,
       patient: patient ? {
@@ -548,12 +503,14 @@ async function loadManagedUsersByAuthIds(
         unreadNotificationCount: profile ? (unreadByProfile.get(profile.id) ?? 0) : 0,
       },
       flags: {
-        locked: profile ? !profile.active : false,
-        deletable: profile?.app_role !== 'platform_admin',
-        lockable: profile?.app_role !== 'platform_admin',
+        deleted,
+        locked: deleted ? false : profile ? !profile.active : false,
+        deletable: !deleted && profile?.app_role !== 'platform_admin',
+        lockable: !deleted && profile?.app_role !== 'platform_admin',
         patientAccessOpen: patient ? activeGrantCount > 0 || pendingRequestCount > 0 : null,
-        restrictable: Boolean(staff),
-        staffAccessRestricted: staff ? (!staff.active || activeMembershipCount === 0) : null,
+        restrictable: Boolean(staff) && !deleted,
+        restorable: deleted && profile?.app_role !== 'platform_admin',
+        staffAccessRestricted: staff ? (!deleted && (!staff.active || activeMembershipCount === 0)) : null,
       },
     } satisfies ManagedUser
   })
@@ -605,6 +562,20 @@ async function searchUsers(adminClient: ReturnType<typeof createAdminClient>, qu
       item.staff?.email?.toLowerCase().includes(loweredQuery)
     )
   })
+}
+
+async function listDeletedUsers(adminClient: ReturnType<typeof createAdminClient>, limit = 20) {
+  const profilesResult = await adminClient
+    .from('hid_user_profiles')
+    .select('auth_user_id')
+    .not('deleted_at', 'is', null)
+    .order('deleted_at', { ascending: false })
+    .limit(limit)
+
+  if (profilesResult.error) throw new HttpError(400, profilesResult.error.message, profilesResult.error)
+
+  const authUserIds = unique(((profilesResult.data ?? []) as Array<{ auth_user_id: string }>).map(item => item.auth_user_id))
+  return loadManagedUsersByAuthIds(adminClient, authUserIds)
 }
 
 async function loadManagedUserByAuthId(adminClient: ReturnType<typeof createAdminClient>, authUserId: string) {
@@ -661,17 +632,17 @@ async function loadActionTarget(adminClient: ReturnType<typeof createAdminClient
   const [profileResult, patientResult, staffResult] = await Promise.all([
     adminClient
       .from('hid_user_profiles')
-      .select('id, auth_user_id, app_role, display_name, active, mfa_required, created_at, updated_at')
+      .select('id, auth_user_id, app_role, display_name, active, deleted_at, deleted_reason, deleted_by_user_profile_id, mfa_required, created_at, restored_at, restored_by_user_profile_id, updated_at')
       .eq('auth_user_id', targetAuthUserId)
       .maybeSingle(),
     adminClient
       .from('hid_patients')
-      .select('id, auth_user_id, user_profile_id, hid_code, full_name, email, phone_e164, gender, dob, country, state, emergency_contact_name, emergency_contact_phone, profile_percent, notifications_enabled, created_at, updated_at')
+      .select('id, auth_user_id, user_profile_id, hid_code, full_name, email, phone_e164, gender, dob, country, state, emergency_contact_name, emergency_contact_phone, profile_percent, notifications_enabled, created_at, deleted_at, deleted_reason, restored_at, updated_at')
       .eq('auth_user_id', targetAuthUserId)
       .maybeSingle(),
     adminClient
       .from('hid_staff_accounts')
-      .select('id, auth_user_id, user_profile_id, full_name, email, phone_e164, hospital_name, verification_status, license_number, role, active, created_at, updated_at')
+      .select('id, auth_user_id, user_profile_id, full_name, email, phone_e164, hospital_name, verification_status, license_number, role, active, created_at, deleted_at, deleted_reason, restored_at, updated_at')
       .eq('auth_user_id', targetAuthUserId)
       .maybeSingle(),
   ])
@@ -695,10 +666,17 @@ async function performUserAction(
 ) {
   const target = await loadActionTarget(adminClient, targetAuthUserId)
   if (!target.profile) throw new HttpError(404, 'We could not find this account.')
+  const targetDeleted = Boolean(target.profile.deleted_at || target.patient?.deleted_at || target.staff?.deleted_at)
+
   if (target.profile.app_role === 'platform_admin') {
     if (action === 'delete_account') throw new HttpError(403, 'Platform admin accounts cannot be deleted from the dashboard.')
     if (action === 'lock_profile' || action === 'unlock_profile') throw new HttpError(403, 'Platform admin accounts cannot be locked from the dashboard.')
+    if (action === 'restore_account') throw new HttpError(403, 'Platform admin accounts cannot be restored from the dashboard.')
     throw new HttpError(403, 'Platform admin accounts cannot be modified from the dashboard.')
+  }
+
+  if (targetDeleted && !['restore_account', 'delete_account'].includes(action)) {
+    throw new HttpError(409, 'This account has been deleted. Restore it before changing access or profile state.')
   }
 
   if (action === 'lock_profile') {
@@ -1043,46 +1021,83 @@ async function performUserAction(
   }
 
   if (action === 'delete_account') {
-    const storagePaths = new Set<string>()
+    const { data, error } = await adminClient.rpc('hid_soft_delete_account_by_auth_user_id', {
+      p_actor_profile_id: actor.profileId,
+      p_auth_user_id: targetAuthUserId,
+      p_reason: 'Account deleted by HID admin.',
+    })
 
-    if (target.patient?.id) {
-      for (const path of await listStoragePathsForPatient(adminClient, target.patient.id)) {
-        storagePaths.add(path)
-      }
+    if (error) throw new HttpError(400, error.message, error)
+    const deleted = (data as { deleted?: boolean } | null)?.deleted ?? false
+    const alreadyDeleted = (data as { already_deleted?: boolean } | null)?.already_deleted ?? false
+    if (!deleted && !alreadyDeleted) {
+      throw new HttpError(404, 'This account could not be deleted right now.')
     }
 
-    for (const path of await listStoragePathsForProfile(adminClient, target.profile.id)) {
-      storagePaths.add(path)
-    }
+    const userUpdate = await adminClient.auth.admin.updateUserById(targetAuthUserId, {
+      ban_duration: LOCK_BAN_DURATION,
+    })
+    if (userUpdate.error) throw new HttpError(400, userUpdate.error.message, userUpdate.error)
 
-    await removeStoragePaths(adminClient, [...storagePaths])
-
+    await insertNotifications(adminClient, [{
+      userProfileId: target.profile.id,
+      patientId: target.patient?.id ?? null,
+      title: 'Account deleted',
+      message: 'An HID administrator deleted this account. It is no longer accessible unless restored by an administrator.',
+    }])
     await logAdminAuditEvent(adminClient, actor, {
-      action: 'admin_delete_account',
+      action: 'admin_soft_delete_account',
       patientId: target.patient?.id ?? null,
       reason: 'Account deleted by HID admin',
+      resourceId: target.profile.id,
+      resourceType: 'user_profile',
+      metadata: {
+        already_deleted: alreadyDeleted,
+        target_auth_user_id: targetAuthUserId,
+      },
+    })
+
+    const updated = await loadManagedUserByAuthId(adminClient, targetAuthUserId)
+    return {
+      deleted: true,
+      targetAuthUserId,
+      user: updated,
+    }
+  }
+
+  if (action === 'restore_account') {
+    const { data, error } = await adminClient.rpc('hid_restore_account_by_auth_user_id', {
+      p_actor_profile_id: actor.profileId,
+      p_auth_user_id: targetAuthUserId,
+    })
+
+    if (error) throw new HttpError(400, error.message, error)
+    const restored = (data as { restored?: boolean } | null)?.restored ?? false
+    if (!restored) {
+      throw new HttpError(404, 'This account could not be restored right now.')
+    }
+
+    const userUpdate = await adminClient.auth.admin.updateUserById(targetAuthUserId, {
+      ban_duration: 'none',
+    })
+    if (userUpdate.error) throw new HttpError(400, userUpdate.error.message, userUpdate.error)
+
+    await insertNotifications(adminClient, [{
+      userProfileId: target.profile.id,
+      patientId: target.patient?.id ?? null,
+      title: 'Account restored',
+      message: 'An HID administrator restored this account. You can sign in again and continue using HID.',
+    }])
+    await logAdminAuditEvent(adminClient, actor, {
+      action: 'admin_restore_account',
+      patientId: target.patient?.id ?? null,
+      reason: 'Account restored by HID admin',
       resourceId: target.profile.id,
       resourceType: 'user_profile',
       metadata: {
         target_auth_user_id: targetAuthUserId,
       },
     })
-
-    const { data, error } = await adminClient.rpc('hid_delete_account_by_auth_user_id', {
-      p_auth_user_id: targetAuthUserId,
-    })
-
-    if (error) throw new HttpError(400, error.message, error)
-    const deleted = (data as { deleted?: boolean } | null)?.deleted ?? true
-    if (!deleted) {
-      throw new HttpError(404, 'This account was already deleted.')
-    }
-
-    return {
-      deleted,
-      targetAuthUserId,
-      user: null,
-    }
   }
 
   const updated = await loadManagedUserByAuthId(adminClient, targetAuthUserId)
@@ -1099,8 +1114,11 @@ Deno.serve(req => withErrorHandling(req, async () => {
 
   if (req.method === 'GET') {
     const requestUrl = new URL(req.url)
-    const query = asTrimmedString(requestUrl.searchParams.get('query'), 'query')
-    const matches = await searchUsers(adminClient, query)
+    const includeDeleted = requestUrl.searchParams.get('deleted') === '1'
+    const queryValue = requestUrl.searchParams.get('query')
+    const matches = includeDeleted
+      ? await listDeletedUsers(adminClient)
+      : await searchUsers(adminClient, asTrimmedString(queryValue, 'query'))
     return json({ data: { matches } })
   }
 

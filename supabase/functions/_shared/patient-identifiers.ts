@@ -20,6 +20,8 @@ export type ResolvedPatientAuthIdentity = {
 
 export type ResolvedPatientAccessState = ResolvedPatientAuthIdentity & {
   profileActive: boolean
+  profileDeleted: boolean
+  patientDeleted: boolean
 }
 
 export async function resolvePatientAuthIdentity(
@@ -115,7 +117,7 @@ export async function resolvePatientAccessState(
 
   const { data, error } = await adminClient
     .from('hid_user_profiles')
-    .select('active')
+    .select('active, deleted_at')
     .eq('id', identity.userProfileId)
     .maybeSingle()
 
@@ -123,9 +125,21 @@ export async function resolvePatientAccessState(
     throw error
   }
 
+  const patientStateResult = await adminClient
+    .from('hid_patients')
+    .select('deleted_at')
+    .eq('id', identity.patientId)
+    .maybeSingle()
+
+  if (patientStateResult.error) {
+    throw patientStateResult.error
+  }
+
   return {
     ...identity,
     profileActive: data?.active !== false,
+    profileDeleted: Boolean(data?.deleted_at),
+    patientDeleted: Boolean(patientStateResult.data?.deleted_at),
   }
 }
 

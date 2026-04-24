@@ -7,7 +7,7 @@ Deno.serve(req => withErrorHandling(req, async () => {
   const adminClient = createAdminClient()
   const { error } = await adminClient
     .from('hid_user_profiles')
-    .select('id', { head: true, count: 'exact' })
+    .select('id', { head: true })
     .limit(1)
 
   if (error) {

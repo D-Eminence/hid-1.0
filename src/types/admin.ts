@@ -156,6 +156,7 @@ export type AdminUserManagementAction =
   | 'restrict_staff_access'
   | 'restore_staff_access'
   | 'close_patient_access'
+  | 'restore_account'
   | 'delete_account'
 
 export interface AdminManagedUserProfile {
@@ -164,8 +165,13 @@ export interface AdminManagedUserProfile {
   appRole: string | null
   displayName: string | null
   active: boolean
+  deletedAt: string | null
+  deletedByUserProfileId: string | null
+  deletedReason: string | null
   mfaRequired: boolean
   createdAt: string
+  restoredAt: string | null
+  restoredByUserProfileId: string | null
   updatedAt: string
 }
 
@@ -227,11 +233,13 @@ export interface AdminManagedUserStats {
 }
 
 export interface AdminManagedUserFlags {
+  deleted: boolean
   locked: boolean
   deletable: boolean
   lockable: boolean
   patientAccessOpen: boolean | null
   restrictable: boolean
+  restorable: boolean
   staffAccessRestricted: boolean | null
 }
 

@@ -83,7 +83,7 @@ export default function HospitalDashboard() {
 
   async function requestDeleteOtp() {
     if (deleteConfirmText.trim().toUpperCase() !== 'DELETE') {
-      showToast('Type DELETE to confirm permanent account removal.', 'error')
+      showToast('Type DELETE to confirm account deletion.', 'error')
       return
     }
 
@@ -131,7 +131,7 @@ export default function HospitalDashboard() {
     setDeletingAccount(true)
     try {
       await deleteMyAccount(deleteChallengeId, deleteVerificationToken)
-      showToast('Your hospital account has been permanently deleted.', 'success')
+      showToast('Your hospital account has been deleted. An HID admin can restore it if needed.', 'success')
       navigate(HOSPITAL_AUTH_PATH, { replace: true })
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Unable to delete this hospital account right now.'
@@ -345,7 +345,7 @@ export default function HospitalDashboard() {
         <Card style={{ border: '1px solid #fecaca', background: '#fff7f7' }}>
           <div style={{ fontSize: 15, fontWeight: 700, color: '#991b1b' }}>Danger Zone</div>
           <div style={{ color: '#7f1d1d', fontSize: 12, marginTop: 6, lineHeight: 1.7 }}>
-            Permanently deleting this hospital account removes its access history, dashboard data, and medical records created by this account.
+            Deleting this hospital account immediately removes its access to HID. The account stays archived for admin review and can be restored by HID support if needed.
           </div>
           <Button
             variant="danger"
@@ -355,17 +355,17 @@ export default function HospitalDashboard() {
               setDeleteModalOpen(true)
             }}
           >
-            Delete account permanently
+            Delete account
           </Button>
         </Card>
       </div>
 
-      <Modal open={deleteModalOpen} onClose={() => { if (!sendingDeleteOtp && !verifyingDeleteOtp && !deletingAccount) setDeleteModalOpen(false) }} title="Delete hospital account permanently" width={520}>
+      <Modal open={deleteModalOpen} onClose={() => { if (!sendingDeleteOtp && !verifyingDeleteOtp && !deletingAccount) setDeleteModalOpen(false) }} title="Delete hospital account" width={520}>
         <div style={{ display: 'grid', gap: 16 }}>
           {!deleteChallengeId ? (
             <>
               <div style={{ color: '#4b5563', fontSize: 13, lineHeight: 1.7 }}>
-                This permanently removes the hospital account, ends its access, and deletes the records created by this account. This action cannot be undone. Type DELETE, then we will send a 6-digit verification code to your email.
+                This deletes the hospital HID access and archives the account for admin review. Type DELETE, then we will send a 6-digit verification code to your email.
               </div>
               <Input
                 label='Type "DELETE" to confirm'
@@ -386,7 +386,7 @@ export default function HospitalDashboard() {
           ) : !deleteVerificationToken ? (
             <>
               <div style={{ color: '#4b5563', fontSize: 13, lineHeight: 1.7 }}>
-                We sent a 6-digit code to {deleteMaskedEmail || 'your email address'}. Enter it below to confirm permanent account deletion.
+                We sent a 6-digit code to {deleteMaskedEmail || 'your email address'}. Enter it below to confirm account deletion.
               </div>
               <OtpInputs value={deleteOtp} onChange={setDeleteOtp} onComplete={verifyDeleteOtp} />
               <div style={{ display: 'flex', justifyContent: 'space-between', gap: 10, flexWrap: 'wrap' }}>
@@ -409,14 +409,14 @@ export default function HospitalDashboard() {
           ) : (
             <>
               <div style={{ color: '#4b5563', fontSize: 13, lineHeight: 1.7 }}>
-                Verification complete. Deleting this hospital account will permanently remove its access history, dashboard data, and records created by this account.
+                Verification complete. Deleting this hospital account will remove HID access and archive the account for admin review or restoration.
               </div>
               <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10, flexWrap: 'wrap' }}>
                 <Button variant="outline" onClick={() => setDeleteModalOpen(false)} disabled={deletingAccount}>
                   Cancel
                 </Button>
                 <Button variant="danger" loading={deletingAccount} onClick={() => void confirmPermanentDelete()}>
-                  Delete permanently
+                  Delete account
                 </Button>
               </div>
             </>
