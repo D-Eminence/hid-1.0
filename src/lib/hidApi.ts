@@ -374,7 +374,12 @@ function isPendingStaffOnboarding(value: unknown): value is PendingStaffOnboardi
 
 function isDeletedAccountMessage(message: string) {
   const lower = message.toLowerCase()
-  return lower.includes('account has been deleted') || lower.includes('patient account has been deleted')
+  return (
+    lower.includes('account has been deleted') ||
+    lower.includes('patient account has been deleted') ||
+    lower.includes('user is banned') ||
+    lower.includes('banned until')
+  )
 }
 
 async function getAccessToken() {
@@ -458,7 +463,7 @@ async function edgeRequest<T>(functionName: string, options: EdgeRequestOptions 
         ? parsedPayload.error
         : fallbackMessage || response.statusText || ''
     const responseMessage = isDeletedAccountMessage(rawResponseMessage)
-      ? 'This account has been deleted. Contact HID support if you need it restored.'
+      ? 'We could not verify those details.'
       : rawResponseMessage && !isLowSignalErrorMessage(rawResponseMessage)
         ? rawResponseMessage
         : fallbackErrorMessageForStatus(response.status)
@@ -664,7 +669,14 @@ async function verifySignupOtpAndEnsureSession(email: string, password: string, 
     })
 
     if (signInError) {
-      throw new HidApiError(401, signInError.message, signInError)
+      const lower = signInError.message.toLowerCase()
+      throw new HidApiError(
+        401,
+        lower.includes('user is banned') || lower.includes('banned until')
+          ? 'The sign-in details are not correct.'
+          : signInError.message,
+        signInError
+      )
     }
   }
 }
@@ -1413,7 +1425,14 @@ export async function patientSignIn(identifier: string, password: string, captch
   })
 
   if (error) {
-    throw new HidApiError(401, error.message, error)
+    const lower = error.message.toLowerCase()
+    throw new HidApiError(
+      401,
+      lower.includes('user is banned') || lower.includes('banned until')
+        ? 'The sign-in details are not correct.'
+        : error.message,
+      error
+    )
   }
 
   return ensurePatientProfileRegistered()

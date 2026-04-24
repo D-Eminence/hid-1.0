@@ -493,7 +493,12 @@ function normalizeToastMessage(message: string, type: ToastType) {
     if (lower.includes('incorrect otp')) return 'The verification code is not correct.'
     if (lower.includes('incorrect reset otp')) return 'The password reset code is not correct.'
     if (lower.includes('passwords do not match')) return 'The passwords do not match.'
-    if (lower.includes('invalid credentials') || lower.includes('invalid hospital credentials')) return 'The sign-in details are not correct.'
+    if (
+      lower.includes('invalid credentials') ||
+      lower.includes('invalid hospital credentials') ||
+      lower.includes('user is banned') ||
+      lower.includes('banned until')
+    ) return 'The sign-in details are not correct.'
     if (lower.includes('email not confirmed')) return 'Enter the verification code sent to your email to continue.'
     if (lower.includes('signups not allowed') || lower.includes('phone signups are disabled') || lower.includes('signups not allowed for otp') || (lower.includes('signup') && lower.includes('disabled'))) {
       return 'Patient self-sign-up is currently disabled.'
@@ -566,7 +571,12 @@ function normalizeToastMessage(message: string, type: ToastType) {
     }
     if (lower.includes('please sign in again')) return 'Please sign in again to continue.'
     if (lower.includes('authentication required') || lower.includes('missing authorization')) return 'Please sign in to continue.'
-    if (lower.includes('patient was not found') || lower.includes('could not be verified')) return 'We could not verify those details.'
+    if (
+      lower.includes('patient was not found') ||
+      lower.includes('could not be verified') ||
+      lower.includes('account has been deleted') ||
+      lower.includes('patient account has been deleted')
+    ) return 'We could not verify those details.'
     if (lower.includes('access pin must be 4 to 8 digits')) return 'Access PIN must be 4 to 8 digits.'
     if (lower.includes('not found')) return 'We could not find the information you requested.'
     if (lower.includes('expired')) return 'This session has expired. Please try again.'

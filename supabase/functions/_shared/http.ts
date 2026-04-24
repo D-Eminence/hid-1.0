@@ -158,6 +158,9 @@ function sanitizeErrorMessage(message: string, status: number) {
   if (lower.includes('invalid credentials') || lower.includes('sign-in details')) {
     return 'The sign-in details are not correct.'
   }
+  if (lower.includes('user is banned') || lower.includes('banned until')) {
+    return 'The sign-in details are not correct.'
+  }
   if (lower.includes('authentication required') || lower.includes('missing authorization header')) {
     return 'Please sign in to continue.'
   }
@@ -173,7 +176,7 @@ function sanitizeErrorMessage(message: string, status: number) {
     return 'This account is not active right now. Contact support if you need help.'
   }
   if (lower.includes('account has been deleted') || lower.includes('patient account has been deleted')) {
-    return 'This account has been deleted. Contact HID support if you need it restored.'
+    return 'We could not verify those details.'
   }
   if (lower.includes('patient account is locked')) {
     return 'This patient account is locked right now and cannot be opened by a hospital.'

@@ -1043,7 +1043,7 @@ async function performUserAction(
       userProfileId: target.profile.id,
       patientId: target.patient?.id ?? null,
       title: 'Account deleted',
-      message: 'An HID administrator deleted this account. It is no longer accessible unless restored by an administrator.',
+      message: 'This HID account was deleted and is no longer available.',
     }])
     await logAdminAuditEvent(adminClient, actor, {
       action: 'admin_soft_delete_account',

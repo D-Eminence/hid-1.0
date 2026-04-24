@@ -64,7 +64,7 @@ Deno.serve(req => withErrorHandling(req, async () => {
     user_profile_id: profileResult.data.id,
     patient_id: patientResult.data?.id ?? null,
     title: 'Account deleted',
-    message: 'This HID account was deleted and is no longer accessible unless restored by an administrator.',
+    message: 'This HID account was deleted and is no longer available.',
     type: 'security',
   })
 

@@ -131,7 +131,7 @@ export default function HospitalDashboard() {
     setDeletingAccount(true)
     try {
       await deleteMyAccount(deleteChallengeId, deleteVerificationToken)
-      showToast('Your hospital account has been deleted. An HID admin can restore it if needed.', 'success')
+      showToast('Your hospital account has been deleted and is no longer available.', 'success')
       navigate(HOSPITAL_AUTH_PATH, { replace: true })
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Unable to delete this hospital account right now.'

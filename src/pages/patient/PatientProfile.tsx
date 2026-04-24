@@ -259,7 +259,7 @@ export default function PatientProfile() {
     setDeletingAccount(true)
     try {
       await deleteMyAccount(deleteChallengeId, deleteVerificationToken)
-      showToast('Your account has been deleted. An HID admin can restore it if needed.', 'success')
+      showToast('Your account has been deleted and is no longer available.', 'success')
       navigate('/patient', { replace: true })
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Unable to delete your account right now.'

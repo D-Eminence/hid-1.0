@@ -72,7 +72,7 @@ export async function requireUser(req: Request): Promise<{
 
   const profile = (profileResult.data ?? null) as HidUserProfileRecord | null
   if (profile?.deleted_at) {
-    throw new HttpError(403, 'This account has been deleted.')
+    throw new HttpError(401, 'The sign-in details are not correct.')
   }
   if (profile?.active === false) {
     throw new HttpError(403, 'This account is inactive.')
@@ -95,7 +95,7 @@ export async function requireUser(req: Request): Promise<{
 
     staffAccount = (staffResult.data ?? null) as HidStaffAccountState | null
     if (staffAccount?.deleted_at) {
-      throw new HttpError(403, 'This account has been deleted.')
+      throw new HttpError(401, 'The sign-in details are not correct.')
     }
     if (staffAccount?.active === false) {
       throw new HttpError(403, 'This account is not allowed to do that right now.')
