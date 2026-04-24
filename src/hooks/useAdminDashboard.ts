@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react'
-import { sanitizeUserFacingMessage, showToast } from '../components/ui'
+import { sanitizeUserFacingMessage, showToast } from '../components/toast'
 import { fetchAdminDashboardOverview } from '../services/adminDashboard'
 import type { AdminDashboardOverview, AdminOverviewWindow } from '../types/admin'
 

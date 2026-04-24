@@ -6,6 +6,7 @@ import { countUnreadNotifications } from '../lib/hidApi'
 import { getPersonInitials } from '../lib/utils'
 import { preloadPath } from '../lib/routePreload'
 import { subscribeToNotifications } from '../lib/notificationsRealtime'
+import { prefetchPatientRouteData } from '../lib/experienceWarmup'
 
 interface NavItem {
   path: string
@@ -87,6 +88,13 @@ export function PortalShell({
   const [profileMenuOpen, setProfileMenuOpen] = useState(false)
   const [hasUnreadNotifications, setHasUnreadNotifications] = useState(false)
 
+  function warmPath(path: string) {
+    preloadPath(path)
+    if (notificationHidCode) {
+      prefetchPatientRouteData(path, notificationHidCode)
+    }
+  }
+
   useEffect(() => {
     if (!notificationPath) return
     let active = true
@@ -128,10 +136,10 @@ export function PortalShell({
   useEffect(() => {
     const paths = Array.from(new Set([...items.map(item => item.path), ...(notificationPath ? [notificationPath] : [])]))
     const timer = window.setTimeout(() => {
-      paths.forEach(path => preloadPath(path))
+      paths.forEach(path => warmPath(path))
     }, 20)
     return () => window.clearTimeout(timer)
-  }, [items, notificationPath])
+  }, [items, notificationHidCode, notificationPath])
 
   useEffect(() => {
     function handleClickOutside(event: MouseEvent) {
@@ -149,13 +157,13 @@ export function PortalShell({
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 16, flexWrap: 'wrap' }}>
           <div
             style={{ cursor: 'pointer' }}
-            onMouseEnter={() => preloadPath(items[0]?.path ?? '/')}
+            onMouseEnter={() => warmPath(items[0]?.path ?? '/')}
             onClick={() => navigate(items[0]?.path ?? '/')}
           >
             <HIDLogo size="sm" />
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginLeft: 'auto' }}>
-            <div onMouseEnter={() => { if (notificationPath) preloadPath(notificationPath) }}>
+            <div onMouseEnter={() => { if (notificationPath) warmPath(notificationPath) }}>
               <BellBadge hasUnread={hasUnreadNotifications} onClick={notificationPath ? () => navigate(notificationPath) : undefined} />
             </div>
             <div style={{ position: 'relative' }} ref={menuRef}>
@@ -198,8 +206,8 @@ export function PortalShell({
                 <button
                   key={item.path}
                   onClick={() => navigate(item.path)}
-                  onMouseEnter={() => preloadPath(item.path)}
-                  onFocus={() => preloadPath(item.path)}
+                  onMouseEnter={() => warmPath(item.path)}
+                  onFocus={() => warmPath(item.path)}
                   style={{
                     border: 'none',
                     background: 'none',

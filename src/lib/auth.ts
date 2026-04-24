@@ -1,4 +1,5 @@
 import { safeSignOut } from './supabase'
+import { resetClientCaches } from './cacheReset'
 
 const PATIENT_SESSION_KEY = 'hid_patient_session'
 const STAFF_SESSION_KEY = 'hid_staff_session'
@@ -56,6 +57,7 @@ export function clearStaffSession() {
 export function clearAllPortalSessions() {
   clearPatientSession()
   clearStaffSession()
+  resetClientCaches()
 }
 
 export async function signOutAndClearSessions() {

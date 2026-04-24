@@ -4,6 +4,8 @@ import { OtpInputs } from '../../components/OtpInputs'
 import { Badge, Button, Card, Input, Modal, PageLoader, showToast } from '../../components/ui'
 import { HospitalLayout } from '../../components/HospitalLayout'
 import { getStaffSession, signOutAndClearSessions } from '../../lib/auth'
+import { subscribeToAccessChanges } from '../../lib/accessRealtime'
+import { readDoctorDashboardSnapshot, seedDoctorDashboardCache } from '../../lib/experienceWarmup'
 import {
   HOSPITAL_ACCESS_PATH,
   HOSPITAL_AUTH_PATH,
@@ -32,8 +34,11 @@ function isActiveGrant(status: string | null, expiresAt: string | null) {
 export default function HospitalDashboard() {
   const navigate = useNavigate()
   const session = useMemo(() => getStaffSession(), [])
-  const [dashboard, setDashboard] = useState<HidStaffDashboardResponse | null>(null)
-  const [loading, setLoading] = useState(true)
+  const cachedDashboard = useMemo(() => (
+    session ? readDoctorDashboardSnapshot(session.id) : null
+  ), [session])
+  const [dashboard, setDashboard] = useState<HidStaffDashboardResponse | null>(cachedDashboard)
+  const [loading, setLoading] = useState(!cachedDashboard)
   const [deleteModalOpen, setDeleteModalOpen] = useState(false)
   const [deleteConfirmText, setDeleteConfirmText] = useState('')
   const [deleteChallengeId, setDeleteChallengeId] = useState('')
@@ -49,19 +54,33 @@ export default function HospitalDashboard() {
       navigate(HOSPITAL_AUTH_PATH)
       return
     }
-    void loadDashboard()
-  }, [navigate, session])
+    void loadDashboard(Boolean(cachedDashboard))
+  }, [cachedDashboard, navigate, session])
 
-  async function loadDashboard() {
-    setLoading(true)
+  useEffect(() => {
+    if (!session) return
+
+    const unsubscribe = subscribeToAccessChanges(() => {
+      if (document.visibilityState === 'visible') {
+        void loadDashboard(true)
+      }
+    })
+
+    return unsubscribe
+  }, [session])
+
+  async function loadDashboard(silent = false) {
+    if (!session) return
+    if (!silent) setLoading(true)
     try {
       const nextDashboard = await fetchStaffDashboard()
+      seedDoctorDashboardCache(session.id, nextDashboard)
       setDashboard(nextDashboard)
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Unable to load the hospital dashboard.'
       showToast(message, 'error')
     } finally {
-      setLoading(false)
+      if (!silent) setLoading(false)
     }
   }
 

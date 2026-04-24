@@ -5,8 +5,16 @@ import { Badge, Button, Card, EmptyState, Input, Modal, PageLoader, Textarea, sh
 import { FileAttachmentPreview, MedicalRecordMarkdownView } from '../../components/RecordMarkdownView'
 import { VoiceToTextButton } from '../../components/VoiceToTextButton'
 import { getStaffSession, signOutAndClearSessions } from '../../lib/auth'
+import { subscribeToAccessChanges } from '../../lib/accessRealtime'
+import {
+  readDoctorDashboardSnapshot,
+  readDoctorPatientRecordsSnapshot,
+  seedDoctorDashboardCache,
+  seedDoctorPatientRecordsCache,
+} from '../../lib/experienceWarmup'
 import { HOSPITAL_ACCESS_PATH, HOSPITAL_AUTH_PATH } from '../../lib/hospitalRoutes'
 import {
+  buildOptimisticMedicalRecord,
   buildStructuredRecordBody,
   countAllRecordAttachments,
   createEmptyRecordForm,
@@ -23,18 +31,33 @@ import { formatDateTime } from '../../lib/utils'
 import type { MedicalRecord, MedicalRecordFile, Patient } from '../../types/database'
 import type { HidStaffDashboardRequest } from '../../types/hid'
 
-const ACCESS_GRANT_FALLBACK_POLL_MS = 15000
+const ACCESS_GRANT_FALLBACK_POLL_MS = 60000
 
 export default function DoctorPatientRecords() {
   const navigate = useNavigate()
   const { hidCode = '' } = useParams()
   const session = useMemo(() => getStaffSession(), [])
   const normalizedHidCode = hidCode.trim().toUpperCase()
-  const [patient, setPatient] = useState<Patient | null>(null)
-  const [records, setRecords] = useState<MedicalRecord[]>([])
-  const [recordFiles, setRecordFiles] = useState<Record<string, MedicalRecordFile[]>>({})
-  const [activeRequest, setActiveRequest] = useState<HidStaffDashboardRequest | null>(null)
-  const [loading, setLoading] = useState(true)
+  const cachedRecordsView = useMemo(() => (
+    session ? readDoctorPatientRecordsSnapshot(session.id, normalizedHidCode) : null
+  ), [normalizedHidCode, session])
+  const cachedDashboard = useMemo(() => (
+    session ? readDoctorDashboardSnapshot(session.id) : null
+  ), [session])
+  const initialActiveRequest = useMemo(() => (
+    cachedDashboard?.requests.find(item =>
+      item.hid_code === normalizedHidCode &&
+      item.grant_status === 'active' &&
+      !!item.expires_at &&
+      new Date(item.expires_at).getTime() > Date.now()
+    ) ?? null
+  ), [cachedDashboard, normalizedHidCode])
+  const canHydrateFromCache = Boolean(cachedRecordsView && initialActiveRequest?.grant_id)
+  const [patient, setPatient] = useState<Patient | null>(() => canHydrateFromCache ? (cachedRecordsView?.patient ?? null) : null)
+  const [records, setRecords] = useState<MedicalRecord[]>(() => canHydrateFromCache ? (cachedRecordsView?.records ?? []) : [])
+  const [recordFiles, setRecordFiles] = useState<Record<string, MedicalRecordFile[]>>(() => canHydrateFromCache ? (cachedRecordsView?.recordFiles ?? {}) : {})
+  const [activeRequest, setActiveRequest] = useState<HidStaffDashboardRequest | null>(initialActiveRequest)
+  const [loading, setLoading] = useState(!canHydrateFromCache)
   const [search, setSearch] = useState('')
   const [open, setOpen] = useState(false)
   const [saving, setSaving] = useState(false)
@@ -56,8 +79,8 @@ export default function DoctorPatientRecords() {
       navigate(HOSPITAL_ACCESS_PATH)
       return
     }
-    void loadPageData()
-  }, [navigate, normalizedHidCode, session])
+    void loadPageData(canHydrateFromCache)
+  }, [canHydrateFromCache, navigate, normalizedHidCode, session])
 
   useEffect(() => {
     if (!activeRequest?.grant_id || !normalizedHidCode || !session) return
@@ -70,6 +93,7 @@ export default function DoctorPatientRecords() {
       checking = true
       try {
         const dashboard = await fetchStaffDashboard({ forceRefresh: true })
+        seedDoctorDashboardCache(session.id, dashboard)
         const grant = dashboard.requests.find(item =>
           item.grant_id === activeRequest.grant_id &&
           item.hid_code === normalizedHidCode &&
@@ -92,6 +116,11 @@ export default function DoctorPatientRecords() {
       }
     }
 
+    const unsubscribe = subscribeToAccessChanges(() => {
+      if (document.visibilityState === 'visible') {
+        void verifyGrant()
+      }
+    })
     const interval = window.setInterval(() => {
       if (document.visibilityState === 'visible') {
         void verifyGrant()
@@ -107,6 +136,7 @@ export default function DoctorPatientRecords() {
     document.addEventListener('visibilitychange', handleVisibility)
     return () => {
       active = false
+      unsubscribe()
       window.clearInterval(interval)
       document.removeEventListener('visibilitychange', handleVisibility)
     }
@@ -120,6 +150,8 @@ export default function DoctorPatientRecords() {
         fetchStaffDashboard(),
         fetchPatientRecordsView(normalizedHidCode),
       ])
+      seedDoctorDashboardCache(session.id, dashboard)
+      seedDoctorPatientRecordsCache(session.id, normalizedHidCode, recordsView)
 
       const grant = dashboard.requests.find(item =>
         item.hid_code === normalizedHidCode &&
@@ -187,7 +219,7 @@ export default function DoctorPatientRecords() {
   }
 
   async function saveRecord() {
-    if (!patient || saving || saveLockRef.current) return
+    if (!session || !patient || saving || saveLockRef.current) return
     if (preparingUploads) {
       showToast('Attached files are still being prepared. Please wait a moment, then save again.', 'error')
       return
@@ -203,6 +235,26 @@ export default function DoctorPatientRecords() {
 
     saveLockRef.current = true
     setSaving(true)
+    const formSnapshot = recordForm
+    const optimisticEntry = buildOptimisticMedicalRecord({
+      category: inferRecordCategory(recordForm),
+      createdBy: session.fullName,
+      createdByRole: session.role,
+      hidCode: patient.hid_code,
+      notes: recordForm.roleNote.trim() || null,
+      record: buildStructuredRecordBody(recordForm),
+      title: recordForm.title.trim(),
+      transcriptionText: recordForm.transcriptionText.trim() || null,
+      uploads: recordForm.uploads,
+    })
+
+    setRecords(current => [optimisticEntry.record, ...current])
+    setRecordFiles(current => ({
+      ...current,
+      [optimisticEntry.record.id]: optimisticEntry.attachments,
+    }))
+    setOpen(false)
+    setRecordForm(createEmptyRecordForm())
     try {
       await createMedicalRecordWithUploads({
         patientIdentifier: patient.hid_code,
@@ -213,10 +265,16 @@ export default function DoctorPatientRecords() {
         uploads: recordForm.uploads,
       })
       await loadPageData(true)
-      setOpen(false)
-      setRecordForm(createEmptyRecordForm())
       showToast('Medical record saved.', 'success')
     } catch (error) {
+      setRecords(current => current.filter(item => item.id !== optimisticEntry.record.id))
+      setRecordFiles(current => {
+        const next = { ...current }
+        delete next[optimisticEntry.record.id]
+        return next
+      })
+      setOpen(true)
+      setRecordForm(formSnapshot)
       const message = error instanceof Error ? error.message : 'Unable to save the medical record.'
       showToast(message, 'error')
     } finally {

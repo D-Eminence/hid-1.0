@@ -2,6 +2,10 @@ import { defineConfig } from 'vite'
 import legacy from '@vitejs/plugin-legacy'
 import react from '@vitejs/plugin-react'
 
+function isPackageModule(id: string, packageName: string) {
+  return id.includes(`/node_modules/${packageName}/`)
+}
+
 export default defineConfig({
   envPrefix: ['VITE_', 'HID'],
   plugins: [
@@ -27,17 +31,28 @@ export default defineConfig({
       output: {
         manualChunks(id) {
           if (!id.includes('node_modules')) return undefined
-          if (id.includes('react-router-dom') || id.includes('/react/') || id.includes('/react-dom/')) {
-            return 'vendor-react'
-          }
-          if (id.includes('@supabase/supabase-js')) {
-            return 'vendor-supabase'
-          }
-          if (id.includes('@sentry/')) {
+          if (id.includes('/node_modules/@sentry/')) {
             return 'vendor-sentry'
           }
-          if (id.includes('posthog-js')) {
+          if (isPackageModule(id, 'posthog-js')) {
             return 'vendor-posthog'
+          }
+          if (id.includes('/node_modules/@supabase/')) {
+            return 'vendor-supabase'
+          }
+          if (
+            isPackageModule(id, 'react-router-dom') ||
+            isPackageModule(id, 'react-router') ||
+            id.includes('/node_modules/@remix-run/router/')
+          ) {
+            return 'vendor-router'
+          }
+          if (
+            isPackageModule(id, 'react') ||
+            isPackageModule(id, 'react-dom') ||
+            isPackageModule(id, 'scheduler')
+          ) {
+            return 'vendor-react-core'
           }
           return undefined
         },

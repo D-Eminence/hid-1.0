@@ -3,6 +3,8 @@ import { useNavigate } from 'react-router-dom'
 import { PortalShell } from '../../components/PortalShell'
 import { Badge, Button, Card, PageLoader, showToast } from '../../components/ui'
 import { getPatientSession, signOutAndClearSessions } from '../../lib/auth'
+import { subscribeToAccessChanges } from '../../lib/accessRealtime'
+import { readPatientHistorySnapshot, readPatientProfileSnapshot, seedPatientHistoryCache, seedPatientProfileCache } from '../../lib/experienceWarmup'
 import {
   fetchMyPatient,
   fetchPatientHistory,
@@ -42,10 +44,16 @@ function getAccessLabel(request: AccessRequest) {
 export default function PatientHistory() {
   const navigate = useNavigate()
   const session = useMemo(() => getPatientSession(), [])
-  const [logs, setLogs] = useState<AccessLog[]>([])
-  const [patient, setPatient] = useState<Patient | null>(null)
-  const [activeGrants, setActiveGrants] = useState<AccessRequest[]>([])
-  const [loading, setLoading] = useState(true)
+  const cachedHistory = useMemo(() => (
+    session ? readPatientHistorySnapshot(session.hidCode) : null
+  ), [session])
+  const cachedPatient = useMemo(() => (
+    session ? readPatientProfileSnapshot(session.hidCode) : null
+  ), [session])
+  const [logs, setLogs] = useState<AccessLog[]>(() => cachedHistory?.logs ?? [])
+  const [patient, setPatient] = useState<Patient | null>(() => cachedPatient)
+  const [activeGrants, setActiveGrants] = useState<AccessRequest[]>(() => cachedHistory?.activeGrants ?? [])
+  const [loading, setLoading] = useState(!cachedHistory && !cachedPatient)
   const [actingId, setActingId] = useState('')
 
   useEffect(() => {
@@ -53,8 +61,20 @@ export default function PatientHistory() {
       navigate('/patient')
       return
     }
-    void loadHistoryData()
-  }, [navigate, session])
+    void loadHistoryData(Boolean(cachedHistory || cachedPatient))
+  }, [cachedHistory, cachedPatient, navigate, session])
+
+  useEffect(() => {
+    if (!session) return
+
+    const unsubscribe = subscribeToAccessChanges(() => {
+      if (document.visibilityState === 'visible') {
+        void loadHistoryData(true)
+      }
+    })
+
+    return unsubscribe
+  }, [session])
 
   async function loadHistoryData(silent = false) {
     if (!session) return
@@ -64,6 +84,8 @@ export default function PatientHistory() {
         fetchMyPatient(),
         fetchPatientHistory(session.hidCode),
       ])
+      seedPatientProfileCache(nextPatient)
+      seedPatientHistoryCache(session.hidCode, history)
       setPatient(nextPatient)
       setActiveGrants(history.activeGrants)
       setLogs(history.logs)
@@ -82,12 +104,14 @@ export default function PatientHistory() {
 
   async function revokeGrant(grant: AccessRequest) {
     setActingId(grant.id)
+    const previousGrants = activeGrants
+    setActiveGrants(current => current.filter(item => item.id !== grant.id))
     try {
       await revokeAccessGrant(grant.id)
-      setActiveGrants(current => current.filter(item => item.id !== grant.id))
       showToast('Access revoked.', 'success')
       void loadHistoryData(true)
     } catch (error) {
+      setActiveGrants(previousGrants)
       const message = error instanceof Error ? error.message : 'Unable to revoke access.'
       showToast(message, 'error')
     } finally {

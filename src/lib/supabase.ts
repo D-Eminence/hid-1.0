@@ -1,26 +1,14 @@
 import { createClient } from '@supabase/supabase-js'
 import type { Session, User } from '@supabase/supabase-js'
 import type { Database } from '../types/database'
-
-const supabaseUrl = import.meta.env.VITE_SUPABASE_URL as string | undefined
-const supabaseKey = import.meta.env.VITE_SUPABASE_ANON_KEY as string | undefined
-export const NETWORK_TIMEOUT_MS = 15000
-export const NETWORK_TIMEOUT_MESSAGE = 'The request took too long. Check your internet connection and try again.'
-
-export const isConfigured = !!(supabaseUrl && supabaseKey)
+import {
+  isConfigured,
+  NETWORK_TIMEOUT_MESSAGE,
+  NETWORK_TIMEOUT_MS,
+  supabaseKey,
+  supabaseUrl,
+} from './supabaseConfig'
 const AUTH_LOCK_RETRY_MS = 80
-
-function getSupabaseStorageKey() {
-  if (!supabaseUrl) return null
-
-  try {
-    const projectRef = new URL(supabaseUrl).hostname.split('.')[0]?.trim()
-    if (!projectRef) return null
-    return `sb-${projectRef}-auth-token`
-  } catch {
-    return null
-  }
-}
 
 function isRequest(input: RequestInfo | URL): input is Request {
   return typeof Request !== 'undefined' && input instanceof Request
@@ -139,16 +127,9 @@ export async function getSafeUser() {
 export async function safeSignOut() {
   await runAuthOperationWithRetry(() => supabase.auth.signOut())
 }
-
-export function hasStoredSupabaseAuthSession() {
-  if (typeof window === 'undefined') return false
-
-  const storageKey = getSupabaseStorageKey()
-  if (!storageKey) return false
-
-  const storedValue = window.localStorage.getItem(storageKey)
-  if (!storedValue) return false
-
-  const trimmedValue = storedValue.trim()
-  return trimmedValue !== '' && trimmedValue !== 'null'
-}
+export {
+  hasStoredSupabaseAuthSession,
+  isConfigured,
+  NETWORK_TIMEOUT_MESSAGE,
+  NETWORK_TIMEOUT_MS,
+} from './supabaseConfig'

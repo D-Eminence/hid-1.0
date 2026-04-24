@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import { PortalShell } from '../../components/PortalShell'
 import { Button, Card, PageLoader, showToast } from '../../components/ui'
 import { getPatientSession, signOutAndClearSessions } from '../../lib/auth'
+import { readPatientNotificationsSnapshot, readPatientProfileSnapshot, seedPatientNotificationsCache, seedPatientProfileCache } from '../../lib/experienceWarmup'
 import { fetchMyPatient, listNotifications, markNotificationRead } from '../../lib/hidApi'
 import { subscribeToNotifications } from '../../lib/notificationsRealtime'
 import { formatDateTime } from '../../lib/utils'
@@ -18,17 +19,23 @@ const patientNav = [
 export default function PatientNotifications() {
   const navigate = useNavigate()
   const session = useMemo(() => getPatientSession(), [])
-  const [notifications, setNotifications] = useState<Notification[]>([])
-  const [patient, setPatient] = useState<Patient | null>(null)
-  const [loading, setLoading] = useState(true)
+  const cachedNotifications = useMemo(() => (
+    session ? readPatientNotificationsSnapshot(session.hidCode) : null
+  ), [session])
+  const cachedPatient = useMemo(() => (
+    session ? readPatientProfileSnapshot(session.hidCode) : null
+  ), [session])
+  const [notifications, setNotifications] = useState<Notification[]>(() => cachedNotifications?.notifications ?? [])
+  const [patient, setPatient] = useState<Patient | null>(() => cachedNotifications?.patient ?? cachedPatient)
+  const [loading, setLoading] = useState(!cachedNotifications && !cachedPatient)
 
   useEffect(() => {
     if (!session) {
       navigate('/patient')
       return
     }
-    void loadNotificationsPage()
-  }, [navigate, session])
+    void loadNotificationsPage(Boolean(cachedNotifications || cachedPatient))
+  }, [cachedNotifications, cachedPatient, navigate, session])
 
   useEffect(() => {
     if (!session) return
@@ -56,6 +63,11 @@ export default function PatientNotifications() {
         fetchMyPatient(),
         listNotifications(session.hidCode),
       ])
+      seedPatientProfileCache(nextPatient)
+      seedPatientNotificationsCache(session.hidCode, {
+        patient: nextPatient,
+        notifications: nextNotifications,
+      })
       setPatient(nextPatient)
       setNotifications(nextNotifications)
     } catch (error) {
@@ -72,10 +84,12 @@ export default function PatientNotifications() {
   }
 
   async function markRead(id: string) {
+    const previousNotifications = notifications
+    setNotifications(items => items.map(item => item.id === id ? { ...item, is_read: true } : item))
     try {
       await markNotificationRead(id)
-      setNotifications(items => items.map(item => item.id === id ? { ...item, is_read: true } : item))
     } catch (error) {
+      setNotifications(previousNotifications)
       const message = error instanceof Error ? error.message : 'Unable to update this notification.'
       showToast(message, 'error')
     }

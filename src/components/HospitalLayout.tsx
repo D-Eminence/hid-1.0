@@ -2,12 +2,15 @@ import React, { useEffect, useState } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
 import { HIDLogo } from './HIDLogo'
 import { StaffNotificationWatcher } from './StaffNotificationWatcher'
+import { getStaffSession } from '../lib/auth'
+import { prefetchHospitalRouteData } from '../lib/experienceWarmup'
 import {
   HOSPITAL_ACCESS_PATH,
   HOSPITAL_DASHBOARD_PATH,
   HOSPITAL_EMERGENCY_PATH,
   HOSPITAL_HISTORY_PATH,
 } from '../lib/hospitalRoutes'
+import { preloadPath } from '../lib/routePreload'
 
 type HospitalSection = 'dashboard' | 'access' | 'history' | 'emergency'
 
@@ -82,6 +85,14 @@ export function HospitalLayout({
   const navigate = useNavigate()
   const { pathname } = useLocation()
   const [isCompact, setIsCompact] = useState(() => (typeof window !== 'undefined' ? window.innerWidth < 820 : false))
+  const session = React.useMemo(() => getStaffSession(), [])
+
+  function warmPath(path: string) {
+    preloadPath(path)
+    if (session) {
+      prefetchHospitalRouteData(path, session)
+    }
+  }
 
   useEffect(() => {
     const handleResize = () => setIsCompact(window.innerWidth < 820)
@@ -89,6 +100,15 @@ export function HospitalLayout({
     window.addEventListener('resize', handleResize)
     return () => window.removeEventListener('resize', handleResize)
   }, [])
+
+  useEffect(() => {
+    const paths = hospitalNav.map(item => item.path)
+    const timer = window.setTimeout(() => {
+      paths.forEach(path => warmPath(path))
+    }, 20)
+
+    return () => window.clearTimeout(timer)
+  }, [session])
 
   return (
     <div style={{ display: 'flex', flexDirection: isCompact ? 'column' : 'row', minHeight: '100vh' }}>
@@ -108,7 +128,11 @@ export function HospitalLayout({
           zIndex: 50,
         }}
       >
-        <div style={{ padding: isCompact ? '4px 8px 14px' : '4px 8px 24px', cursor: 'pointer' }} onClick={() => navigate(HOSPITAL_DASHBOARD_PATH)}>
+        <div
+          style={{ padding: isCompact ? '4px 8px 14px' : '4px 8px 24px', cursor: 'pointer' }}
+          onMouseEnter={() => warmPath(HOSPITAL_DASHBOARD_PATH)}
+          onClick={() => navigate(HOSPITAL_DASHBOARD_PATH)}
+        >
           <HIDLogo size="sm" />
         </div>
 
@@ -128,6 +152,8 @@ export function HospitalLayout({
               <button
                 key={item.path}
                 onClick={() => navigate(item.path)}
+                onMouseEnter={() => warmPath(item.path)}
+                onFocus={() => warmPath(item.path)}
                 style={{
                   display: 'flex',
                   alignItems: 'center',

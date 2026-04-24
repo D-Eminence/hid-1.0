@@ -5,8 +5,16 @@ import { Badge, Button, Card, EmptyState, Input, Modal, PageLoader, Textarea, sh
 import { FileAttachmentPreview, MedicalRecordMarkdownView } from '../../components/RecordMarkdownView'
 import { VoiceToTextButton } from '../../components/VoiceToTextButton'
 import { getStaffSession, signOutAndClearSessions } from '../../lib/auth'
+import { subscribeToAccessChanges } from '../../lib/accessRealtime'
+import {
+  prefetchDoctorPatientRecordsCache,
+  readDoctorPatientRecordsSnapshot,
+  seedDoctorDashboardCache,
+  seedDoctorPatientRecordsCache,
+} from '../../lib/experienceWarmup'
 import { HOSPITAL_AUTH_PATH } from '../../lib/hospitalRoutes'
 import {
+  buildOptimisticMedicalRecord,
   buildStructuredRecordBody,
   createEmptyRecordForm,
   getInvalidRecordUploadNames,
@@ -28,7 +36,7 @@ interface SessionRecordEntry {
   attachments: MedicalRecordFile[]
 }
 
-const ACCESS_GRANT_FALLBACK_POLL_MS = 15000
+const ACCESS_GRANT_FALLBACK_POLL_MS = 60000
 
 export default function DoctorEmergency() {
   const navigate = useNavigate()
@@ -75,7 +83,7 @@ export default function DoctorEmergency() {
 
   async function handleEmergencyAccess(event: React.FormEvent) {
     event.preventDefault()
-    if (!validate()) return
+    if (!session || !validate()) return
 
     const normalizedHidCode = hidCode.trim().toUpperCase()
     setLoading(true)
@@ -85,7 +93,18 @@ export default function DoctorEmergency() {
     try {
       const response = await breakGlassAccess(normalizedHidCode, reason.trim(), 30)
       setActiveGrantId(response.grant_id)
+      const cachedView = readDoctorPatientRecordsSnapshot(session.id, normalizedHidCode)
+      if (cachedView) {
+        setData({
+          patient: cachedView.patient,
+        })
+      }
       const view = await fetchPatientRecordsView(normalizedHidCode)
+      seedDoctorPatientRecordsCache(session.id, normalizedHidCode, view)
+      void prefetchDoctorPatientRecordsCache({
+        sessionId: session.id,
+        hidCode: normalizedHidCode,
+      })
       setData({
         patient: view.patient,
       })
@@ -101,6 +120,7 @@ export default function DoctorEmergency() {
   useEffect(() => {
     if (!activeGrantId || !data?.patient.hid_code || !session) return
 
+    const currentSession = session
     let active = true
     let checking = false
 
@@ -109,6 +129,7 @@ export default function DoctorEmergency() {
       checking = true
       try {
         const dashboard = await fetchStaffDashboard({ forceRefresh: true })
+        seedDoctorDashboardCache(currentSession.id, dashboard)
         const stillActive = dashboard.requests.some(item =>
           item.grant_id === activeGrantId &&
           item.hid_code === data.patient.hid_code &&
@@ -130,6 +151,11 @@ export default function DoctorEmergency() {
       }
     }
 
+    const unsubscribe = subscribeToAccessChanges(() => {
+      if (document.visibilityState === 'visible') {
+        void verifyGrant()
+      }
+    })
     const interval = window.setInterval(() => {
       if (document.visibilityState === 'visible') {
         void verifyGrant()
@@ -145,6 +171,7 @@ export default function DoctorEmergency() {
     document.addEventListener('visibilitychange', handleVisibility)
     return () => {
       active = false
+      unsubscribe()
       window.clearInterval(interval)
       document.removeEventListener('visibilitychange', handleVisibility)
     }
@@ -152,7 +179,7 @@ export default function DoctorEmergency() {
 
   async function handleAddRecord(event: React.FormEvent) {
     event.preventDefault()
-    if (!data || savingRecord || saveLockRef.current) return
+    if (!session || !data || savingRecord || saveLockRef.current) return
     if (preparingUploads) {
       showToast('Attached files are still being prepared. Please wait a moment, then save again.', 'error')
       return
@@ -168,6 +195,28 @@ export default function DoctorEmergency() {
 
     saveLockRef.current = true
     setSavingRecord(true)
+    const formSnapshot = recordForm
+    const optimisticEntry = buildOptimisticMedicalRecord({
+      category: inferRecordCategory(recordForm),
+      createdBy: session.fullName,
+      createdByRole: session.role,
+      hidCode: data.patient.hid_code,
+      notes: recordForm.roleNote.trim() || `Emergency session note: ${reason.trim()}`,
+      record: buildStructuredRecordBody(recordForm),
+      title: recordForm.title.trim(),
+      transcriptionText: recordForm.transcriptionText.trim() || null,
+      uploads: recordForm.uploads,
+    })
+
+    setSessionRecords(current => [
+      {
+        attachments: optimisticEntry.attachments,
+        record: optimisticEntry.record,
+      },
+      ...current.filter(entry => entry.record.id !== optimisticEntry.record.id),
+    ])
+    setRecordForm(createEmptyRecordForm())
+    setShowAddRecord(false)
     try {
       const created = await createMedicalRecordWithUploads({
         patientIdentifier: data.patient.hid_code,
@@ -179,6 +228,7 @@ export default function DoctorEmergency() {
       })
 
       const view = await fetchPatientRecordsView(data.patient.hid_code)
+      seedDoctorPatientRecordsCache(session.id, data.patient.hid_code, view)
       const createdRecord = view.records.find(record => record.id === created.record_id)
       if (!createdRecord) {
         throw new Error('The emergency note was saved, but it could not be loaded back into this session.')
@@ -191,10 +241,11 @@ export default function DoctorEmergency() {
         ]
         return next
       })
-      setRecordForm(createEmptyRecordForm())
-      setShowAddRecord(false)
       showToast('Emergency session record saved.', 'success')
     } catch (error) {
+      setSessionRecords(current => current.filter(entry => entry.record.id !== optimisticEntry.record.id))
+      setRecordForm(formSnapshot)
+      setShowAddRecord(true)
       const message = error instanceof Error ? error.message : 'Unable to save the emergency session record.'
       showToast(message, 'error')
     } finally {

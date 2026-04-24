@@ -118,6 +118,40 @@ export function buildOptimisticRecordFiles(record: MedicalRecord, uploads: Uploa
   }))
 }
 
+export function buildOptimisticMedicalRecord(params: {
+  category: RecordCategory
+  createdBy: string
+  createdByRole: string
+  hidCode: string
+  notes?: string | null
+  record: string
+  title: string
+  transcriptionText?: string | null
+  uploads?: UploadDraft[]
+}) {
+  const createdAt = new Date().toISOString()
+  const optimisticRecord = {
+    id: `optimistic-${Math.random().toString(36).slice(2, 10)}-${Date.now()}`,
+    hid_code: params.hidCode,
+    title: params.title,
+    category: params.category,
+    record: params.record,
+    notes: params.notes ?? null,
+    attachment_name: params.uploads?.[0]?.file_name ?? null,
+    attachment_type: params.uploads?.[0]?.file_type ?? null,
+    attachment_data_url: params.uploads?.[0]?.file_data_url ?? null,
+    transcription_text: params.transcriptionText ?? null,
+    created_by: params.createdBy,
+    added_by_role: params.createdByRole,
+    created_at: createdAt,
+  } satisfies MedicalRecord
+
+  return {
+    attachments: buildOptimisticRecordFiles(optimisticRecord, params.uploads ?? []),
+    record: optimisticRecord,
+  }
+}
+
 export function filterSessionRecords(records: MedicalRecord[], sessionStartedAt: string | null | undefined): MedicalRecord[] {
   if (!sessionStartedAt) return []
   return records.filter(record => record.created_at >= sessionStartedAt)

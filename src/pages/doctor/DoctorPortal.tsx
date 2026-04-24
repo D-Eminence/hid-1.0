@@ -5,8 +5,16 @@ import { Badge, Button, Card, EmptyState, Input, Modal, PageLoader, Textarea, sh
 import { FileAttachmentPreview, MedicalRecordMarkdownView } from '../../components/RecordMarkdownView'
 import { VoiceToTextButton } from '../../components/VoiceToTextButton'
 import { getStaffSession, signOutAndClearSessions } from '../../lib/auth'
+import { subscribeToAccessChanges } from '../../lib/accessRealtime'
+import {
+  prefetchDoctorPatientRecordsCache,
+  readDoctorPatientRecordsSnapshot,
+  seedDoctorDashboardCache,
+  seedDoctorPatientRecordsCache,
+} from '../../lib/experienceWarmup'
 import { HOSPITAL_AUTH_PATH, HOSPITAL_EMERGENCY_PATH, getHospitalPatientRecordsPath } from '../../lib/hospitalRoutes'
 import {
+  buildOptimisticMedicalRecord,
   buildStructuredRecordBody,
   createEmptyRecordForm,
   getInvalidRecordUploadNames,
@@ -25,7 +33,7 @@ interface AccessedData {
   recordFiles: Record<string, MedicalRecordFile[]>
 }
 
-const ACCESS_GRANT_FALLBACK_POLL_MS = 15000
+const ACCESS_GRANT_FALLBACK_POLL_MS = 60000
 
 export default function DoctorPortal() {
   const navigate = useNavigate()
@@ -70,7 +78,9 @@ export default function DoctorPortal() {
   }
 
   async function loadPatientView(normalizedHidCode: string) {
+    if (!session) throw new Error('Please sign in to continue.')
     const view = await fetchPatientRecordsView(normalizedHidCode)
+    seedDoctorPatientRecordsCache(session.id, normalizedHidCode, view)
     setData({
       patient: view.patient,
       records: view.records,
@@ -81,7 +91,7 @@ export default function DoctorPortal() {
 
   async function handleAccess(event: React.FormEvent) {
     event.preventDefault()
-    if (!validate()) return
+    if (!session || !validate()) return
 
     const normalizedHidCode = hidCode.trim().toUpperCase()
     setLoading(true)
@@ -90,7 +100,19 @@ export default function DoctorPortal() {
     try {
       const response = await accessPatientWithPin(normalizedHidCode, pin.trim(), 60)
       setActiveGrantId(response.grant_id)
+      const cachedView = readDoctorPatientRecordsSnapshot(session.id, normalizedHidCode)
+      if (cachedView) {
+        setData({
+          patient: cachedView.patient,
+          records: cachedView.records,
+          recordFiles: cachedView.recordFiles,
+        })
+      }
       const view = await loadPatientView(normalizedHidCode)
+      void prefetchDoctorPatientRecordsCache({
+        sessionId: session.id,
+        hidCode: normalizedHidCode,
+      })
       showToast(`Access granted. Patient: ${view.patient.full_name}`, 'success')
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Unable to access this patient right now.'
@@ -103,6 +125,7 @@ export default function DoctorPortal() {
   useEffect(() => {
     if (!activeGrantId || !data?.patient.hid_code || !session) return
 
+    const currentSession = session
     let active = true
     let checking = false
 
@@ -111,6 +134,7 @@ export default function DoctorPortal() {
       checking = true
       try {
         const dashboard = await fetchStaffDashboard({ forceRefresh: true })
+        seedDoctorDashboardCache(currentSession.id, dashboard)
         const stillActive = dashboard.requests.some(item =>
           item.grant_id === activeGrantId &&
           item.hid_code === data.patient.hid_code &&
@@ -132,6 +156,11 @@ export default function DoctorPortal() {
       }
     }
 
+    const unsubscribe = subscribeToAccessChanges(() => {
+      if (document.visibilityState === 'visible') {
+        void verifyGrant()
+      }
+    })
     const interval = window.setInterval(() => {
       if (document.visibilityState === 'visible') {
         void verifyGrant()
@@ -147,6 +176,7 @@ export default function DoctorPortal() {
     document.addEventListener('visibilitychange', handleVisibility)
     return () => {
       active = false
+      unsubscribe()
       window.clearInterval(interval)
       document.removeEventListener('visibilitychange', handleVisibility)
     }
@@ -154,7 +184,7 @@ export default function DoctorPortal() {
 
   async function handleAddRecord(event: React.FormEvent) {
     event.preventDefault()
-    if (!data || addingRecord || saveLockRef.current) return
+    if (!session || !data || addingRecord || saveLockRef.current) return
     if (preparingUploads) {
       showToast('Attached files are still being prepared. Please wait a moment, then save again.', 'error')
       return
@@ -170,6 +200,29 @@ export default function DoctorPortal() {
 
     saveLockRef.current = true
     setAddingRecord(true)
+    const formSnapshot = recordForm
+    const optimisticEntry = buildOptimisticMedicalRecord({
+      category: inferRecordCategory(recordForm),
+      createdBy: session.fullName,
+      createdByRole: session.role,
+      hidCode: data.patient.hid_code,
+      notes: recordForm.roleNote.trim() || null,
+      record: buildStructuredRecordBody(recordForm),
+      title: recordForm.title.trim(),
+      transcriptionText: recordForm.transcriptionText.trim() || null,
+      uploads: recordForm.uploads,
+    })
+
+    setData(current => current ? {
+      ...current,
+      recordFiles: {
+        ...current.recordFiles,
+        [optimisticEntry.record.id]: optimisticEntry.attachments,
+      },
+      records: [optimisticEntry.record, ...current.records],
+    } : current)
+    setRecordForm(createEmptyRecordForm())
+    setShowAddRecord(false)
     try {
       await createMedicalRecordWithUploads({
         patientIdentifier: data.patient.hid_code,
@@ -180,10 +233,15 @@ export default function DoctorPortal() {
         uploads: recordForm.uploads,
       })
       await loadPatientView(data.patient.hid_code)
-      setRecordForm(createEmptyRecordForm())
-      setShowAddRecord(false)
       showToast('Medical record added successfully', 'success')
     } catch (error) {
+      setData(current => current ? {
+        ...current,
+        recordFiles: Object.fromEntries(Object.entries(current.recordFiles).filter(([key]) => key !== optimisticEntry.record.id)),
+        records: current.records.filter(item => item.id !== optimisticEntry.record.id),
+      } : current)
+      setRecordForm(formSnapshot)
+      setShowAddRecord(true)
       const message = error instanceof Error ? error.message : 'Unable to save the medical record.'
       showToast(message, 'error')
     } finally {

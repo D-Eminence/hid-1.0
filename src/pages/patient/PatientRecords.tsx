@@ -5,7 +5,9 @@ import { Badge, Button, Card, EmptyState, Input, Modal, PageLoader, Textarea, sh
 import { FileAttachmentPreview, MedicalRecordMarkdownView } from '../../components/RecordMarkdownView'
 import { VoiceToTextButton } from '../../components/VoiceToTextButton'
 import { getPatientSession, signOutAndClearSessions } from '../../lib/auth'
+import { readPatientRecordsSnapshot, seedPatientProfileCache, seedPatientRecordsCache } from '../../lib/experienceWarmup'
 import {
+  buildOptimisticMedicalRecord,
   buildStructuredRecordBody,
   countAllRecordAttachments,
   createEmptyRecordForm,
@@ -31,10 +33,13 @@ const patientNav = [
 export default function PatientRecords() {
   const navigate = useNavigate()
   const session = useMemo(() => getPatientSession(), [])
-  const [records, setRecords] = useState<MedicalRecord[]>([])
-  const [recordFiles, setRecordFiles] = useState<Record<string, MedicalRecordFile[]>>({})
-  const [patient, setPatient] = useState<Patient | null>(null)
-  const [loading, setLoading] = useState(true)
+  const cachedView = useMemo(() => (
+    session ? readPatientRecordsSnapshot(session.hidCode) : null
+  ), [session])
+  const [records, setRecords] = useState<MedicalRecord[]>(() => cachedView?.records ?? [])
+  const [recordFiles, setRecordFiles] = useState<Record<string, MedicalRecordFile[]>>(() => cachedView?.recordFiles ?? {})
+  const [patient, setPatient] = useState<Patient | null>(() => cachedView?.patient ?? null)
+  const [loading, setLoading] = useState(!cachedView)
   const [open, setOpen] = useState(false)
   const [saving, setSaving] = useState(false)
   const [preparingUploads, setPreparingUploads] = useState(false)
@@ -47,14 +52,16 @@ export default function PatientRecords() {
       navigate('/patient')
       return
     }
-    void loadPageData()
-  }, [navigate, session])
+    void loadPageData(Boolean(cachedView))
+  }, [cachedView, navigate, session])
 
   async function loadPageData(silent = false) {
     if (!session) return
     if (!silent) setLoading(true)
     try {
       const nextPage = await fetchPatientRecordsView(session.hidCode)
+      seedPatientProfileCache(nextPage.patient)
+      seedPatientRecordsCache(session.hidCode, nextPage)
       setPatient(nextPage.patient)
       setRecords(nextPage.records)
       setRecordFiles(nextPage.recordFiles)
@@ -122,6 +129,26 @@ export default function PatientRecords() {
 
     saveLockRef.current = true
     setSaving(true)
+    const formSnapshot = recordForm
+    const optimisticEntry = buildOptimisticMedicalRecord({
+      category: inferRecordCategory(recordForm),
+      createdBy: session.fullName,
+      createdByRole: 'patient',
+      hidCode: session.hidCode,
+      notes: recordForm.roleNote.trim() || null,
+      record: buildStructuredRecordBody(recordForm),
+      title: recordForm.title.trim(),
+      transcriptionText: recordForm.transcriptionText.trim() || null,
+      uploads: recordForm.uploads,
+    })
+
+    setRecords(current => [optimisticEntry.record, ...current])
+    setRecordFiles(current => ({
+      ...current,
+      [optimisticEntry.record.id]: optimisticEntry.attachments,
+    }))
+    setOpen(false)
+    setRecordForm(createEmptyRecordForm())
     try {
       await createMedicalRecordWithUploads({
         patientIdentifier: session.hidCode,
@@ -132,10 +159,16 @@ export default function PatientRecords() {
         uploads: recordForm.uploads,
       })
       await loadPageData(true)
-      setOpen(false)
-      setRecordForm(createEmptyRecordForm())
       showToast('Medical record saved.', 'success')
     } catch (error) {
+      setRecords(current => current.filter(item => item.id !== optimisticEntry.record.id))
+      setRecordFiles(current => {
+        const next = { ...current }
+        delete next[optimisticEntry.record.id]
+        return next
+      })
+      setOpen(true)
+      setRecordForm(formSnapshot)
       const message = error instanceof Error ? error.message : 'Unable to save the medical record.'
       showToast(message, 'error')
     } finally {

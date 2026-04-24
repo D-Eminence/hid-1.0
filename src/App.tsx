@@ -3,8 +3,7 @@ import { BrowserRouter, Navigate, Route, Routes, useLocation, useParams } from '
 import { AppInstallPrompt } from './components/AppInstallPrompt'
 import { HIDLogo } from './components/HIDLogo'
 import { RouteObservability } from './components/RouteObservability'
-import { SessionBootstrap } from './components/SessionBootstrap'
-import { ToastProvider } from './components/ui'
+import { ToastProvider } from './components/toast'
 import { captureException } from './lib/observabilityBridge'
 import {
   AdminDashboardPage,
@@ -29,7 +28,7 @@ import {
   ADMIN_OVERVIEW_PATH,
   ADMIN_ROOT_PATH,
 } from './lib/adminRoutes'
-import { isConfigured } from './lib/supabase'
+import { hasStoredSupabaseAuthSession, isConfigured } from './lib/supabaseConfig'
 import {
   HOSPITAL_ACCESS_PATH,
   HOSPITAL_AUTH_PATH,
@@ -134,12 +133,92 @@ function RouteWarmup() {
   return null
 }
 
+type SessionBootstrapComponent = typeof import('./components/SessionBootstrap')['SessionBootstrap']
+
+function hasStoredPortalSession() {
+  if (typeof window === 'undefined') return false
+  return Boolean(
+    window.localStorage.getItem('hid_patient_session') ||
+    window.localStorage.getItem('hid_staff_session')
+  )
+}
+
+function requiresImmediateSessionBootstrap(pathname: string) {
+  return (
+    pathname.startsWith('/patient/profile') ||
+    pathname.startsWith('/patient/records') ||
+    pathname.startsWith('/patient/history') ||
+    pathname.startsWith('/patient/notifications') ||
+    pathname.startsWith('/hospital/dashboard') ||
+    pathname.startsWith('/hospital/access') ||
+    pathname.startsWith('/hospital/history') ||
+    pathname.startsWith('/hospital/emergency') ||
+    pathname.startsWith('/hospital/patient-records/') ||
+    pathname.startsWith('/eminence/')
+  )
+}
+
+function scheduleBootstrapLoad(task: () => void) {
+  if (typeof window === 'undefined') return () => undefined
+
+  const idleWindow = window as Window & {
+    cancelIdleCallback?: (id: number) => void
+    requestIdleCallback?: (callback: () => void, options?: { timeout: number }) => number
+  }
+
+  if (typeof idleWindow.requestIdleCallback === 'function') {
+    const idleId = idleWindow.requestIdleCallback(task, { timeout: 1500 })
+    return () => idleWindow.cancelIdleCallback?.(idleId)
+  }
+
+  const timer = window.setTimeout(task, 250)
+  return () => window.clearTimeout(timer)
+}
+
+function DeferredSessionBootstrap() {
+  const location = useLocation()
+  const [Bootstrap, setBootstrap] = React.useState<SessionBootstrapComponent | null>(null)
+
+  React.useEffect(() => {
+    if (Bootstrap) return
+
+    let active = true
+
+    const load = () => {
+      void import('./components/SessionBootstrap')
+        .then(module => {
+          if (active) {
+            setBootstrap(() => module.SessionBootstrap)
+          }
+        })
+        .catch(() => undefined)
+    }
+
+    const shouldLoadImmediately =
+      requiresImmediateSessionBootstrap(location.pathname) ||
+      hasStoredPortalSession() ||
+      hasStoredSupabaseAuthSession()
+
+    const cancel = shouldLoadImmediately ? (() => {
+      load()
+      return () => undefined
+    })() : scheduleBootstrapLoad(load)
+
+    return () => {
+      active = false
+      cancel()
+    }
+  }, [Bootstrap, location.pathname])
+
+  return Bootstrap ? <Bootstrap /> : null
+}
+
 export default function App() {
   return (
     <ErrorBoundary>
       <BrowserRouter>
         <ToastProvider />
-        <SessionBootstrap />
+        <DeferredSessionBootstrap />
         <RouteObservability />
         <RouteWarmup />
         <AppInstallPrompt />

@@ -114,6 +114,7 @@ export interface HidMedicalRecordFile {
   original_file_name: string
   mime_type: string | null
   size_bytes: number | null
+  signed_download_url?: string | null
   uploaded_by_user_profile_id: string
   created_at: string
 }

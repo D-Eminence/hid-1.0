@@ -4,6 +4,7 @@ import { OtpInputs } from '../../components/OtpInputs'
 import { PortalShell } from '../../components/PortalShell'
 import { Button, Card, Input, Modal, PageLoader, Select, Textarea, showToast } from '../../components/ui'
 import { getPatientSession, setPatientSession, signOutAndClearSessions } from '../../lib/auth'
+import { readPatientProfileSnapshot, seedPatientProfileCache, warmPatientExperience } from '../../lib/experienceWarmup'
 import {
   deleteMyAccount,
   fetchMyPatient,
@@ -39,12 +40,17 @@ const BASIC_INFO_LOCK_STORAGE_PREFIX = 'hid-basic-info-locked:'
 export default function PatientProfile() {
   const navigate = useNavigate()
   const session = useMemo(() => getPatientSession(), [])
-  const [patient, setPatient] = useState<Patient | null>(null)
-  const [loading, setLoading] = useState(true)
+  const cachedPatient = useMemo(() => (
+    session ? readPatientProfileSnapshot(session.hidCode) : null
+  ), [session])
+  const [patient, setPatient] = useState<Patient | null>(cachedPatient)
+  const [loading, setLoading] = useState(!cachedPatient)
   const [saving, setSaving] = useState(false)
-  const [savedOnce, setSavedOnce] = useState(false)
-  const [savedProfileSnapshot, setSavedProfileSnapshot] = useState('')
-  const [basicInfoLocked, setBasicInfoLocked] = useState(false)
+  const [savedOnce, setSavedOnce] = useState(() => cachedPatient ? isBasicInfoLocked(cachedPatient) : false)
+  const [savedProfileSnapshot, setSavedProfileSnapshot] = useState(() => (
+    cachedPatient ? buildProfileSnapshot(cachedPatient, formatDate(cachedPatient.dob), '') : ''
+  ))
+  const [basicInfoLocked, setBasicInfoLocked] = useState(() => cachedPatient ? isBasicInfoLocked(cachedPatient) : false)
   const [uploadingPhoto, setUploadingPhoto] = useState(false)
   const [profileConfirmed, setProfileConfirmed] = useState(false)
   const [accessPinDraft, setAccessPinDraft] = useState('')
@@ -57,7 +63,7 @@ export default function PatientProfile() {
   const [sendingDeleteOtp, setSendingDeleteOtp] = useState(false)
   const [verifyingDeleteOtp, setVerifyingDeleteOtp] = useState(false)
   const [deletingAccount, setDeletingAccount] = useState(false)
-  const [dobInput, setDobInput] = useState('')
+  const [dobInput, setDobInput] = useState(() => cachedPatient ? formatDate(cachedPatient.dob) : '')
   const [openSections, setOpenSections] = useState({
     about: true,
     health: false,
@@ -76,6 +82,10 @@ export default function PatientProfile() {
       try {
         const nextPatient = await fetchMyPatient()
         if (!active) return
+        seedPatientProfileCache(nextPatient)
+        if (session) {
+          warmPatientExperience(session, nextPatient)
+        }
         const nextBasicInfoLocked = isBasicInfoLocked(nextPatient)
         setPatient(nextPatient)
         setDobInput(formatDate(nextPatient.dob))
@@ -124,6 +134,7 @@ export default function PatientProfile() {
       setPatient(nextPatient)
       setSavedProfileSnapshot(buildProfileSnapshot(nextPatient, formatDate(nextPatient.dob), accessPinDraft))
       showToast('Profile photo updated.', 'success')
+      seedPatientProfileCache(nextPatient)
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Unable to update your profile photo.'
       showToast(message, 'error')
@@ -176,6 +187,10 @@ export default function PatientProfile() {
       }
 
       const nextPatient = await fetchMyPatient()
+      seedPatientProfileCache(nextPatient)
+      if (session) {
+        warmPatientExperience(session, nextPatient)
+      }
 
       setPatient(nextPatient)
       setAccessPinDraft('')

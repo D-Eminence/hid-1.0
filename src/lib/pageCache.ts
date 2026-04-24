@@ -1,3 +1,5 @@
+import { registerCacheResetter } from './cacheReset'
+
 const CACHE_PREFIX = 'hid_page_cache:'
 const memoryCache = new Map<string, { expiresAt: number; value: unknown }>()
 
@@ -60,3 +62,25 @@ export function clearPageCache(key: string) {
     // Ignore storage cleanup failures.
   }
 }
+
+export function clearAllPageCaches() {
+  memoryCache.clear()
+  if (!canUseSessionStorage()) return
+
+  try {
+    const keysToDelete: string[] = []
+    for (let index = 0; index < window.sessionStorage.length; index += 1) {
+      const key = window.sessionStorage.key(index)
+      if (key?.startsWith(CACHE_PREFIX)) {
+        keysToDelete.push(key)
+      }
+    }
+    keysToDelete.forEach(key => {
+      window.sessionStorage.removeItem(key)
+    })
+  } catch {
+    // Ignore storage cleanup failures.
+  }
+}
+
+registerCacheResetter(clearAllPageCaches)

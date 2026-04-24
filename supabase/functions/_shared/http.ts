@@ -13,6 +13,35 @@ export class HttpError extends Error {
   }
 }
 
+type CacheHeaderOptions = {
+  maxAgeSeconds: number
+  staleWhileRevalidateSeconds?: number
+  scope?: 'private' | 'public'
+  varyAuthorization?: boolean
+}
+
+function appendHeaders(target: Headers, source?: HeadersInit) {
+  if (!source) return
+
+  if (source instanceof Headers) {
+    source.forEach((value, key) => {
+      target.set(key, value)
+    })
+    return
+  }
+
+  if (Array.isArray(source)) {
+    source.forEach(([key, value]) => {
+      target.set(key, value)
+    })
+    return
+  }
+
+  Object.entries(source).forEach(([key, value]) => {
+    target.set(key, value)
+  })
+}
+
 function withCorsHeaders(response: Response, req: Request) {
   const headers = new Headers(response.headers)
   const corsHeaders = resolveCorsHeaders(req.headers.get('Origin'))
@@ -37,14 +66,37 @@ export function handleOptions(req: Request) {
 }
 
 export function json(data: unknown, status = 200, headersOverride?: HeadersInit) {
+  const headers = new Headers({
+    ...resolveCorsHeaders(null),
+    'Content-Type': 'application/json',
+  })
+  appendHeaders(headers, headersOverride)
+
   return new Response(JSON.stringify(data), {
     status,
-    headers: {
-      ...resolveCorsHeaders(null),
-      'Content-Type': 'application/json',
-      ...(headersOverride ?? {}),
-    },
+    headers,
   })
+}
+
+export function buildCacheHeaders(options: CacheHeaderOptions, headersOverride?: HeadersInit) {
+  const scope = options.scope ?? 'private'
+  const directives = [`${scope}`, `max-age=${Math.max(0, Math.trunc(options.maxAgeSeconds))}`]
+  const staleWhileRevalidateSeconds = Math.max(0, Math.trunc(options.staleWhileRevalidateSeconds ?? 0))
+
+  if (staleWhileRevalidateSeconds > 0) {
+    directives.push(`stale-while-revalidate=${staleWhileRevalidateSeconds}`)
+  }
+
+  const headers = new Headers({
+    'Cache-Control': directives.join(', '),
+  })
+
+  if (options.varyAuthorization !== false) {
+    headers.set('Vary', 'Authorization')
+  }
+
+  appendHeaders(headers, headersOverride)
+  return headers
 }
 
 export async function readJson<T>(req: Request): Promise<T> {

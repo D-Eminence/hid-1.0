@@ -15,6 +15,7 @@ import type {
 } from '../types/hid'
 import type { UploadDraft } from './medicalRecordUtils'
 import { clearAllPortalSessions } from './auth'
+import { registerCacheResetter } from './cacheReset'
 import { BANNED_ACCOUNT_MESSAGE, isBannedAuthMessage } from './securityMessages'
 import { fetchWithTimeout, getSafeSession, getSafeUser, NETWORK_TIMEOUT_MESSAGE, safeSignOut, supabase } from './supabase'
 
@@ -123,7 +124,7 @@ const VIEW_CACHE_TTL_MS = 12000
 const RECENT_RECORD_SAVE_TTL_MS = 5 * 60 * 1000
 const RECORD_UPLOAD_TIMEOUT_MS = 90000
 const RECORD_UPLOAD_RETRY_COUNT = 3
-const REQUEST_DEDUPE_ONLY_TTL_MS = 0
+const NOTIFICATIONS_CACHE_TTL_MS = 10_000
 const PRIVILEGED_MFA_ROLES = new Set(['platform_admin', 'org_admin', 'clinician'])
 const HID_PATIENT_COLUMNS = [
   'id',
@@ -196,6 +197,15 @@ type SignedDownloadCacheEntry = {
 
 const viewCache = new Map<string, ViewCacheEntry<unknown>>()
 const signedDownloadCache = new Map<string, SignedDownloadCacheEntry>()
+
+function clearHidApiCaches() {
+  viewCache.clear()
+  signedDownloadCache.clear()
+  inflightRecordSaves.clear()
+  recentRecordSaves.clear()
+}
+
+registerCacheResetter(clearHidApiCaches)
 
 export class HidApiError extends Error {
   status: number
@@ -881,13 +891,13 @@ async function signRecordDownload(fileId: string) {
 async function toLegacyRecordFiles(files: HidPatientRecordsResponse['records'][number]['files']): Promise<MedicalRecordFile[]> {
   const resolvedFiles = await Promise.all(files.map(async file => {
     try {
-      const signed = await signRecordDownload(file.id)
+      const signedUrl = file.signed_download_url || (await signRecordDownload(file.id)).signedUrl
       return {
         id: file.id,
         record_id: file.record_id,
         file_name: file.original_file_name,
         file_type: file.mime_type,
-        file_data_url: signed.signedUrl,
+        file_data_url: signedUrl,
         created_at: file.created_at,
       } satisfies MedicalRecordFile
     } catch {
@@ -1155,7 +1165,7 @@ export async function countUnreadNotifications() {
     }
 
     return count ?? 0
-  }, REQUEST_DEDUPE_ONLY_TTL_MS)
+  }, NOTIFICATIONS_CACHE_TTL_MS)
 }
 
 export async function listNotifications(hidCode: string) {
@@ -1169,7 +1179,7 @@ export async function listNotifications(hidCode: string) {
     }
 
     return ((data as HidNotification[] | null) ?? []).map(item => toLegacyNotification(item, hidCode))
-  }, REQUEST_DEDUPE_ONLY_TTL_MS)
+  }, NOTIFICATIONS_CACHE_TTL_MS)
 }
 
 export async function listUnreadNotifications(hidCode: string, limit = 20) {
@@ -1185,7 +1195,7 @@ export async function listUnreadNotifications(hidCode: string, limit = 20) {
     }
 
     return ((data as HidNotification[] | null) ?? []).map(item => toLegacyNotification(item, hidCode))
-  }, REQUEST_DEDUPE_ONLY_TTL_MS)
+  }, NOTIFICATIONS_CACHE_TTL_MS)
 }
 
 export async function markNotificationRead(id: string) {

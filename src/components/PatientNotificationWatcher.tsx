@@ -1,5 +1,5 @@
 import React, { useEffect } from 'react'
-import { showToast } from './ui'
+import { showToast } from './toast'
 import { listUnreadNotifications, markAllNotificationsRead } from '../lib/hidApi'
 import { subscribeToNotifications } from '../lib/notificationsRealtime'
 

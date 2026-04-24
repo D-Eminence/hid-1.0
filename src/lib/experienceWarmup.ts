@@ -1,197 +1,195 @@
 import type { PatientSession, StaffSession } from './auth'
-import { writePageCache } from './pageCache'
-import { supabase } from './supabase'
-import type {
-  AccessLog,
-  AccessRequest,
-  MedicalRecord,
-  MedicalRecordFile,
-  Notification,
-  Patient,
-  StaffAccount,
-} from '../types/database'
+import {
+  fetchMyPatient,
+  fetchPatientHistory,
+  fetchPatientRecordsView,
+  fetchStaffDashboard,
+  listNotifications,
+} from './hidApi'
+import { readPageCache, writePageCache } from './pageCache'
+import type { Notification, Patient } from '../types/database'
+import type { HidStaffDashboardResponse } from '../types/hid'
 
-type DoctorDashboardCache = {
-  account: StaffAccount | null
-  requests: AccessRequest[]
-  patientNames: Record<string, string>
-  accessLogs: AccessLog[]
-}
-
-type DoctorPatientRecordsCache = {
-  account: StaffAccount | null
+type PatientRecordsSnapshot = Awaited<ReturnType<typeof fetchPatientRecordsView>>
+type PatientHistorySnapshot = Awaited<ReturnType<typeof fetchPatientHistory>>
+type PatientNotificationsSnapshot = {
+  notifications: Notification[]
   patient: Patient | null
-  activeRequest: AccessRequest | null
-  records: MedicalRecord[]
-  recordFiles: Record<string, MedicalRecordFile[]>
 }
 
-function canUseSessionStorage() {
-  return typeof window !== 'undefined' && typeof window.sessionStorage !== 'undefined'
+const PATIENT_PROFILE_TTL_MS = 120_000
+const PAGE_TTL_MS = 90_000
+const DOCTOR_DASHBOARD_TTL_MS = 45_000
+
+const inflightPrefetches = new Map<string, Promise<void>>()
+
+function patientProfileKey(hidCode: string) {
+  return `patient-profile:${hidCode.toUpperCase()}`
 }
 
-function readSessionStorage<T>(key: string): T | null {
-  if (!canUseSessionStorage()) return null
-  try {
-    const raw = window.sessionStorage.getItem(key)
-    return raw ? JSON.parse(raw) as T : null
-  } catch {
-    return null
-  }
+function patientRecordsKey(hidCode: string) {
+  return `patient-records:self:${hidCode.toUpperCase()}`
 }
 
-function writeSessionStorage(key: string, value: unknown) {
-  if (!canUseSessionStorage()) return
-  try {
-    window.sessionStorage.setItem(key, JSON.stringify(value))
-  } catch {
-    // Ignore storage errors.
-  }
+function patientHistoryKey(hidCode: string) {
+  return `patient-history:${hidCode.toUpperCase()}`
 }
 
-function groupRecordFiles(files: MedicalRecordFile[]) {
-  return files.reduce<Record<string, MedicalRecordFile[]>>((acc, item) => {
-    acc[item.record_id] = [...(acc[item.record_id] ?? []), item]
-    return acc
-  }, {})
+function patientNotificationsKey(hidCode: string) {
+  return `patient-notifications:${hidCode.toUpperCase()}`
+}
+
+function doctorDashboardKey(sessionId: string) {
+  return `doctor-dashboard:${sessionId}`
+}
+
+function doctorPatientRecordsKey(sessionId: string, hidCode: string) {
+  return `doctor-patient-records:${sessionId}:${hidCode.toUpperCase()}`
+}
+
+function runPrefetchTask(key: string, task: () => Promise<void>) {
+  const existing = inflightPrefetches.get(key)
+  if (existing) return existing
+
+  const request = task()
+    .catch(() => undefined)
+    .finally(() => {
+      inflightPrefetches.delete(key)
+    })
+
+  inflightPrefetches.set(key, request)
+  return request
+}
+
+export function readPatientProfileSnapshot(hidCode: string) {
+  return readPageCache<Patient>(patientProfileKey(hidCode))
+}
+
+export function readPatientRecordsSnapshot(hidCode: string) {
+  return readPageCache<PatientRecordsSnapshot>(patientRecordsKey(hidCode))
+}
+
+export function readPatientHistorySnapshot(hidCode: string) {
+  return readPageCache<PatientHistorySnapshot>(patientHistoryKey(hidCode))
+}
+
+export function readPatientNotificationsSnapshot(hidCode: string) {
+  return readPageCache<PatientNotificationsSnapshot>(patientNotificationsKey(hidCode))
+}
+
+export function readDoctorDashboardSnapshot(sessionId: string) {
+  return readPageCache<HidStaffDashboardResponse>(doctorDashboardKey(sessionId))
+}
+
+export function readDoctorPatientRecordsSnapshot(sessionId: string, hidCode: string) {
+  return readPageCache<PatientRecordsSnapshot>(doctorPatientRecordsKey(sessionId, hidCode))
 }
 
 export function seedPatientProfileCache(patient: Patient) {
-  writeSessionStorage(`hid_patient_profile_cache_${patient.hid_code}`, patient)
+  writePageCache(patientProfileKey(patient.hid_code), patient, PATIENT_PROFILE_TTL_MS)
+}
+
+export function seedPatientRecordsCache(hidCode: string, snapshot: PatientRecordsSnapshot) {
+  writePageCache(patientRecordsKey(hidCode), snapshot, PAGE_TTL_MS)
+}
+
+export function seedPatientHistoryCache(hidCode: string, snapshot: PatientHistorySnapshot) {
+  writePageCache(patientHistoryKey(hidCode), snapshot, PAGE_TTL_MS)
+}
+
+export function seedPatientNotificationsCache(hidCode: string, snapshot: PatientNotificationsSnapshot) {
+  writePageCache(patientNotificationsKey(hidCode), snapshot, PAGE_TTL_MS)
+}
+
+export function seedDoctorDashboardCache(sessionId: string, snapshot: HidStaffDashboardResponse) {
+  writePageCache(doctorDashboardKey(sessionId), snapshot, DOCTOR_DASHBOARD_TTL_MS)
+}
+
+export function seedDoctorPatientRecordsCache(sessionId: string, hidCode: string, snapshot: PatientRecordsSnapshot) {
+  writePageCache(doctorPatientRecordsKey(sessionId, hidCode), snapshot, PAGE_TTL_MS)
 }
 
 export async function prefetchPatientPortalCaches(hidCode: string, knownPatient?: Patient | null) {
-  const patientPromise = knownPatient
-    ? Promise.resolve(knownPatient)
-    : supabase.from('patients').select('*').eq('hid_code', hidCode).single().then(({ data }) => (data as Patient | null) ?? null)
+  const normalizedHidCode = hidCode.trim().toUpperCase()
+  return runPrefetchTask(`patient-portal:${normalizedHidCode}`, async () => {
+    const patient = knownPatient ?? await fetchMyPatient()
+    seedPatientProfileCache(patient)
 
-  const [patient, recordsRes, logsRes, requestsRes, notificationsRes] = await Promise.all([
-    patientPromise,
-    supabase.from('medical_records').select('*').eq('hid_code', hidCode).order('created_at', { ascending: false }),
-    supabase.from('access_logs').select('*').eq('hid_code', hidCode).order('access_time', { ascending: false }),
-    supabase.from('access_requests').select('*').eq('hid_code', hidCode).eq('status', 'approved').order('created_at', { ascending: false }),
-    supabase.from('notifications').select('*').eq('hid_code', hidCode).order('created_at', { ascending: false }),
-  ])
+    const [recordsView, history, notifications] = await Promise.all([
+      fetchPatientRecordsView(normalizedHidCode),
+      fetchPatientHistory(normalizedHidCode),
+      listNotifications(normalizedHidCode),
+    ])
 
-  const nextPatient = patient ?? null
-  const records = (recordsRes.data as MedicalRecord[] | null) ?? []
-  const ids = records.map(item => item.id)
-  const { data: fileData } = ids.length > 0
-    ? await supabase.from('medical_record_files').select('*').in('record_id', ids).order('created_at', { ascending: true })
-    : { data: [] }
-  const recordFiles = groupRecordFiles((fileData as MedicalRecordFile[] | null) ?? [])
-  const logs = (logsRes.data as AccessLog[] | null) ?? []
-  const requests = (requestsRes.data as AccessRequest[] | null) ?? []
-  const notifications = (notificationsRes.data as Notification[] | null) ?? []
-
-  if (nextPatient) seedPatientProfileCache(nextPatient)
-  writePageCache(`patient-records:${hidCode}`, { patient: nextPatient, records, recordFiles }, 90_000)
-  writePageCache(`patient-history:${hidCode}`, { patient: nextPatient, logs, requests }, 90_000)
-  writePageCache(`patient-notifications:${hidCode}`, { patient: nextPatient, notifications }, 90_000)
+    seedPatientRecordsCache(normalizedHidCode, recordsView)
+    seedPatientHistoryCache(normalizedHidCode, history)
+    seedPatientNotificationsCache(normalizedHidCode, {
+      patient,
+      notifications,
+    })
+  })
 }
 
-export function seedDoctorDashboardCache(sessionId: string, cache: DoctorDashboardCache) {
-  writeSessionStorage(`hid_hospital_dashboard_${sessionId}`, cache)
-}
-
-export async function prefetchDoctorPortalCache(session: StaffSession, knownAccount?: StaffAccount | null) {
-  const [accountRes, requestsRes] = await Promise.all([
-    knownAccount
-      ? Promise.resolve({ data: knownAccount })
-      : supabase.from('staff_accounts').select('*').eq('id', session.id).single(),
-    supabase.from('access_requests').select('*').eq('doctor_account_id', session.id).order('created_at', { ascending: false }),
-  ])
-
-  const account = (accountRes.data as StaffAccount | null) ?? knownAccount ?? null
-  const requests = (requestsRes.data as AccessRequest[] | null) ?? []
-  const requestIds = requests.map(item => item.id)
-  const { data: accessLogData } = requestIds.length > 0
-    ? await supabase.from('access_logs').select('*').in('request_id', requestIds).order('access_time', { ascending: false })
-    : { data: [] }
-  const accessLogs = (accessLogData as AccessLog[] | null) ?? []
-  const hids = Array.from(new Set([...requests.map(item => item.hid_code), ...accessLogs.map(item => item.hid_code)]))
-  const { data: patientData } = hids.length > 0
-    ? await supabase.from('patients').select('hid_code, full_name').in('hid_code', hids)
-    : { data: [] }
-  const patientNames = ((patientData as Pick<Patient, 'hid_code' | 'full_name'>[] | null) ?? []).reduce<Record<string, string>>((acc, item) => {
-    acc[item.hid_code] = item.full_name
-    return acc
-  }, {})
-
-  seedDoctorDashboardCache(session.id, { account, requests, patientNames, accessLogs })
-}
-
-export function seedDoctorPatientRecordsCache(sessionId: string, hidCode: string, cache: DoctorPatientRecordsCache) {
-  writePageCache(`doctor-patient-records:${sessionId}:${hidCode.toUpperCase()}`, cache, 90_000)
+export async function prefetchDoctorPortalCache(session: StaffSession, knownDashboard?: HidStaffDashboardResponse | null) {
+  return runPrefetchTask(`doctor-portal:${session.id}`, async () => {
+    const dashboard = knownDashboard ?? await fetchStaffDashboard()
+    seedDoctorDashboardCache(session.id, dashboard)
+  })
 }
 
 export async function prefetchDoctorPatientRecordsCache({
   sessionId,
   hidCode,
-  knownAccount,
-  knownPatient,
-  knownRequest,
 }: {
   sessionId: string
   hidCode: string
-  knownAccount?: StaffAccount | null
-  knownPatient?: Patient | null
-  knownRequest?: AccessRequest | null
 }) {
   const normalizedHidCode = hidCode.trim().toUpperCase()
-  const [accountRes, patientRes, accessRes, recordsRes] = await Promise.all([
-    knownAccount
-      ? Promise.resolve({ data: knownAccount })
-      : supabase.from('staff_accounts').select('*').eq('id', sessionId).single(),
-    knownPatient
-      ? Promise.resolve({ data: knownPatient })
-      : supabase.from('patients').select('*').eq('hid_code', normalizedHidCode).single(),
-    knownRequest
-      ? Promise.resolve({ data: [knownRequest] })
-      : supabase
-        .from('access_requests')
-        .select('*')
-        .eq('doctor_account_id', sessionId)
-        .eq('hid_code', normalizedHidCode)
-        .eq('request_type', 'standard')
-        .order('created_at', { ascending: false }),
-    supabase.from('medical_records').select('*').eq('hid_code', normalizedHidCode).order('created_at', { ascending: false }),
-  ])
-
-  const account = (accountRes.data as StaffAccount | null) ?? knownAccount ?? null
-  const patient = (patientRes.data as Patient | null) ?? knownPatient ?? null
-  const activeRequest = knownRequest ?? (((accessRes.data as AccessRequest[] | null) ?? [])[0] ?? null)
-  const records = (recordsRes.data as MedicalRecord[] | null) ?? []
-  const ids = records.map(item => item.id)
-  const { data: fileData } = ids.length > 0
-    ? await supabase.from('medical_record_files').select('*').in('record_id', ids).order('created_at', { ascending: true })
-    : { data: [] }
-  const recordFiles = groupRecordFiles((fileData as MedicalRecordFile[] | null) ?? [])
-
-  seedDoctorPatientRecordsCache(sessionId, normalizedHidCode, {
-    account,
-    patient,
-    activeRequest,
-    records,
-    recordFiles,
+  return runPrefetchTask(`doctor-patient:${sessionId}:${normalizedHidCode}`, async () => {
+    const recordsView = await fetchPatientRecordsView(normalizedHidCode)
+    seedDoctorPatientRecordsCache(sessionId, normalizedHidCode, recordsView)
   })
-}
-
-export function seedDoctorDashboardShellCache(sessionId: string, account: StaffAccount | null) {
-  const existing = readSessionStorage<DoctorDashboardCache>(`hid_hospital_dashboard_${sessionId}`)
-  seedDoctorDashboardCache(sessionId, {
-    account,
-    requests: existing?.requests ?? [],
-    patientNames: existing?.patientNames ?? {},
-    accessLogs: existing?.accessLogs ?? [],
-  })
-}
-
-export function seedDoctorPortalFromAccount(sessionId: string, account: StaffAccount) {
-  seedDoctorDashboardShellCache(sessionId, account)
 }
 
 export function warmPatientExperience(session: PatientSession, patient: Patient) {
   seedPatientProfileCache(patient)
   void prefetchPatientPortalCaches(session.hidCode, patient)
+}
+
+export function prefetchPatientRouteData(path: string, hidCode: string) {
+  const normalizedPath = path.trim().toLowerCase()
+  const normalizedHidCode = hidCode.trim().toUpperCase()
+
+  if (!normalizedPath || !normalizedHidCode) return
+
+  if (
+    normalizedPath.startsWith('/patient/profile') ||
+    normalizedPath.startsWith('/patient/records') ||
+    normalizedPath.startsWith('/patient/history') ||
+    normalizedPath.startsWith('/patient/notifications')
+  ) {
+    void prefetchPatientPortalCaches(normalizedHidCode)
+  }
+}
+
+export function prefetchHospitalRouteData(path: string, session: StaffSession) {
+  const normalizedPath = path.trim().toLowerCase()
+  if (!normalizedPath) return
+
+  if (
+    normalizedPath.startsWith('/hospital/dashboard') ||
+    normalizedPath.startsWith('/hospital/access') ||
+    normalizedPath.startsWith('/hospital/history') ||
+    normalizedPath.startsWith('/hospital/emergency')
+  ) {
+    void prefetchDoctorPortalCache(session)
+  }
+
+  const patientRecordMatch = normalizedPath.match(/^\/hospital\/patient-records\/(.+)$/)
+  if (patientRecordMatch?.[1]) {
+    void prefetchDoctorPatientRecordsCache({
+      sessionId: session.id,
+      hidCode: decodeURIComponent(patientRecordMatch[1]),
+    })
+  }
 }

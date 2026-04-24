@@ -1,5 +1,6 @@
 import React, { useEffect } from 'react'
 import { clearAllPortalSessions, getStaffSession, setPatientSession, setStaffSession } from '../lib/auth'
+import { prefetchDoctorPortalCache, seedPatientProfileCache, warmPatientExperience } from '../lib/experienceWarmup'
 import { fetchMyPatient, fetchMyStaffAccount } from '../lib/hidApi'
 import { clearObservabilityIdentity, identifyObservabilityUser } from '../lib/observabilityBridge'
 import { getSafeSession, safeSignOut, supabase } from '../lib/supabase'
@@ -57,11 +58,14 @@ async function hydratePortalSession() {
     ])
 
     if (patient.status === 'fulfilled' && patient.value) {
-      setPatientSession({
+      const nextPatientSession = {
         hidCode: patient.value.hid_code,
         phone: patient.value.phone ?? '',
         fullName: patient.value.full_name,
-      })
+      }
+      setPatientSession(nextPatientSession)
+      seedPatientProfileCache(patient.value)
+      warmPatientExperience(nextPatientSession, patient.value)
       identifyObservabilityUser({
         appRole: 'patient',
         id: session.user.id,
@@ -70,13 +74,15 @@ async function hydratePortalSession() {
 
     if (staff.status === 'fulfilled' && staff.value) {
       const existingStaffSession = getStaffSession()
-      setStaffSession({
+      const nextStaffSession = {
         id: staff.value.id,
         fullName: staff.value.full_name,
         hospitalName: staff.value.hospital_name ?? existingStaffSession?.hospitalName ?? null,
         email: staff.value.email,
         role: staff.value.role,
-      })
+      }
+      setStaffSession(nextStaffSession)
+      void prefetchDoctorPortalCache(nextStaffSession)
       identifyObservabilityUser({
         appRole: 'clinician',
         id: session.user.id,

@@ -3,6 +3,8 @@ import { useNavigate } from 'react-router-dom'
 import { Badge, Button, Card, EmptyState, Input, Modal, PageLoader, SectionHeader, showToast } from '../../components/ui'
 import { HospitalLayout } from '../../components/HospitalLayout'
 import { getStaffSession, signOutAndClearSessions } from '../../lib/auth'
+import { subscribeToAccessChanges } from '../../lib/accessRealtime'
+import { readDoctorDashboardSnapshot, seedDoctorDashboardCache } from '../../lib/experienceWarmup'
 import { HOSPITAL_AUTH_PATH } from '../../lib/hospitalRoutes'
 import { fetchStaffDashboard } from '../../lib/hidApi'
 import { formatDateTime } from '../../lib/utils'
@@ -51,9 +53,12 @@ function toHospitalLogs(dashboard: HidStaffDashboardResponse): HospitalAccessLog
 export default function DoctorHistory() {
   const navigate = useNavigate()
   const session = useMemo(() => getStaffSession(), [])
-  const [dashboard, setDashboard] = useState<HidStaffDashboardResponse | null>(null)
-  const [logs, setLogs] = useState<HospitalAccessLog[]>([])
-  const [loading, setLoading] = useState(true)
+  const cachedDashboard = useMemo(() => (
+    session ? readDoctorDashboardSnapshot(session.id) : null
+  ), [session])
+  const [dashboard, setDashboard] = useState<HidStaffDashboardResponse | null>(cachedDashboard)
+  const [logs, setLogs] = useState<HospitalAccessLog[]>(() => cachedDashboard ? toHospitalLogs(cachedDashboard) : [])
+  const [loading, setLoading] = useState(!cachedDashboard)
   const [search, setSearch] = useState('')
   const [filter, setFilter] = useState<'all' | 'standard' | 'emergency'>('all')
   const [selected, setSelected] = useState<HospitalAccessLog | null>(null)
@@ -64,8 +69,20 @@ export default function DoctorHistory() {
       navigate(HOSPITAL_AUTH_PATH)
       return
     }
-    void loadLogs()
-  }, [navigate, session])
+    void loadLogs(Boolean(cachedDashboard))
+  }, [cachedDashboard, navigate, session])
+
+  useEffect(() => {
+    if (!session) return
+
+    const unsubscribe = subscribeToAccessChanges(() => {
+      if (document.visibilityState === 'visible') {
+        void loadLogs(true)
+      }
+    })
+
+    return unsubscribe
+  }, [session])
 
   useEffect(() => {
     const handleResize = () => setIsCompact(window.innerWidth < 900)
@@ -74,17 +91,19 @@ export default function DoctorHistory() {
     return () => window.removeEventListener('resize', handleResize)
   }, [])
 
-  async function loadLogs() {
-    setLoading(true)
+  async function loadLogs(silent = false) {
+    if (!session) return
+    if (!silent) setLoading(true)
     try {
       const nextDashboard = await fetchStaffDashboard()
+      seedDoctorDashboardCache(session.id, nextDashboard)
       setDashboard(nextDashboard)
       setLogs(toHospitalLogs(nextDashboard))
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Unable to load hospital access logs.'
       showToast(message, 'error')
     } finally {
-      setLoading(false)
+      if (!silent) setLoading(false)
     }
   }
 
