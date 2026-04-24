@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react'
+import { BANNED_ACCOUNT_MESSAGE, isBannedAuthMessage } from '../lib/securityMessages'
 
 // ── Button ──────────────────────────────────────────────────────────────────
 type BtnVariant = 'primary' | 'secondary' | 'danger' | 'ghost' | 'outline'
@@ -495,10 +496,9 @@ function normalizeToastMessage(message: string, type: ToastType) {
     if (lower.includes('passwords do not match')) return 'The passwords do not match.'
     if (
       lower.includes('invalid credentials') ||
-      lower.includes('invalid hospital credentials') ||
-      lower.includes('user is banned') ||
-      lower.includes('banned until')
+      lower.includes('invalid hospital credentials')
     ) return 'The sign-in details are not correct.'
+    if (isBannedAuthMessage(raw)) return BANNED_ACCOUNT_MESSAGE
     if (lower.includes('email not confirmed')) return 'Enter the verification code sent to your email to continue.'
     if (lower.includes('signups not allowed') || lower.includes('phone signups are disabled') || lower.includes('signups not allowed for otp') || (lower.includes('signup') && lower.includes('disabled'))) {
       return 'Patient self-sign-up is currently disabled.'

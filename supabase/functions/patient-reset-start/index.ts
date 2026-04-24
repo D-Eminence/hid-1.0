@@ -18,14 +18,19 @@ Deno.serve(req => withErrorHandling(req, async () => {
   const identifier = asTrimmedString(body.identifier, 'identifier')
   await verifyTurnstileToken(req, body.turnstileToken ?? null, 'patient-reset-start')
 
+  const genericResponse = () => json({
+    data: {
+      challengeId: crypto.randomUUID(),
+      deliveryChannels: ['email'],
+      expiresAt: new Date(Date.now() + passwordResetOtpTtlMinutes() * 60 * 1000).toISOString(),
+      maskedEmail: null,
+      maskedPhone: null,
+    },
+  })
+
   const adminClient = createAdminClient()
   const resolvedIdentity = await resolvePatientAuthIdentity(adminClient, identifier)
-  if (!resolvedIdentity) {
-    throw new HttpError(404, 'No patient account was found for those details.')
-  }
-  if (!resolvedIdentity.email) {
-    throw new HttpError(400, 'This account does not have an email address for password reset.')
-  }
+  if (!resolvedIdentity || !resolvedIdentity.email) return genericResponse()
 
   const challenge = await createPatientPasswordResetChallenge(adminClient, {
     authUserId: resolvedIdentity.authUserId,
@@ -73,8 +78,7 @@ Deno.serve(req => withErrorHandling(req, async () => {
       challengeId: challenge.challengeId,
       deliveryChannels: deliveries.receipts.map(item => item.channel),
       expiresAt: challenge.expiresAt,
-      hidCode: resolvedIdentity.hidCode,
-      maskedEmail: deliveries.receipts.find(item => item.channel === 'email')?.maskedTarget ?? null,
+      maskedEmail: null,
       maskedPhone: null,
     },
   })

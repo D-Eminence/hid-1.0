@@ -1,0 +1,105 @@
+name: Deploy Preview
+
+on:
+  pull_request:
+    branches:
+      - main
+    types:
+      - opened
+      - synchronize
+      - reopened
+
+concurrency:
+  group: vercel-preview-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+env:
+  VERCEL_ORG_ID: team_GNXU4k8eiqhjBG6hNGoEuunX
+  VERCEL_PROJECT_ID: prj_BrqBNZ4JXQQ78lNzvEM0nXYaOrq7
+
+jobs:
+  preview:
+    if: github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: write
+
+    steps:
+      - name: Verify Vercel token is configured
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+        run: |
+          if [ -z "$VERCEL_TOKEN" ]; then
+            echo "VERCEL_TOKEN repository secret is missing."
+            exit 1
+          fi
+
+      - name: Checkout repository
+        uses: actions/checkout@v5
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run security audit
+        run: npm run security:audit
+
+      - name: Verify local preview build
+        run: npm run build
+
+      - name: Pull Vercel preview environment
+        run: npx vercel@latest pull --yes --environment=preview --token="${{ secrets.VERCEL_TOKEN }}"
+
+      - name: Build Vercel preview artifact
+        run: npx vercel@latest build --token="${{ secrets.VERCEL_TOKEN }}"
+
+      - name: Deploy preview
+        id: deploy
+        run: |
+          preview_url="$(npx vercel@latest deploy --prebuilt --token="${{ secrets.VERCEL_TOKEN }}" --yes | tail -n 1)"
+          echo "preview_url=${preview_url}" >> "$GITHUB_OUTPUT"
+          echo "Preview URL: ${preview_url}" >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Comment preview URL on PR
+        uses: actions/github-script@v7
+        env:
+          PREVIEW_URL: ${{ steps.deploy.outputs.preview_url }}
+        with:
+          script: |
+            const body = [
+              'Preview deployment is ready.',
+              '',
+              `URL: ${process.env.PREVIEW_URL}`,
+              '',
+              'Review this preview before merging to `main`.',
+            ].join('\n')
+            const issue_number = context.issue.number
+            const comments = await github.rest.issues.listComments({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number,
+            })
+            const existing = comments.data.find(comment =>
+              comment.user?.type === 'Bot' && comment.body?.includes('Preview deployment is ready.')
+            )
+            if (existing) {
+              await github.rest.issues.updateComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                comment_id: existing.id,
+                body,
+              })
+            } else {
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number,
+                body,
+              })
+            }

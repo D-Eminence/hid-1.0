@@ -1,4 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react'
+import { getTurnstileSiteKey } from '../lib/captcha'
 
 declare global {
   interface Window {
@@ -49,7 +50,7 @@ type TurnstileWidgetProps = {
 }
 
 export function TurnstileWidget({ action, onTokenChange, resetKey }: TurnstileWidgetProps) {
-  const siteKey = import.meta.env.VITE_TURNSTILE_SITE_KEY as string | undefined
+  const siteKey = getTurnstileSiteKey() || undefined
   const containerRef = useRef<HTMLDivElement | null>(null)
   const widgetIdRef = useRef<string | null>(null)
   const [error, setError] = useState('')

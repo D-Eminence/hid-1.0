@@ -759,7 +759,7 @@ async function performUserAction(
         userProfileId: target.profile.id,
         patientId: target.patient?.id ?? null,
         title: 'Account locked',
-        message: 'An HID administrator locked this account. Contact support if you need help.',
+        message: 'An HID administrator locked this account. Contact: support@healthidentitydirectory.com',
       },
       ...affectedStaffProfiles.map(staffProfile => ({
         userProfileId: staffProfile.user_profile_id,

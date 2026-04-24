@@ -11,11 +11,16 @@ import { isConfigured } from './lib/supabase'
 const app  = express()
 const PORT = process.env.PORT ?? 3000
 const isProd = process.env.NODE_ENV === 'production'
+const legacyServerExplicitlyEnabled = process.env.ENABLE_LEGACY_SERVER === 'true'
 const sentryCompat = Sentry as typeof Sentry & {
   Handlers?: {
     errorHandler?: () => express.ErrorRequestHandler
     requestHandler?: () => express.RequestHandler
   }
+}
+
+if (isProd && !legacyServerExplicitlyEnabled) {
+  throw new Error('Refusing to start the legacy compatibility server in production without ENABLE_LEGACY_SERVER=true.')
 }
 
 // ── Sentry (error monitoring) ─────────────────────────────────────────────────

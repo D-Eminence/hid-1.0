@@ -111,12 +111,9 @@ export interface HidMedicalRecordFile {
   record_id: string
   record_version_id: string
   patient_id: string
-  storage_bucket: string
-  storage_path: string
   original_file_name: string
   mime_type: string | null
   size_bytes: number | null
-  sha256_hex: string | null
   uploaded_by_user_profile_id: string
   created_at: string
 }

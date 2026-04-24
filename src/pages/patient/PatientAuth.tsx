@@ -6,6 +6,7 @@ import { OtpInputs } from '../../components/OtpInputs'
 import { TurnstileWidget } from '../../components/TurnstileWidget'
 import { Button, Input, Select, showToast } from '../../components/ui'
 import { clearPatientSession, getPatientSession, setPatientSession } from '../../lib/auth'
+import { ensureCaptchaReady, isTurnstileConfigured } from '../../lib/captcha'
 import {
   completePatientPasswordReset,
   fetchMyPatient,
@@ -67,7 +68,7 @@ type ForgotState = {
   verificationToken: string
 }
 
-const TURNSTILE_ENABLED = Boolean(import.meta.env.VITE_TURNSTILE_SITE_KEY)
+const TURNSTILE_ENABLED = isTurnstileConfigured()
 
 function emptyForgotState(): ForgotState {
   return {
@@ -155,8 +156,11 @@ export default function PatientAuth() {
   useEffect(() => preloadRoutesAfterDelay(['patientProfile', 'patientRecords', 'patientHistory', 'patientNotifications']), [])
 
   function requireCaptcha() {
-    if (!TURNSTILE_ENABLED) return true
-    if (captchaToken) return true
+    if (!TURNSTILE_ENABLED && !ensureCaptchaReady(captchaToken)) {
+      showToast('Security check is not configured right now. Please contact support.', 'error')
+      return false
+    }
+    if (ensureCaptchaReady(captchaToken)) return true
     showToast('Complete the security check before continuing.', 'error')
     return false
   }

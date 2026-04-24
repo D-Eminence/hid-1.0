@@ -8,6 +8,7 @@ import type {
 } from '../types/admin'
 import { HidApiError } from '../lib/hidApi'
 import { clearAllPortalSessions } from '../lib/auth'
+import { BANNED_ACCOUNT_MESSAGE, isBannedAuthMessage } from '../lib/securityMessages'
 import { NETWORK_TIMEOUT_MESSAGE, fetchWithTimeout, getSafeSession, safeSignOut } from '../lib/supabase'
 
 type EdgeEnvelope<T> = {
@@ -29,6 +30,7 @@ function fallbackErrorMessage(raw: string, status: number) {
   if (lower.includes('posthog')) return 'PostHog data is not available right now.'
   if (lower.includes('provider request failed with status 401') || status === 401) return 'Please sign in to open the admin dashboard.'
   if (lower.includes('provider request failed with status 403') || status === 403) return 'Admin access is limited to platform admins.'
+  if (isBannedAuthMessage(raw)) return BANNED_ACCOUNT_MESSAGE
   if (status === 404) return 'The requested admin data could not be found right now.'
   if (status === 408) return NETWORK_TIMEOUT_MESSAGE
   if (status === 429) return 'The admin dashboard is being rate-limited right now. Please wait a moment and try again.'

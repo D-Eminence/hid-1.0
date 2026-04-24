@@ -1,6 +1,15 @@
 import { optionalEnv } from './env.ts'
 import { HttpError } from './http.ts'
 
+function getTurnstileSecret() {
+  return optionalEnv('HID_TURNSTILE_SECRET_KEY') || optionalEnv('TURNSTILE_SECRET_KEY')
+}
+
+function isLocalHostname(hostname: string) {
+  const normalized = hostname.trim().toLowerCase()
+  return normalized === 'localhost' || normalized === '127.0.0.1' || normalized === '0.0.0.0' || normalized.endsWith('.local')
+}
+
 function clientIpAddress(req: Request) {
   const cfIp = req.headers.get('cf-connecting-ip')
   if (cfIp) return cfIp
@@ -9,12 +18,16 @@ function clientIpAddress(req: Request) {
 }
 
 export function turnstileEnabled() {
-  return Boolean(optionalEnv('HID_TURNSTILE_SECRET_KEY'))
+  return Boolean(getTurnstileSecret())
 }
 
 export async function verifyTurnstileToken(req: Request, token: string | null | undefined, action: string) {
-  const secret = optionalEnv('HID_TURNSTILE_SECRET_KEY')
-  if (!secret) return
+  const secret = getTurnstileSecret()
+  if (!secret) {
+    const hostname = new URL(req.url).hostname
+    if (isLocalHostname(hostname)) return
+    throw new HttpError(503, 'Security verification is not configured right now. Please try again later.')
+  }
 
   if (!token) {
     throw new HttpError(400, 'Complete the security check to continue.')

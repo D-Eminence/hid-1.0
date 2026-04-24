@@ -54,6 +54,8 @@ export async function requireUser(req: Request): Promise<{
   profile: HidUserProfileRecord | null
   staffAccount: HidStaffAccountState | null
 }> {
+  const authHeader = req.headers.get('Authorization')
+  const accessToken = authHeader?.replace(/^Bearer\s+/i, '').trim() ?? ''
   const client = createUserClient(req)
   const { data, error } = await client.auth.getUser()
   if (error || !data.user) {
@@ -99,6 +101,23 @@ export async function requireUser(req: Request): Promise<{
     }
     if (staffAccount?.active === false) {
       throw new HttpError(403, 'This account is not allowed to do that right now.')
+    }
+  }
+
+  const shouldRequireMfa =
+    Boolean(profile?.mfa_required) &&
+    (
+      effectiveRole === 'platform_admin' ||
+      ((effectiveRole === 'clinician' || effectiveRole === 'org_admin') && Boolean(staffAccount?.id))
+    )
+
+  if (shouldRequireMfa) {
+    const assurance = await client.auth.mfa.getAuthenticatorAssuranceLevel(accessToken)
+    if (assurance.error) {
+      throw new HttpError(400, 'We could not verify this account right now.', assurance.error)
+    }
+    if (assurance.data?.currentLevel !== 'aal2') {
+      throw new HttpError(403, 'Multi-factor authentication is required for this account.')
     }
   }
 

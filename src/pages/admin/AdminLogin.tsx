@@ -2,12 +2,32 @@ import React, { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { AuthShell } from '../../components/AuthShell'
 import { OtpInputs } from '../../components/OtpInputs'
+import { TurnstileWidget } from '../../components/TurnstileWidget'
 import { Button, Input, showToast } from '../../components/ui'
 import { clearAllPortalSessions, signOutAndClearSessions } from '../../lib/auth'
+import { ensureCaptchaReady, isTurnstileConfigured } from '../../lib/captcha'
 import { ADMIN_LOGIN_PATH, ADMIN_OVERVIEW_PATH } from '../../lib/adminRoutes'
-import { startAdminPasswordResetOtp, updateCurrentUserPassword, verifyAdminPasswordResetOtp } from '../../lib/hidApi'
+import {
+  enrollPrivilegedTotp,
+  getPrivilegedMfaRequirement,
+  startAdminPasswordResetOtp,
+  updateCurrentUserPassword,
+  verifyAdminPasswordResetOtp,
+  verifyPrivilegedTotp,
+} from '../../lib/hidApi'
 import { getSafeUser, safeSignOut, supabase } from '../../lib/supabase'
 import { isStrongPassword, maskEmailAddress, PASSWORD_REQUIREMENTS_TEXT } from '../../lib/utils'
+
+type AdminStep = 'login' | 'forgot' | 'reset' | 'mfa-enroll' | 'mfa-verify'
+
+type EnrollmentState = {
+  factorId: string
+  friendlyName: string | null
+  qrCode: string
+  secret: string
+}
+
+const TURNSTILE_ENABLED = isTurnstileConfigured()
 
 async function getCurrentAppRole() {
   const user = await getSafeUser()
@@ -29,7 +49,7 @@ async function getCurrentAppRole() {
 
 export default function AdminLogin() {
   const navigate = useNavigate()
-  const [step, setStep] = useState<'login' | 'forgot' | 'reset'>('login')
+  const [step, setStep] = useState<AdminStep>('login')
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [otp, setOtp] = useState('')
@@ -37,17 +57,97 @@ export default function AdminLogin() {
   const [otpVerified, setOtpVerified] = useState(false)
   const [resetPassword, setResetPassword] = useState('')
   const [confirmResetPassword, setConfirmResetPassword] = useState('')
+  const [captchaToken, setCaptchaToken] = useState<string | null>(null)
+  const [captchaResetKey, setCaptchaResetKey] = useState(0)
+  const [mfaCode, setMfaCode] = useState('')
+  const [mfaFactorId, setMfaFactorId] = useState<string | null>(null)
+  const [mfaEnrollment, setMfaEnrollment] = useState<EnrollmentState | null>(null)
   const [loading, setLoading] = useState(false)
   const canSubmitReset = isStrongPassword(resetPassword) && resetPassword === confirmResetPassword
+
+  function resetCaptcha() {
+    setCaptchaToken(null)
+    setCaptchaResetKey(current => current + 1)
+  }
+
+  function requireCaptcha() {
+    if (!TURNSTILE_ENABLED && !ensureCaptchaReady(captchaToken)) {
+      showToast('Security check is not configured right now. Please contact support.', 'error')
+      return false
+    }
+    if (ensureCaptchaReady(captchaToken)) return true
+    showToast('Complete the security check before continuing.', 'error')
+    return false
+  }
+
+  function resetMfaState() {
+    setMfaCode('')
+    setMfaFactorId(null)
+    setMfaEnrollment(null)
+  }
+
+  async function finalizeAdminAccess() {
+    clearAllPortalSessions()
+    showToast('Admin sign-in successful.', 'success')
+    navigate(ADMIN_OVERVIEW_PATH, { replace: true })
+  }
+
+  async function moveIntoAdminMfaFlow(showMfaToast = true) {
+    const role = await getCurrentAppRole()
+    if (role !== 'platform_admin') {
+      await safeSignOut().catch(() => undefined)
+      clearAllPortalSessions()
+      resetMfaState()
+      showToast('Admin access is limited to platform admins.', 'error')
+      return
+    }
+
+    const requirement = await getPrivilegedMfaRequirement()
+    if (!requirement.required) {
+      resetMfaState()
+      await finalizeAdminAccess()
+      return
+    }
+
+    setMfaCode('')
+    if (requirement.needsEnrollment || !requirement.challengeFactorId) {
+      const enrollment = await enrollPrivilegedTotp('HID Admin Authenticator')
+      setMfaEnrollment({
+        factorId: enrollment.factorId,
+        friendlyName: enrollment.friendlyName,
+        qrCode: enrollment.qrCode,
+        secret: enrollment.secret,
+      })
+      setMfaFactorId(enrollment.factorId)
+      setStep('mfa-enroll')
+      if (showMfaToast) {
+        showToast('Set up your authenticator app to finish signing in.', 'info')
+      }
+      return
+    }
+
+    setMfaEnrollment(null)
+    setMfaFactorId(requirement.challengeFactorId)
+    setStep('mfa-verify')
+    if (showMfaToast) {
+      showToast('Enter your authenticator code to finish signing in.', 'info')
+    }
+  }
+
+  async function abandonMfaFlow() {
+    await safeSignOut().catch(() => undefined)
+    clearAllPortalSessions()
+    resetMfaState()
+    setStep('login')
+  }
 
   useEffect(() => {
     let active = true
     void (async () => {
       try {
         const role = await getCurrentAppRole()
-        if (active && role === 'platform_admin') {
-          navigate(ADMIN_OVERVIEW_PATH, { replace: true })
-        }
+        if (!active || role !== 'platform_admin') return
+        await moveIntoAdminMfaFlow(false)
       } catch {
         // Best effort only. Manual sign-in remains available.
       }
@@ -73,10 +173,11 @@ export default function AdminLogin() {
       showToast('Enter your admin email address first.', 'error')
       return
     }
+    if (!requireCaptcha()) return
 
     setLoading(true)
     try {
-      await startAdminPasswordResetOtp(email)
+      await startAdminPasswordResetOtp(email, captchaToken)
       setOtp('')
       setOtpSent(true)
       setOtpVerified(false)
@@ -85,6 +186,7 @@ export default function AdminLogin() {
       const message = error instanceof Error ? error.message : 'Unable to send a verification code right now.'
       showToast(message, 'error')
     } finally {
+      resetCaptcha()
       setLoading(false)
     }
   }
@@ -140,35 +242,91 @@ export default function AdminLogin() {
       showToast('Enter your admin email address and password.', 'error')
       return
     }
+    if (!requireCaptcha()) return
 
     setLoading(true)
     try {
       const { error } = await supabase.auth.signInWithPassword({
         email: email.trim().toLowerCase(),
         password,
+        options: {
+          captchaToken: captchaToken ?? undefined,
+        },
       })
 
       if (error) {
         throw error
       }
 
-      const role = await getCurrentAppRole()
-      if (role !== 'platform_admin') {
-        await safeSignOut().catch(() => undefined)
-        clearAllPortalSessions()
-        showToast('Admin access is limited to platform admins.', 'error')
-        return
-      }
-
-      clearAllPortalSessions()
-      showToast('Admin sign-in successful.', 'success')
-      navigate(ADMIN_OVERVIEW_PATH, { replace: true })
+      await moveIntoAdminMfaFlow()
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Unable to sign in right now.'
       showToast(message, 'error')
     } finally {
+      resetCaptcha()
       setLoading(false)
     }
+  }
+
+  async function submitMfa(nextCode = mfaCode) {
+    const factorId = mfaEnrollment?.factorId ?? mfaFactorId
+    if (!factorId) {
+      showToast('Start sign-in again to continue.', 'error')
+      await abandonMfaFlow()
+      return
+    }
+
+    setLoading(true)
+    try {
+      await verifyPrivilegedTotp(factorId, nextCode)
+      resetMfaState()
+      await finalizeAdminAccess()
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'The authenticator code is not correct.'
+      showToast(message, 'error')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  if (step === 'mfa-enroll' || step === 'mfa-verify') {
+    const title = step === 'mfa-enroll' ? 'Set Up Authenticator' : 'Enter Authenticator Code'
+    const description = step === 'mfa-enroll'
+      ? 'Scan this QR code with your authenticator app, then enter the 6-digit code to finish signing in.'
+      : 'Open your authenticator app and enter the latest 6-digit code for your HID admin account.'
+
+    return (
+      <AuthShell title={title} providerLink={false} mode="forgot">
+        <div style={{ display: 'grid', gap: 18 }}>
+          <div style={{ color: '#6b7280', fontSize: 13, lineHeight: 1.6 }}>
+            {description}
+          </div>
+          {step === 'mfa-enroll' && mfaEnrollment ? (
+            <>
+              <div style={{ justifySelf: 'center', padding: 14, borderRadius: 18, border: '1px solid #dbe4f0', background: '#ffffff' }}>
+                <img src={mfaEnrollment.qrCode} alt="Authenticator QR code" style={{ width: 188, height: 188, display: 'block' }} />
+              </div>
+              <div style={{ color: '#6b7280', fontSize: 12, lineHeight: 1.6 }}>
+                Manual setup key
+              </div>
+              <div style={{ padding: 12, borderRadius: 12, background: '#f5f7fa', fontFamily: 'monospace', fontSize: 12, wordBreak: 'break-word' }}>
+                {mfaEnrollment.secret}
+              </div>
+            </>
+          ) : null}
+          <OtpInputs value={mfaCode} onChange={setMfaCode} onComplete={submitMfa} />
+          <Button loading={loading} onClick={() => void submitMfa()} fullWidth>
+            {step === 'mfa-enroll' ? 'Verify and Continue' : 'Continue'}
+          </Button>
+          <button
+            onClick={() => void abandonMfaFlow()}
+            style={{ border: 'none', background: 'none', color: '#1f8cff', fontSize: 12, cursor: 'pointer', justifySelf: 'start', padding: 0 }}
+          >
+            Back to sign in
+          </button>
+        </div>
+      </AuthShell>
+    )
   }
 
   if (step === 'forgot') {
@@ -190,6 +348,7 @@ export default function AdminLogin() {
                 onChange={event => setEmail(event.target.value)}
                 autoComplete="email"
               />
+              <TurnstileWidget action="admin-reset" onTokenChange={setCaptchaToken} resetKey={captchaResetKey} />
               <Button loading={loading} onClick={() => void sendResetLink()} fullWidth>
                 Send OTP
               </Button>
@@ -296,6 +455,7 @@ export default function AdminLogin() {
             }
           }}
         />
+        <TurnstileWidget action="admin-login" onTokenChange={setCaptchaToken} resetKey={captchaResetKey} />
         <Button loading={loading} onClick={() => void submit()} fullWidth>
           Sign In
         </Button>

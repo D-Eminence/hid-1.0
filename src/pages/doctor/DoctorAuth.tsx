@@ -6,14 +6,18 @@ import { OtpInputs } from '../../components/OtpInputs'
 import { TurnstileWidget } from '../../components/TurnstileWidget'
 import { Button, Input, Select, showToast } from '../../components/ui'
 import { clearStaffSession, getStaffSession, setStaffSession, signOutAndClearSessions } from '../../lib/auth'
+import { ensureCaptchaReady, isTurnstileConfigured } from '../../lib/captcha'
 import { HOSPITAL_AUTH_PATH, HOSPITAL_DASHBOARD_PATH } from '../../lib/hospitalRoutes'
 import {
+  enrollPrivilegedTotp,
   fetchMyStaffAccount,
+  getPrivilegedMfaRequirement,
   providerSignUp,
   providerSignIn,
   sendStaffVerificationEmail,
   sendStaffPasswordReset,
   updateCurrentUserPassword,
+  verifyPrivilegedTotp,
   verifyStaffPasswordResetOtp,
   verifyStaffSignupOtp,
 } from '../../lib/hidApi'
@@ -22,8 +26,16 @@ import { preloadRoutesAfterDelay } from '../../lib/routePreload'
 import { hasStoredSupabaseAuthSession, supabase } from '../../lib/supabase'
 import { COUNTRIES, PASSWORD_REQUIREMENTS_TEXT, STATES_BY_COUNTRY, isStrongPassword, maskEmailAddress } from '../../lib/utils'
 
-type DoctorStep = 'login' | 'signup' | 'verify' | 'forgot' | 'reset'
-const TURNSTILE_ENABLED = Boolean(import.meta.env.VITE_TURNSTILE_SITE_KEY)
+type DoctorStep = 'login' | 'signup' | 'verify' | 'forgot' | 'reset' | 'mfa-enroll' | 'mfa-verify'
+type StaffAccount = NonNullable<Awaited<ReturnType<typeof fetchMyStaffAccount>>>
+type MfaEnrollmentState = {
+  factorId: string
+  friendlyName: string | null
+  qrCode: string
+  secret: string
+}
+
+const TURNSTILE_ENABLED = isTurnstileConfigured()
 
 function actionButtonStyle(active: boolean) {
   return { marginTop: 16, background: active ? '#1f8cff' : '#9aa6b2' }
@@ -74,6 +86,10 @@ export default function DoctorAuth() {
   const [signupAccepted, setSignupAccepted] = useState(false)
   const [captchaToken, setCaptchaToken] = useState<string | null>(null)
   const [captchaResetKey, setCaptchaResetKey] = useState(0)
+  const [pendingStaffAccount, setPendingStaffAccount] = useState<StaffAccount | null>(null)
+  const [mfaCode, setMfaCode] = useState('')
+  const [mfaFactorId, setMfaFactorId] = useState<string | null>(null)
+  const [mfaEnrollment, setMfaEnrollment] = useState<MfaEnrollmentState | null>(null)
 
   const canSubmitLogin = !!loginForm.hospitalName.trim() && !!loginForm.email.trim() && !!loginForm.password
   const canSubmitSignup =
@@ -100,14 +116,7 @@ export default function DoctorAuth() {
       try {
         const staffAccount = await fetchMyStaffAccount()
         if (!active || !staffAccount) return
-        setStaffSession({
-          id: staffAccount.id,
-          fullName: staffAccount.full_name,
-          hospitalName: staffAccount.hospital_name,
-          email: staffAccount.email,
-          role: staffAccount.role,
-        })
-        navigate(HOSPITAL_DASHBOARD_PATH)
+        await moveIntoStaffMfaFlow(staffAccount, false)
       } catch {
         if (!active) return
         clearStaffSession()
@@ -132,8 +141,11 @@ export default function DoctorAuth() {
   useEffect(() => preloadRoutesAfterDelay(['doctorDashboard', 'doctorAccess', 'doctorHistory', 'doctorEmergency', 'doctorPatientRecords']), [])
 
   function requireCaptcha() {
-    if (!TURNSTILE_ENABLED) return true
-    if (captchaToken) return true
+    if (!TURNSTILE_ENABLED && !ensureCaptchaReady(captchaToken)) {
+      showToast('Security check is not configured right now. Please contact support.', 'error')
+      return false
+    }
+    if (ensureCaptchaReady(captchaToken)) return true
     showToast('Complete the security check before continuing.', 'error')
     return false
   }
@@ -141,6 +153,65 @@ export default function DoctorAuth() {
   function resetCaptcha() {
     setCaptchaToken(null)
     setCaptchaResetKey(current => current + 1)
+  }
+
+  function resetMfaState() {
+    setPendingStaffAccount(null)
+    setMfaCode('')
+    setMfaFactorId(null)
+    setMfaEnrollment(null)
+  }
+
+  function finalizeStaffAccess(staffAccount: StaffAccount) {
+    resetMfaState()
+    setStaffSession({
+      id: staffAccount.id,
+      fullName: staffAccount.full_name,
+      hospitalName: staffAccount.hospital_name,
+      email: staffAccount.email,
+      role: staffAccount.role,
+    })
+    navigate(HOSPITAL_DASHBOARD_PATH)
+  }
+
+  async function moveIntoStaffMfaFlow(staffAccount: StaffAccount, showMfaToast = true) {
+    const requirement = await getPrivilegedMfaRequirement()
+    if (!requirement.required) {
+      finalizeStaffAccess(staffAccount)
+      return
+    }
+
+    setPendingStaffAccount(staffAccount)
+    setMfaCode('')
+
+    if (requirement.needsEnrollment || !requirement.challengeFactorId) {
+      const enrollment = await enrollPrivilegedTotp(`${staffAccount.hospital_name || 'HID'} Authenticator`)
+      setMfaEnrollment({
+        factorId: enrollment.factorId,
+        friendlyName: enrollment.friendlyName,
+        qrCode: enrollment.qrCode,
+        secret: enrollment.secret,
+      })
+      setMfaFactorId(enrollment.factorId)
+      setStep('mfa-enroll')
+      if (showMfaToast) {
+        showToast('Set up your authenticator app to finish signing in.', 'info')
+      }
+      return
+    }
+
+    setMfaEnrollment(null)
+    setMfaFactorId(requirement.challengeFactorId)
+    setStep('mfa-verify')
+    if (showMfaToast) {
+      showToast('Enter your authenticator code to finish signing in.', 'info')
+    }
+  }
+
+  async function abandonMfaFlow() {
+    await signOutAndClearSessions().catch(() => undefined)
+    resetMfaState()
+    setStep('login')
   }
 
   async function submitLogin() {
@@ -154,14 +225,7 @@ export default function DoctorAuth() {
     try {
       const staffAccount = await providerSignIn(loginForm.hospitalName, loginForm.email, loginForm.password, captchaToken)
       trackEvent('staff_signin_completed')
-      setStaffSession({
-        id: staffAccount.id,
-        fullName: staffAccount.full_name,
-        hospitalName: (staffAccount.hospital_name ?? loginForm.hospitalName.trim()) || null,
-        email: staffAccount.email,
-        role: staffAccount.role,
-      })
-      navigate(HOSPITAL_DASHBOARD_PATH)
+      await moveIntoStaffMfaFlow(staffAccount)
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Invalid hospital credentials.'
       if (error instanceof Error && message.toLowerCase().includes('email not confirmed') && /\S+@\S+\.\S+/.test(loginForm.email.trim())) {
@@ -221,14 +285,7 @@ export default function DoctorAuth() {
       }
 
       trackEvent('hospital_signup_completed')
-      setStaffSession({
-        id: result.staffAccount.id,
-        fullName: result.staffAccount.full_name,
-        hospitalName: result.staffAccount.hospital_name,
-        email: result.staffAccount.email,
-        role: result.staffAccount.role,
-      })
-      navigate(HOSPITAL_DASHBOARD_PATH)
+      await moveIntoStaffMfaFlow(result.staffAccount)
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Unable to create the hospital account.'
       showToast(message, 'error')
@@ -248,15 +305,8 @@ export default function DoctorAuth() {
     try {
       const staffAccount = await verifyStaffSignupOtp(signupVerification.email, signupVerification.password, nextCode.trim())
       trackEvent('hospital_signup_completed')
-      setStaffSession({
-        id: staffAccount.id,
-        fullName: staffAccount.full_name,
-        hospitalName: staffAccount.hospital_name,
-        email: staffAccount.email,
-        role: staffAccount.role,
-      })
-      showToast('Email verified. Your hospital account is ready.', 'success')
-      navigate(HOSPITAL_DASHBOARD_PATH)
+      showToast('Email verified. Continue with your authenticator to finish signing in.', 'success')
+      await moveIntoStaffMfaFlow(staffAccount)
     } catch (error) {
       const message = error instanceof Error ? error.message : 'The verification code is not correct.'
       showToast(message, 'error')
@@ -352,6 +402,65 @@ export default function DoctorAuth() {
     } finally {
       setLoading(false)
     }
+  }
+
+  async function submitMfa(nextCode = mfaCode) {
+    const factorId = mfaEnrollment?.factorId ?? mfaFactorId
+    if (!factorId || !pendingStaffAccount) {
+      showToast('Start sign-in again to continue.', 'error')
+      await abandonMfaFlow()
+      return
+    }
+
+    setLoading(true)
+    try {
+      await verifyPrivilegedTotp(factorId, nextCode)
+      finalizeStaffAccess(pendingStaffAccount)
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'The authenticator code is not correct.'
+      showToast(message, 'error')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  if (step === 'mfa-enroll' || step === 'mfa-verify') {
+    return (
+      <AuthShell mode="provider">
+        <div style={{ flex: 1, display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
+          <div style={{ textAlign: 'center' }}>
+            <div style={{ fontSize: 30, fontWeight: 700 }}>
+              {step === 'mfa-enroll' ? 'Set up your authenticator' : 'Enter authenticator code'}
+            </div>
+            <p style={{ color: '#7d8797', marginTop: 10, fontSize: 12, lineHeight: 1.6 }}>
+              {step === 'mfa-enroll'
+                ? 'Scan this QR code with your authenticator app, then enter the latest 6-digit code to finish signing in.'
+                : 'Open your authenticator app and enter the latest 6-digit code for your hospital account.'}
+            </p>
+          </div>
+          {step === 'mfa-enroll' && mfaEnrollment ? (
+            <>
+              <div style={{ marginTop: 22, alignSelf: 'center', padding: 14, borderRadius: 18, border: '1px solid #dbe4f0', background: '#ffffff' }}>
+                <img src={mfaEnrollment.qrCode} alt="Authenticator QR code" style={{ width: 188, height: 188, display: 'block' }} />
+              </div>
+              <div style={{ color: '#7d8797', fontSize: 11, lineHeight: 1.6, marginTop: 14 }}>Manual setup key</div>
+              <div style={{ marginTop: 8, padding: 12, borderRadius: 12, background: '#f5f7fa', fontFamily: 'monospace', fontSize: 12, wordBreak: 'break-word' }}>
+                {mfaEnrollment.secret}
+              </div>
+            </>
+          ) : null}
+          <div style={{ marginTop: 24 }}>
+            <OtpInputs value={mfaCode} onChange={setMfaCode} onComplete={submitMfa} />
+          </div>
+          <Button loading={loading} onClick={() => void submitMfa()} style={actionButtonStyle(mfaCode.length === 6)}>
+            {step === 'mfa-enroll' ? 'Verify and Continue' : 'Continue'}
+          </Button>
+          <button onClick={() => void abandonMfaFlow()} style={{ marginTop: 12, border: 'none', background: 'none', color: '#1f8cff', fontSize: 11 }}>
+            Back to sign in
+          </button>
+        </div>
+      </AuthShell>
+    )
   }
 
   if (step === 'forgot') {

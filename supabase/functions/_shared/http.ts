@@ -1,5 +1,7 @@
 import { resolveCorsHeaders } from './cors.ts'
 
+const BANNED_ACCOUNT_MESSAGE = 'This user is banned. Contact: support@healthidentitydirectory.com'
+
 export class HttpError extends Error {
   status: number
   details?: unknown
@@ -159,7 +161,7 @@ function sanitizeErrorMessage(message: string, status: number) {
     return 'The sign-in details are not correct.'
   }
   if (lower.includes('user is banned') || lower.includes('banned until')) {
-    return 'The sign-in details are not correct.'
+    return BANNED_ACCOUNT_MESSAGE
   }
   if (lower.includes('authentication required') || lower.includes('missing authorization header')) {
     return 'Please sign in to continue.'

@@ -15,6 +15,7 @@ import type {
 } from '../types/hid'
 import type { UploadDraft } from './medicalRecordUtils'
 import { clearAllPortalSessions } from './auth'
+import { BANNED_ACCOUNT_MESSAGE, isBannedAuthMessage } from './securityMessages'
 import { fetchWithTimeout, getSafeSession, getSafeUser, NETWORK_TIMEOUT_MESSAGE, safeSignOut, supabase } from './supabase'
 
 type PendingPatientSignup = {
@@ -51,6 +52,8 @@ type SignedUploadResponse = {
   signedUrl: string
   token: string
   path: string
+  uploadToken: string
+  uploadTokenExpiresAt: string
 }
 
 type SignedDownloadResponse = {
@@ -61,7 +64,6 @@ type PasswordResetStartResponse = {
   challengeId: string
   deliveryChannels: Array<'email'>
   expiresAt: string
-  hidCode: string
   maskedEmail: string | null
 }
 
@@ -87,11 +89,27 @@ type RecordCreationResponse = {
   version_id: string
 }
 
-type SignupAvailabilityResponse = {
-  accountType: 'patient' | 'hospital'
-  emailInUse: boolean
-  emailOwner: 'patient' | 'hospital' | 'unknown' | null
-  phoneInUse: boolean
+type UserSecurityProfile = {
+  app_role: string | null
+  deleted_at: string | null
+  mfa_required: boolean
+}
+
+type PrivilegedMfaRequirement = {
+  challengeFactorId: string | null
+  challengeFactorLabel: string | null
+  currentLevel: 'aal1' | 'aal2' | null
+  nextLevel: 'aal1' | 'aal2' | null
+  needsEnrollment: boolean
+  required: boolean
+}
+
+type TotpEnrollment = {
+  factorId: string
+  friendlyName: string | null
+  qrCode: string
+  secret: string
+  uri: string
 }
 
 type HistoryView = {
@@ -106,6 +124,7 @@ const RECENT_RECORD_SAVE_TTL_MS = 5 * 60 * 1000
 const RECORD_UPLOAD_TIMEOUT_MS = 90000
 const RECORD_UPLOAD_RETRY_COUNT = 3
 const REQUEST_DEDUPE_ONLY_TTL_MS = 0
+const PRIVILEGED_MFA_ROLES = new Set(['platform_admin', 'org_admin', 'clinician'])
 const HID_PATIENT_COLUMNS = [
   'id',
   'user_profile_id',
@@ -376,9 +395,7 @@ function isDeletedAccountMessage(message: string) {
   const lower = message.toLowerCase()
   return (
     lower.includes('account has been deleted') ||
-    lower.includes('patient account has been deleted') ||
-    lower.includes('user is banned') ||
-    lower.includes('banned until')
+    lower.includes('patient account has been deleted')
   )
 }
 
@@ -462,11 +479,13 @@ async function edgeRequest<T>(functionName: string, options: EdgeRequestOptions 
       parsedPayload && typeof parsedPayload === 'object' && 'error' in parsedPayload && typeof parsedPayload.error === 'string'
         ? parsedPayload.error
         : fallbackMessage || response.statusText || ''
-    const responseMessage = isDeletedAccountMessage(rawResponseMessage)
-      ? 'We could not verify those details.'
-      : rawResponseMessage && !isLowSignalErrorMessage(rawResponseMessage)
-        ? rawResponseMessage
-        : fallbackErrorMessageForStatus(response.status)
+    const responseMessage = isBannedAuthMessage(rawResponseMessage)
+      ? BANNED_ACCOUNT_MESSAGE
+      : isDeletedAccountMessage(rawResponseMessage)
+        ? 'We could not verify those details.'
+        : rawResponseMessage && !isLowSignalErrorMessage(rawResponseMessage)
+          ? rawResponseMessage
+          : fallbackErrorMessageForStatus(response.status)
 
     const lowered = responseMessage.toLowerCase()
     if (
@@ -516,13 +535,13 @@ function authRedirectUrl(path: 'patient' | 'hospital') {
   return `${window.location.origin}/patient`
 }
 
-async function getCurrentUserAppRole() {
+async function getCurrentUserSecurityProfile() {
   const user = await getSafeUser()
   if (!user) return null
 
   const { data: profile, error } = await supabase
     .from('hid_user_profiles')
-    .select('app_role, deleted_at')
+    .select('app_role, deleted_at, mfa_required')
     .eq('auth_user_id', user.id)
     .maybeSingle()
 
@@ -530,9 +549,18 @@ async function getCurrentUserAppRole() {
     throw new HidApiError(400, error.message, error)
   }
 
-  const profileRow = profile as { app_role?: unknown; deleted_at?: unknown } | null
+  const profileRow = profile as Partial<UserSecurityProfile> | null
   if (profileRow?.deleted_at) return null
-  return typeof profileRow?.app_role === 'string' ? profileRow.app_role : null
+  return {
+    app_role: typeof profileRow?.app_role === 'string' ? profileRow.app_role : null,
+    deleted_at: typeof profileRow?.deleted_at === 'string' ? profileRow.deleted_at : null,
+    mfa_required: Boolean(profileRow?.mfa_required),
+  } satisfies UserSecurityProfile
+}
+
+async function getCurrentUserAppRole() {
+  const profile = await getCurrentUserSecurityProfile()
+  return profile?.app_role ?? null
 }
 
 async function requestSignupVerificationEmail(email: string, path: 'patient' | 'hospital', captchaToken?: string | null) {
@@ -555,57 +583,96 @@ async function requestSignupVerificationEmail(email: string, path: 'patient' | '
   }
 }
 
-async function checkSignupAvailability(params: {
-  accountType: 'patient' | 'hospital'
-  email: string
-  phone?: string | null
-}) {
-  return edgeRequest<SignupAvailabilityResponse>('signup-availability', {
-    method: 'POST',
-    requireAuth: false,
-    body: {
-      accountType: params.accountType,
-      email: params.email,
-      phone: params.phone ?? null,
-    },
-  })
+function toFriendlyFactorLabel(value: unknown) {
+  return typeof value === 'string' && value.trim() ? value.trim() : null
 }
 
-async function ensurePatientSignupAvailability(email: string, phone?: string | null) {
-  const availability = await checkSignupAvailability({
-    accountType: 'patient',
-    email,
-    phone,
-  })
+async function listMfaFactors() {
+  const { data, error } = await supabase.auth.mfa.listFactors()
+  if (error) {
+    throw new HidApiError(400, error.message, error)
+  }
+  return data
+}
 
-  if (availability.emailInUse && availability.phoneInUse) {
-    throw new HidApiError(409, 'That email address and phone number are already linked to HID accounts.')
+export async function getPrivilegedMfaRequirement(): Promise<PrivilegedMfaRequirement> {
+  const profile = await getCurrentUserSecurityProfile()
+  if (!profile?.mfa_required || !profile.app_role || !PRIVILEGED_MFA_ROLES.has(profile.app_role)) {
+    return {
+      challengeFactorId: null,
+      challengeFactorLabel: null,
+      currentLevel: null,
+      nextLevel: null,
+      needsEnrollment: false,
+      required: false,
+    }
   }
-  if (availability.emailInUse) {
-    throw new HidApiError(409, 'That email address is already linked to an HID account. Sign in instead.')
+
+  const [{ data: assurance, error: assuranceError }, factors] = await Promise.all([
+    supabase.auth.mfa.getAuthenticatorAssuranceLevel(),
+    listMfaFactors(),
+  ])
+
+  if (assuranceError) {
+    throw new HidApiError(400, assuranceError.message, assuranceError)
   }
-  if (availability.phoneInUse) {
-    throw new HidApiError(409, 'That phone number is already linked to another HID account.')
+
+  const verifiedTotp = (factors?.totp ?? []).find(factor => typeof factor?.id === 'string') ?? null
+  const currentLevel = assurance?.currentLevel ?? null
+  const nextLevel = assurance?.nextLevel ?? null
+
+  return {
+    challengeFactorId: typeof verifiedTotp?.id === 'string' ? verifiedTotp.id : null,
+    challengeFactorLabel: toFriendlyFactorLabel(verifiedTotp?.friendly_name),
+    currentLevel,
+    nextLevel,
+    needsEnrollment: !verifiedTotp,
+    required: currentLevel !== 'aal2',
   }
 }
 
-async function ensureHospitalSignupAvailability(email: string) {
-  const availability = await checkSignupAvailability({
-    accountType: 'hospital',
-    email,
+export async function enrollPrivilegedTotp(friendlyName: string): Promise<TotpEnrollment> {
+  const factors = await listMfaFactors()
+  const staleUnverifiedTotp = (factors?.all ?? []).filter(
+    factor => factor.factor_type === 'totp' && factor.status !== 'verified' && typeof factor.id === 'string',
+  )
+
+  for (const factor of staleUnverifiedTotp) {
+    await supabase.auth.mfa.unenroll({ factorId: factor.id }).catch(() => undefined)
+  }
+
+  const { data, error } = await supabase.auth.mfa.enroll({
+    factorType: 'totp',
+    friendlyName,
   })
 
-  if (!availability.emailInUse) return
-
-  if (availability.emailOwner === 'patient') {
-    throw new HidApiError(409, 'This email address is already linked to a patient account. Use a different email for the hospital account.')
+  if (error || !data?.id || !data.totp?.qr_code || !data.totp.secret || !data.totp.uri) {
+    throw new HidApiError(400, error?.message ?? 'Unable to start multi-factor setup right now.', error)
   }
 
-  if (availability.emailOwner === 'hospital') {
-    throw new HidApiError(409, 'An account with this email already exists. Sign in instead.')
+  return {
+    factorId: data.id,
+    friendlyName: toFriendlyFactorLabel(data.friendly_name) ?? friendlyName,
+    qrCode: data.totp.qr_code,
+    secret: data.totp.secret,
+    uri: data.totp.uri,
+  }
+}
+
+export async function verifyPrivilegedTotp(factorId: string, code: string) {
+  const normalizedCode = code.trim()
+  if (normalizedCode.length !== 6) {
+    throw new HidApiError(400, 'Enter the 6-digit authenticator code first.')
   }
 
-  throw new HidApiError(409, 'This email address is already linked to an HID account. Sign in instead or use a different email.')
+  const { error } = await supabase.auth.mfa.challengeAndVerify({
+    factorId,
+    code: normalizedCode,
+  })
+
+  if (error) {
+    throw new HidApiError(400, error.message, error)
+  }
 }
 
 async function requestEmailOtp(email: string, captchaToken?: string | null) {
@@ -669,11 +736,10 @@ async function verifySignupOtpAndEnsureSession(email: string, password: string, 
     })
 
     if (signInError) {
-      const lower = signInError.message.toLowerCase()
       throw new HidApiError(
         401,
-        lower.includes('user is banned') || lower.includes('banned until')
-          ? 'The sign-in details are not correct.'
+        isBannedAuthMessage(signInError.message)
+          ? BANNED_ACCOUNT_MESSAGE
           : signInError.message,
         signInError
       )
@@ -1285,8 +1351,8 @@ export async function uploadRecordFiles(recordId: string, uploads: UploadDraft[]
         method: 'POST',
         body: {
           recordId,
-          storagePath: signed.path,
           originalFileName: upload.file_name,
+          uploadToken: signed.uploadToken,
           mimeType: upload.file_type,
           sizeBytes: blob.size,
         },
@@ -1360,7 +1426,6 @@ export async function patientSignUpWithPassword(params: PendingPatientSignup & {
   }
 
   await clearConflictingAuthSession(normalizedEmail)
-  await ensurePatientSignupAvailability(normalizedEmail, normalizedPhone)
 
   const redirectTo = authRedirectUrl('patient')
   const { data, error } = await supabase.auth.signUp({
@@ -1425,11 +1490,10 @@ export async function patientSignIn(identifier: string, password: string, captch
   })
 
   if (error) {
-    const lower = error.message.toLowerCase()
     throw new HidApiError(
       401,
-      lower.includes('user is banned') || lower.includes('banned until')
-        ? 'The sign-in details are not correct.'
+      isBannedAuthMessage(error.message)
+        ? BANNED_ACCOUNT_MESSAGE
         : error.message,
       error
     )
@@ -1647,7 +1711,6 @@ export async function providerSignUp(params: {
   const hospitalName = params.hospitalName.trim()
   const normalizedEmail = params.email.trim().toLowerCase()
   await clearConflictingAuthSession(normalizedEmail)
-  await ensureHospitalSignupAvailability(normalizedEmail)
 
   const pendingData: PendingStaffOnboarding = {
     country: normalizeOptionalText(params.country),
@@ -1718,7 +1781,11 @@ export async function providerSignIn(hospitalName: string, email: string, passwo
   })
 
   if (error) {
-    throw new HidApiError(401, error.message, error)
+    throw new HidApiError(
+      401,
+      isBannedAuthMessage(error.message) ? BANNED_ACCOUNT_MESSAGE : error.message,
+      error
+    )
   }
 
   await assertHospitalAccountCompatibleEmail()
@@ -1753,8 +1820,8 @@ export async function verifyStaffPasswordResetOtp(email: string, code: string) {
   return staffAccount
 }
 
-export async function startAdminPasswordResetOtp(email: string) {
-  await requestEmailOtp(email, null)
+export async function startAdminPasswordResetOtp(email: string, captchaToken?: string | null) {
+  await requestEmailOtp(email, captchaToken)
 }
 
 export async function verifyAdminPasswordResetOtp(email: string, code: string) {

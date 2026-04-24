@@ -281,7 +281,6 @@ export function LegalDocumentsModal({
             'Monitoring compliance with data protection laws.',
             'Advising on data privacy obligations.',
             'Serving as a point of contact for users and regulators.',
-            'DPO Contact: [Insert DPO Email]',
           ]}
         />
         <AgreementSection

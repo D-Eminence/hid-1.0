@@ -45,14 +45,11 @@ enabled = true
 uri = "https://ekcuyqrwrzvwhmbnkold.supabase.co/functions/v1/send-email?hook_token=env(SEND_EMAIL_HOOK_TOKEN)"
 secrets = "env(SEND_EMAIL_HOOK_SECRET)"
 
-[auth.hook.password_verification_attempt]
-enabled = false
-
-[auth.hook.mfa_verification_attempt]
-enabled = false
+# Password and MFA verification-attempt hooks are not supported on the current
+# hosted Supabase organization, so they are intentionally omitted here.
 
 [functions.patient-register]
-verify_jwt = false
+verify_jwt = true
 
 [functions.patient-login]
 verify_jwt = false
@@ -67,85 +64,85 @@ verify_jwt = false
 verify_jwt = false
 
 [functions.staff-invite]
-verify_jwt = false
+verify_jwt = true
 
 [functions.staff-complete-onboarding]
-verify_jwt = false
+verify_jwt = true
 
 [functions.patients-me]
-verify_jwt = false
+verify_jwt = true
 
 [functions.patients-records]
-verify_jwt = false
+verify_jwt = true
 
 [functions.records-create]
-verify_jwt = false
+verify_jwt = true
 
 [functions.records-version-create]
-verify_jwt = false
+verify_jwt = true
 
 [functions.access-request-create]
-verify_jwt = false
+verify_jwt = true
 
 [functions.access-request-approve]
-verify_jwt = false
+verify_jwt = true
 
 [functions.access-grant-revoke]
-verify_jwt = false
+verify_jwt = true
 
 [functions.break-glass]
-verify_jwt = false
+verify_jwt = true
 
 [functions.files-sign-upload]
-verify_jwt = false
+verify_jwt = true
 
 [functions.files-register-upload]
-verify_jwt = false
+verify_jwt = true
 
 [functions.files-sign-download]
-verify_jwt = false
+verify_jwt = true
 
 [functions.notifications-list]
-verify_jwt = false
+verify_jwt = true
 
 [functions.audit-list]
-verify_jwt = false
+verify_jwt = true
 
 [functions.patient-history-list]
-verify_jwt = false
+verify_jwt = true
 
 [functions.staff-dashboard]
-verify_jwt = false
+verify_jwt = true
 
 [functions.access-request-deny]
-verify_jwt = false
+verify_jwt = true
 
 [functions.access-grant-close]
-verify_jwt = false
+verify_jwt = true
 
 [functions.health-check]
 verify_jwt = false
 
 [functions.patient-access-pin]
-verify_jwt = false
+verify_jwt = true
 
 [functions.admin-dashboard-overview]
-verify_jwt = false
+verify_jwt = true
 
 [functions.admin-user-management]
-verify_jwt = false
+verify_jwt = true
 
 [functions.send-email]
 verify_jwt = false
 
 [functions.signup-availability]
-verify_jwt = false
+verify_jwt = true
 
 [functions.account-delete-start]
-verify_jwt = false
+verify_jwt = true
 
 [functions.account-delete-verify]
-verify_jwt = false
+verify_jwt = true
 
 [functions.delete-my-account]
-verify_jwt = false
+verify_jwt = true

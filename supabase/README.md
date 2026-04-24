@@ -65,11 +65,17 @@ Compatibility-only, not used by the active frontend launch path:
 - `BREVO_API_KEY`
 - `BREVO_FROM_EMAIL`
 - `BREVO_FROM_NAME`
+- `SEND_EMAIL_HOOK_SECRET`
+- `HID_TURNSTILE_SECRET_KEY`
 
 Optional later:
 
 - `HID_STAFF_INVITE_REDIRECT_TO`
-- `HID_TURNSTILE_SECRET_KEY`
+
+Compatibility fallback:
+
+- The backend also accepts `TURNSTILE_SECRET_KEY` for the current hosted setup.
+- Standardize on `HID_TURNSTILE_SECRET_KEY` for all new setup.
 
 For production domains, set `HID_ALLOWED_ORIGIN` as a comma-separated allowlist instead of a single value:
 
@@ -90,6 +96,6 @@ HID_ALLOWED_ORIGIN=https://your-domain.com,https://www.your-domain.com
 - The active frontend is email-only for patient signin.
 - Patient HID codes still exist, but they identify records, not auth sessions.
 - Patient password reset still uses the backend email-code flow.
-- Turnstile is optional and should stay disabled unless you explicitly add it later.
+- Turnstile is required in hosted environments because auth and reset endpoints now fail closed when the secret is missing.
 - Edge Function CORS headers are resolved per request origin from `HID_ALLOWED_ORIGIN`.
 - Expired browser sessions are treated as auth failures and should cause the frontend to send the user back through sign-in instead of surfacing a generic failure.

@@ -3,6 +3,7 @@ import legacy from '@vitejs/plugin-legacy'
 import react from '@vitejs/plugin-react'
 
 export default defineConfig({
+  envPrefix: ['VITE_', 'HID'],
   plugins: [
     react(),
     legacy({
