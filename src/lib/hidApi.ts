@@ -389,6 +389,16 @@ function isPatientProfileConflictError(error: unknown) {
   return candidate.code === '23505' || lower.includes('duplicate key') || lower.includes('idx_hid_patients_phone') || lower.includes('idx_hid_patients_email')
 }
 
+export function isTotpEnrollmentUnavailableError(error: unknown) {
+  if (!(error instanceof Error)) return false
+  const lower = error.message.toLowerCase()
+  return (
+    lower.includes('mfa enroll is disabled for totp') ||
+    lower.includes('totp enroll is disabled') ||
+    (lower.includes('mfa') && lower.includes('disabled') && lower.includes('totp'))
+  )
+}
+
 function isPendingPatientSignup(value: unknown): value is PendingPatientSignup {
   if (!value || typeof value !== 'object') return false
   const candidate = value as Record<string, unknown>

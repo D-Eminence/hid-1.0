@@ -170,6 +170,14 @@ export default function AdminLogin() {
     runWithCaptcha(() => void performSendResetLink())
   }
 
+  function resendResetLink() {
+    if (!email.trim()) {
+      showToast('Enter your admin email address first.', 'error')
+      return
+    }
+    void performSendResetLink()
+  }
+
   async function performSendResetLink() {
     setLoading(true)
     try {
@@ -365,7 +373,7 @@ export default function AdminLogin() {
                 Verify code
               </Button>
               <button
-                onClick={() => void sendResetLink()}
+                onClick={() => void resendResetLink()}
                 style={{ border: 'none', background: 'none', color: '#1f8cff', fontSize: 12, cursor: 'pointer', justifySelf: 'start', padding: 0 }}
               >
                 Send code again

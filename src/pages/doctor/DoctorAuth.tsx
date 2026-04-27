@@ -12,6 +12,7 @@ import {
   enrollPrivilegedTotp,
   fetchMyStaffAccount,
   getPrivilegedMfaRequirement,
+  isTotpEnrollmentUnavailableError,
   providerSignUp,
   providerSignIn,
   sendStaffVerificationEmail,
@@ -179,19 +180,28 @@ export default function DoctorAuth() {
     setMfaCode('')
 
     if (requirement.needsEnrollment || !requirement.challengeFactorId) {
-      const enrollment = await enrollPrivilegedTotp(`${staffAccount.hospital_name || 'HID'} Authenticator`)
-      setMfaEnrollment({
-        factorId: enrollment.factorId,
-        friendlyName: enrollment.friendlyName,
-        qrCode: enrollment.qrCode,
-        secret: enrollment.secret,
-      })
-      setMfaFactorId(enrollment.factorId)
-      setStep('mfa-enroll')
-      if (showMfaToast) {
-        showToast('Set up your authenticator app to finish signing in.', 'info')
+      try {
+        const enrollment = await enrollPrivilegedTotp(`${staffAccount.hospital_name || 'HID'} Authenticator`)
+        setMfaEnrollment({
+          factorId: enrollment.factorId,
+          friendlyName: enrollment.friendlyName,
+          qrCode: enrollment.qrCode,
+          secret: enrollment.secret,
+        })
+        setMfaFactorId(enrollment.factorId)
+        setStep('mfa-enroll')
+        if (showMfaToast) {
+          showToast('Set up your authenticator app to finish signing in.', 'info')
+        }
+        return
+      } catch (error) {
+        if (!isTotpEnrollmentUnavailableError(error)) throw error
+        if (showMfaToast) {
+          showToast('Authenticator setup is not available right now. You can continue without it for now.', 'info')
+        }
+        finalizeStaffAccess(staffAccount)
+        return
       }
-      return
     }
 
     setMfaEnrollment(null)
@@ -318,7 +328,7 @@ export default function DoctorAuth() {
       showToast('Start sign-up again before requesting a new verification code.', 'error')
       return
     }
-    runWithCaptcha(() => void performResendSignupCode())
+    void performResendSignupCode()
   }
 
   async function performResendSignupCode() {
@@ -341,6 +351,14 @@ export default function DoctorAuth() {
       return
     }
     runWithCaptcha(() => void performStartForgotPassword())
+  }
+
+  function resendForgotPasswordCode() {
+    if (!forgot.email.trim()) {
+      showToast('Enter your email address first.', 'error')
+      return
+    }
+    void performStartForgotPassword()
   }
 
   async function performStartForgotPassword() {
@@ -500,7 +518,7 @@ export default function DoctorAuth() {
                 <OtpInputs value={forgot.otp} onChange={value => setForgot(current => ({ ...current, otp: value }))} onComplete={verifyForgotCode} />
               </div>
               <Button loading={loading} onClick={() => void verifyForgotCode()} style={actionButtonStyle(forgot.otp.length === 6)}>Verify code</Button>
-              <button onClick={() => void startForgotPassword()} style={{ marginTop: 12, border: 'none', background: 'none', color: '#1f8cff', fontSize: 10 }}>
+              <button onClick={() => void resendForgotPasswordCode()} style={{ marginTop: 12, border: 'none', background: 'none', color: '#1f8cff', fontSize: 10 }}>
                 Send code again
               </button>
             </>
@@ -547,14 +565,6 @@ export default function DoctorAuth() {
               onComplete={verifySignupCode}
             />
           </div>
-          <TurnstileWidget
-            action="staff-signup-verify"
-            message={captchaNotice?.message}
-            messageTone={captchaNotice?.tone}
-            onTokenChange={handleCaptchaTokenChange}
-            resetKey={captchaResetKey}
-            visible={captchaVisible}
-          />
           <Button loading={loading} onClick={() => void verifySignupCode()} style={actionButtonStyle(signupVerification.code.length === 6)}>
             Verify code
           </Button>

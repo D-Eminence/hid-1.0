@@ -305,7 +305,7 @@ export default function PatientAuth() {
       showToast('Start sign-up again before requesting a new verification code.', 'error')
       return
     }
-    runWithCaptcha(() => void performResendSignupCode())
+    void performResendSignupCode()
   }
 
   async function performResendSignupCode() {
@@ -328,6 +328,14 @@ export default function PatientAuth() {
       return
     }
     runWithCaptcha(() => void performStartForgotPassword())
+  }
+
+  function resendForgotPasswordCode() {
+    if (!canStartForgot) {
+      showToast('Enter your HID code or email address first', 'error')
+      return
+    }
+    void performStartForgotPassword()
   }
 
   async function performStartForgotPassword() {
@@ -535,14 +543,6 @@ export default function PatientAuth() {
               onComplete={verifySignupCode}
             />
           </div>
-          <TurnstileWidget
-            action="patient-signup-verify"
-            message={captchaNotice?.message}
-            messageTone={captchaNotice?.tone}
-            onTokenChange={handleCaptchaTokenChange}
-            resetKey={captchaResetKey}
-            visible={captchaVisible}
-          />
           <Button loading={loading} onClick={() => void verifySignupCode()} style={actionButtonStyle(signupVerification.code.length === 6)}>
             Verify code
           </Button>
@@ -622,7 +622,7 @@ export default function PatientAuth() {
               <OtpInputs value={forgot.otp} onChange={value => setForgot(v => ({ ...v, otp: value }))} onComplete={verifyForgotOtp} />
             </div>
             <Button loading={loading} onClick={() => void verifyForgotOtp()} style={actionButtonStyle(forgot.otp.length === 6)}>Verify code</Button>
-            <button onClick={() => void startForgotPassword()} style={{ marginTop: 12, border: 'none', background: 'none', color: '#1f8cff', fontSize: 10 }}>
+            <button onClick={() => void resendForgotPasswordCode()} style={{ marginTop: 12, border: 'none', background: 'none', color: '#1f8cff', fontSize: 10 }}>
               Send code again
             </button>
           </>
