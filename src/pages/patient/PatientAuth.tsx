@@ -18,7 +18,6 @@ import {
   verifyPatientPasswordResetCode,
 } from '../../lib/hidApi'
 import { trackEvent } from '../../lib/observabilityBridge'
-import { preloadRoutesAfterDelay } from '../../lib/routePreload'
 import { hasStoredSupabaseAuthSession } from '../../lib/supabase'
 import { PASSWORD_REQUIREMENTS_TEXT, isStrongPassword, maskEmailAddress } from '../../lib/utils'
 
@@ -157,8 +156,6 @@ export default function PatientAuth() {
 
     return () => { active = false }
   }, [existingSession, navigate])
-
-  useEffect(() => preloadRoutesAfterDelay(['patientProfile', 'patientRecords', 'patientHistory', 'patientNotifications']), [])
 
   useEffect(() => {
     resetCaptcha()

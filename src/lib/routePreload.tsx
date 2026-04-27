@@ -128,21 +128,21 @@ export function preloadPath(path: string) {
 
 export function getRoutePreloadKeys(path: string): RoutePreloadKey[] {
   if (!path) return []
-  if (path === '/' || path.startsWith('/#')) return ['landing', 'patientAuth', 'doctorAuth']
+  if (path === '/' || path.startsWith('/#')) return ['patientAuth', 'doctorAuth', 'adminLogin']
   if (path === '/signup' || path === '/login' || path === '/register' || path === '/patient' || path.startsWith('/patient/auth')) {
-    return ['patientAuth', 'patientProfile', 'patientRecords', 'patientHistory', 'patientNotifications']
+    return ['patientProfile', 'patientRecords', 'patientHistory', 'patientNotifications']
   }
-  if (path.startsWith('/patient/profile')) return ['patientProfile', 'patientRecords', 'patientHistory', 'patientNotifications']
-  if (path === '/records' || path.startsWith('/patient/records')) return ['patientRecords', 'patientProfile', 'patientHistory', 'patientNotifications']
-  if (path === '/logs' || path.startsWith('/patient/history')) return ['patientHistory', 'patientProfile', 'patientRecords', 'patientNotifications']
-  if (path.startsWith('/patient/notifications')) return ['patientNotifications', 'patientProfile', 'patientRecords', 'patientHistory']
-  if (path === '/eminence' || path.startsWith('/eminence/login')) return ['adminLogin', 'adminDashboard']
-  if (path.startsWith('/eminence/')) return ['adminDashboard', 'adminLogin']
+  if (path.startsWith('/patient/profile')) return ['patientRecords', 'patientHistory', 'patientNotifications']
+  if (path === '/records' || path.startsWith('/patient/records')) return ['patientProfile', 'patientHistory', 'patientNotifications']
+  if (path === '/logs' || path.startsWith('/patient/history')) return ['patientProfile', 'patientRecords', 'patientNotifications']
+  if (path.startsWith('/patient/notifications')) return ['patientProfile', 'patientRecords', 'patientHistory']
+  if (path === '/eminence' || path.startsWith('/eminence/login')) return ['adminDashboard']
+  if (path.startsWith('/eminence/')) return ['adminLogin']
   if (path === '/hospital' || path.startsWith('/hospital/auth') || path.startsWith('/doctor/auth')) {
-    return ['doctorAuth', 'doctorDashboard', 'doctorAccess', 'doctorHistory', 'doctorEmergency']
+    return ['doctorDashboard', 'doctorAccess', 'doctorHistory', 'doctorEmergency']
   }
   if (path === '/dashboard' || path === '/doctor' || path.startsWith('/hospital/dashboard')) {
-    return ['doctorDashboard', 'doctorAccess', 'doctorHistory', 'doctorEmergency', 'doctorPatientRecords']
+    return ['doctorAccess', 'doctorHistory', 'doctorEmergency', 'doctorPatientRecords']
   }
   if (path.startsWith('/doctor/access') || path.startsWith('/hospital/access')) return ['doctorAccess', 'doctorHistory', 'doctorEmergency', 'doctorPatientRecords']
   if (path.startsWith('/hospital/history') || path.startsWith('/doctor/history')) return ['doctorHistory', 'doctorAccess', 'doctorEmergency', 'doctorPatientRecords']

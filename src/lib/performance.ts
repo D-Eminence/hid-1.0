@@ -44,17 +44,23 @@ function runWhenIdle(task: () => void, timeoutMs = 1500) {
 export function warmCriticalConnections() {
   if (typeof window === 'undefined') return
 
-  const origins = new Set<string>()
-
   const supabaseOrigin = safeOrigin(import.meta.env.VITE_SUPABASE_URL as string | undefined)
-  const posthogOrigin = safeOrigin(import.meta.env.VITE_POSTHOG_HOST as string | undefined)
-  const sentryOrigin = safeOrigin(import.meta.env.VITE_SENTRY_DSN as string | undefined)
+  if (supabaseOrigin) {
+    addHeadLink('dns-prefetch', supabaseOrigin)
+    addHeadLink('preconnect', supabaseOrigin, true)
+  }
+}
 
-  ;[supabaseOrigin, posthogOrigin, sentryOrigin].forEach(origin => {
-    if (origin) origins.add(origin)
-  })
+function warmObservabilityConnections() {
+  if (typeof window === 'undefined') return
+
+  const origins = [
+    safeOrigin(import.meta.env.VITE_POSTHOG_HOST as string | undefined),
+    safeOrigin(import.meta.env.VITE_SENTRY_DSN as string | undefined),
+  ]
 
   origins.forEach(origin => {
+    if (!origin) return
     addHeadLink('dns-prefetch', origin)
     addHeadLink('preconnect', origin, true)
   })
@@ -65,6 +71,7 @@ export function scheduleNonCriticalStartup() {
 
   const start = () => {
     runWhenIdle(() => {
+      warmObservabilityConnections()
       initObservability()
       void import('./pwa').then(module => module.registerAppServiceWorker())
     })

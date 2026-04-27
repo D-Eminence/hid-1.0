@@ -23,7 +23,6 @@ import {
   verifyStaffSignupOtp,
 } from '../../lib/hidApi'
 import { trackEvent } from '../../lib/observabilityBridge'
-import { preloadRoutesAfterDelay } from '../../lib/routePreload'
 import { hasStoredSupabaseAuthSession, supabase } from '../../lib/supabase'
 import { COUNTRIES, PASSWORD_REQUIREMENTS_TEXT, STATES_BY_COUNTRY, isStrongPassword, maskEmailAddress } from '../../lib/utils'
 
@@ -143,8 +142,6 @@ export default function DoctorAuth() {
       data.subscription.unsubscribe()
     }
   }, [])
-
-  useEffect(() => preloadRoutesAfterDelay(['doctorDashboard', 'doctorAccess', 'doctorHistory', 'doctorEmergency', 'doctorPatientRecords']), [])
 
   useEffect(() => {
     resetCaptcha()

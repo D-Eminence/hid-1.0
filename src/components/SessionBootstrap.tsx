@@ -6,6 +6,7 @@ import { clearObservabilityIdentity, identifyObservabilityUser } from '../lib/ob
 import { getSafeSession, safeSignOut, supabase } from '../lib/supabase'
 
 const HYDRATE_COOLDOWN_MS = 250
+const BACKGROUND_WARMUP_DELAY_MS = 1200
 let inflightHydration: Promise<void> | null = null
 let lastHydratedAt = 0
 
@@ -20,6 +21,33 @@ function isAuthFailure(reason: unknown) {
     lower.includes('token is expired') ||
     lower.includes('invalid token')
   )
+}
+
+function isConstrainedNetwork() {
+  if (typeof navigator === 'undefined') return false
+  const connection = (navigator as Navigator & {
+    connection?: { saveData?: boolean; effectiveType?: string }
+  }).connection
+
+  if (!connection) return false
+  if (connection.saveData) return true
+  return typeof connection.effectiveType === 'string' && connection.effectiveType.includes('2g')
+}
+
+function scheduleBackgroundWarmup(task: () => void) {
+  if (typeof window === 'undefined' || isConstrainedNetwork()) return
+
+  const idleWindow = window as Window & {
+    requestIdleCallback?: (task: () => void, options?: { timeout: number }) => number
+  }
+
+  window.setTimeout(() => {
+    if (typeof idleWindow.requestIdleCallback === 'function') {
+      idleWindow.requestIdleCallback(task, { timeout: 1500 })
+      return
+    }
+    task()
+  }, BACKGROUND_WARMUP_DELAY_MS)
 }
 
 async function hydratePortalSession() {
@@ -58,14 +86,17 @@ async function hydratePortalSession() {
     ])
 
     if (patient.status === 'fulfilled' && patient.value) {
+      const patientValue = patient.value
       const nextPatientSession = {
-        hidCode: patient.value.hid_code,
-        phone: patient.value.phone ?? '',
-        fullName: patient.value.full_name,
+        hidCode: patientValue.hid_code,
+        phone: patientValue.phone ?? '',
+        fullName: patientValue.full_name,
       }
       setPatientSession(nextPatientSession)
-      seedPatientProfileCache(patient.value)
-      warmPatientExperience(nextPatientSession, patient.value)
+      seedPatientProfileCache(patientValue)
+      scheduleBackgroundWarmup(() => {
+        warmPatientExperience(nextPatientSession, patientValue)
+      })
       identifyObservabilityUser({
         appRole: 'patient',
         id: session.user.id,
@@ -73,20 +104,23 @@ async function hydratePortalSession() {
     }
 
     if (staff.status === 'fulfilled' && staff.value) {
+      const staffValue = staff.value
       const existingStaffSession = getStaffSession()
       const nextStaffSession = {
-        id: staff.value.id,
-        fullName: staff.value.full_name,
-        hospitalName: staff.value.hospital_name ?? existingStaffSession?.hospitalName ?? null,
-        email: staff.value.email,
-        role: staff.value.role,
+        id: staffValue.id,
+        fullName: staffValue.full_name,
+        hospitalName: staffValue.hospital_name ?? existingStaffSession?.hospitalName ?? null,
+        email: staffValue.email,
+        role: staffValue.role,
       }
       setStaffSession(nextStaffSession)
-      void prefetchDoctorPortalCache(nextStaffSession)
+      scheduleBackgroundWarmup(() => {
+        void prefetchDoctorPortalCache(nextStaffSession)
+      })
       identifyObservabilityUser({
         appRole: 'clinician',
         id: session.user.id,
-        staffRole: staff.value.role,
+        staffRole: staffValue.role,
       })
     }
 
