@@ -9,7 +9,7 @@ type CaptchaGateOptions = {
   unavailableMessage?: string
 }
 
-type PendingAction = () => void | Promise<void>
+type PendingAction = (captchaToken: string | null) => void | Promise<void>
 
 export function useCaptchaGate() {
   const [captchaToken, setCaptchaToken] = useState<string | null>(null)
@@ -46,7 +46,7 @@ export function useCaptchaGate() {
   const runWithCaptcha = useCallback((action: PendingAction, options: CaptchaGateOptions = {}) => {
     if (ensureCaptchaReady(captchaToken)) {
       setCaptchaNotice(null)
-      void action()
+      void action(captchaToken)
       return true
     }
 
@@ -71,7 +71,7 @@ export function useCaptchaGate() {
 
     const action = pendingActionRef.current
     pendingActionRef.current = null
-    void action()
+    void action(captchaToken)
   }, [captchaToken])
 
   return {

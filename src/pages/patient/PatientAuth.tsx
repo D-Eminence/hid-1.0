@@ -189,14 +189,14 @@ export default function PatientAuth() {
       showToast('Passwords do not match', 'error')
       return
     }
-    runWithCaptcha(() => void performSignup())
+    runWithCaptcha(token => void performSignup(token))
   }
 
-  async function performSignup() {
+  async function performSignup(captchaTokenOverride: string | null = captchaToken) {
     setLoading(true)
     try {
       const result = await patientSignUpWithPassword({
-        captchaToken,
+        captchaToken: captchaTokenOverride,
         email: signup.email,
         firstName: signup.firstName,
         lastName: signup.lastName,
@@ -240,13 +240,13 @@ export default function PatientAuth() {
       showToast('Enter your HID code or email and password', 'error')
       return
     }
-    runWithCaptcha(() => void performSignIn())
+    runWithCaptcha(token => void performSignIn(token))
   }
 
-  async function performSignIn() {
+  async function performSignIn(captchaTokenOverride: string | null = captchaToken) {
     setLoading(true)
     try {
-      const profile = await patientSignIn(signin.identifier, signin.password, captchaToken)
+      const profile = await patientSignIn(signin.identifier, signin.password, captchaTokenOverride)
       trackEvent('patient_signin_completed')
       setPatientSession({
         hidCode: profile.patient.hid_code,
@@ -257,7 +257,7 @@ export default function PatientAuth() {
     } catch (error) {
       const message = error instanceof Error ? error.message : 'The sign-in details are not correct.'
       if (error instanceof Error && message.toLowerCase().includes('email not confirmed') && looksLikeEmail(signin.identifier)) {
-        await sendPatientVerificationEmail(signin.identifier.trim().toLowerCase(), captchaToken).catch(() => {})
+        await sendPatientVerificationEmail(signin.identifier.trim().toLowerCase(), captchaTokenOverride).catch(() => {})
         setSignupVerification({
           email: signin.identifier.trim().toLowerCase(),
           password: signin.password,
@@ -305,13 +305,13 @@ export default function PatientAuth() {
       showToast('Start sign-up again before requesting a new verification code.', 'error')
       return
     }
-    void performResendSignupCode()
+    void performResendSignupCode(null)
   }
 
-  async function performResendSignupCode() {
+  async function performResendSignupCode(captchaTokenOverride: string | null = captchaToken) {
     setLoading(true)
     try {
-      await sendPatientVerificationEmail(signupVerification.email, captchaToken)
+      await sendPatientVerificationEmail(signupVerification.email, captchaTokenOverride)
       showToast('A new verification code has been sent to your email.', 'success')
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Unable to send another verification code right now.'
@@ -327,7 +327,7 @@ export default function PatientAuth() {
       showToast('Enter your HID code or email address first', 'error')
       return
     }
-    runWithCaptcha(() => void performStartForgotPassword())
+    runWithCaptcha(token => void performStartForgotPassword(token))
   }
 
   function resendForgotPasswordCode() {
@@ -335,13 +335,13 @@ export default function PatientAuth() {
       showToast('Enter your HID code or email address first', 'error')
       return
     }
-    void performStartForgotPassword()
+    void performStartForgotPassword(null)
   }
 
-  async function performStartForgotPassword() {
+  async function performStartForgotPassword(captchaTokenOverride: string | null = captchaToken) {
     setLoading(true)
     try {
-      const result = await startPatientPasswordReset(forgot.identifier, captchaToken)
+      const result = await startPatientPasswordReset(forgot.identifier, captchaTokenOverride)
       setForgot(current => ({
         ...current,
         challengeId: result.challengeId,

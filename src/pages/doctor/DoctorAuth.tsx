@@ -223,19 +223,19 @@ export default function DoctorAuth() {
       showToast('Enter your hospital name, email, and password', 'error')
       return
     }
-    runWithCaptcha(() => void performLogin())
+    runWithCaptcha(token => void performLogin(token))
   }
 
-  async function performLogin() {
+  async function performLogin(captchaTokenOverride: string | null = captchaToken) {
     setLoading(true)
     try {
-      const staffAccount = await providerSignIn(loginForm.hospitalName, loginForm.email, loginForm.password, captchaToken)
+      const staffAccount = await providerSignIn(loginForm.hospitalName, loginForm.email, loginForm.password, captchaTokenOverride)
       trackEvent('staff_signin_completed')
       await moveIntoStaffMfaFlow(staffAccount)
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Invalid hospital credentials.'
       if (error instanceof Error && message.toLowerCase().includes('email not confirmed') && /\S+@\S+\.\S+/.test(loginForm.email.trim())) {
-        await sendStaffVerificationEmail(loginForm.email.trim().toLowerCase(), captchaToken).catch(() => {})
+        await sendStaffVerificationEmail(loginForm.email.trim().toLowerCase(), captchaTokenOverride).catch(() => {})
         setSignupVerification({
           email: loginForm.email.trim().toLowerCase(),
           password: loginForm.password,
@@ -265,14 +265,14 @@ export default function DoctorAuth() {
       showToast('Passwords do not match', 'error')
       return
     }
-    runWithCaptcha(() => void performHospitalSignup())
+    runWithCaptcha(token => void performHospitalSignup(token))
   }
 
-  async function performHospitalSignup() {
+  async function performHospitalSignup(captchaTokenOverride: string | null = captchaToken) {
     setLoading(true)
     try {
       const result = await providerSignUp({
-        captchaToken,
+        captchaToken: captchaTokenOverride,
         country: signupForm.country,
         email: signupForm.email,
         hospitalName: signupForm.hospitalName,
@@ -328,13 +328,13 @@ export default function DoctorAuth() {
       showToast('Start sign-up again before requesting a new verification code.', 'error')
       return
     }
-    void performResendSignupCode()
+    void performResendSignupCode(null)
   }
 
-  async function performResendSignupCode() {
+  async function performResendSignupCode(captchaTokenOverride: string | null = captchaToken) {
     setLoading(true)
     try {
-      await sendStaffVerificationEmail(signupVerification.email, captchaToken)
+      await sendStaffVerificationEmail(signupVerification.email, captchaTokenOverride)
       showToast('A new verification code has been sent to your email.', 'success')
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Unable to send another verification code right now.'
@@ -350,7 +350,7 @@ export default function DoctorAuth() {
       showToast('Enter your email address first.', 'error')
       return
     }
-    runWithCaptcha(() => void performStartForgotPassword())
+    runWithCaptcha(token => void performStartForgotPassword(token))
   }
 
   function resendForgotPasswordCode() {
@@ -358,13 +358,13 @@ export default function DoctorAuth() {
       showToast('Enter your email address first.', 'error')
       return
     }
-    void performStartForgotPassword()
+    void performStartForgotPassword(null)
   }
 
-  async function performStartForgotPassword() {
+  async function performStartForgotPassword(captchaTokenOverride: string | null = captchaToken) {
     setLoading(true)
     try {
-      await sendStaffPasswordReset(forgot.email, `${window.location.origin}${HOSPITAL_AUTH_PATH}`, captchaToken)
+      await sendStaffPasswordReset(forgot.email, `${window.location.origin}${HOSPITAL_AUTH_PATH}`, captchaTokenOverride)
       trackEvent('staff_password_reset_requested')
       setForgotCodeSent(true)
       setForgotOtpVerified(false)

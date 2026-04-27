@@ -167,7 +167,7 @@ export default function AdminLogin() {
       showToast('Enter your admin email address first.', 'error')
       return
     }
-    runWithCaptcha(() => void performSendResetLink())
+    runWithCaptcha(token => void performSendResetLink(token))
   }
 
   function resendResetLink() {
@@ -175,13 +175,13 @@ export default function AdminLogin() {
       showToast('Enter your admin email address first.', 'error')
       return
     }
-    void performSendResetLink()
+    void performSendResetLink(null)
   }
 
-  async function performSendResetLink() {
+  async function performSendResetLink(captchaTokenOverride: string | null = captchaToken) {
     setLoading(true)
     try {
-      await startAdminPasswordResetOtp(email, captchaToken)
+      await startAdminPasswordResetOtp(email, captchaTokenOverride)
       setOtp('')
       setOtpSent(true)
       setOtpVerified(false)
@@ -246,17 +246,17 @@ export default function AdminLogin() {
       showToast('Enter your admin email address and password.', 'error')
       return
     }
-    runWithCaptcha(() => void performSubmit())
+    runWithCaptcha(token => void performSubmit(token))
   }
 
-  async function performSubmit() {
+  async function performSubmit(captchaTokenOverride: string | null = captchaToken) {
     setLoading(true)
     try {
       const { error } = await supabase.auth.signInWithPassword({
         email: email.trim().toLowerCase(),
         password,
         options: {
-          captchaToken: captchaToken ?? undefined,
+          captchaToken: captchaTokenOverride ?? undefined,
         },
       })
 
