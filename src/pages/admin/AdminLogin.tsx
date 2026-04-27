@@ -357,10 +357,10 @@ export default function AdminLogin() {
               <Input
                 label="Admin Email"
                 type="email"
-                placeholder="support@healthidentitydirectory.com"
                 value={email}
                 onChange={event => setEmail(event.target.value)}
-                autoComplete="email"
+                autoComplete="off"
+                spellCheck={false}
               />
               <TurnstileWidget
                 action="admin-reset"
@@ -457,10 +457,10 @@ export default function AdminLogin() {
         <Input
           label="Admin Email"
           type="email"
-          placeholder="support@healthidentitydirectory.com"
           value={email}
           onChange={event => setEmail(event.target.value)}
-          autoComplete="email"
+          autoComplete="off"
+          spellCheck={false}
         />
         <Input
           label="Password"

@@ -171,6 +171,7 @@ const HID_STAFF_ACCOUNT_COLUMNS = [
   'license_number',
   'role',
   'active',
+  'deleted_at',
   'created_at',
   'updated_at',
 ].join(', ')
@@ -411,12 +412,26 @@ function isPendingStaffOnboarding(value: unknown): value is PendingStaffOnboardi
   return typeof candidate.fullName === 'string'
 }
 
-function isDeletedAccountMessage(message: string) {
+function formatDeletedAccountMessage(message: string) {
   const lower = message.toLowerCase()
-  return (
-    lower.includes('account has been deleted') ||
-    lower.includes('patient account has been deleted')
-  )
+  if (lower.includes('patient account has been deleted')) {
+    return 'This patient account has been deleted and can no longer be opened by a hospital.'
+  }
+  if (lower.includes('account has been deleted')) {
+    return 'This account has been deleted and is no longer available.'
+  }
+  return null
+}
+
+function formatLockedAccountMessage(message: string) {
+  const lower = message.toLowerCase()
+  if (lower.includes('patient account is locked')) {
+    return 'This patient account is locked right now and cannot be opened by a hospital.'
+  }
+  if (lower.includes('account is inactive') || lower.includes('account is not active') || lower.includes('account is locked')) {
+    return 'This account is locked right now. Contact support if you need help.'
+  }
+  return null
 }
 
 async function getAccessToken() {
@@ -499,10 +514,11 @@ async function edgeRequest<T>(functionName: string, options: EdgeRequestOptions 
       parsedPayload && typeof parsedPayload === 'object' && 'error' in parsedPayload && typeof parsedPayload.error === 'string'
         ? parsedPayload.error
         : fallbackMessage || response.statusText || ''
+    const normalizedAccountStateMessage = formatDeletedAccountMessage(rawResponseMessage) ?? formatLockedAccountMessage(rawResponseMessage)
     const responseMessage = isBannedAuthMessage(rawResponseMessage)
       ? BANNED_ACCOUNT_MESSAGE
-      : isDeletedAccountMessage(rawResponseMessage)
-        ? 'We could not verify those details.'
+      : normalizedAccountStateMessage
+        ? normalizedAccountStateMessage
         : rawResponseMessage && !isLowSignalErrorMessage(rawResponseMessage)
           ? rawResponseMessage
           : fallbackErrorMessageForStatus(response.status)
@@ -1613,7 +1629,20 @@ export async function fetchMyStaffAccount() {
       throw new HidApiError(400, error.message, error)
     }
 
-    return (data as HidStaffAccount | null) ?? null
+    const staffAccount = (data as HidStaffAccount | null) ?? null
+    if (staffAccount?.deleted_at) {
+      await safeSignOut().catch(() => undefined)
+      clearAllPortalSessions()
+      throw new HidApiError(403, 'This account has been deleted and is no longer available.')
+    }
+
+    if (staffAccount?.active === false) {
+      await safeSignOut().catch(() => undefined)
+      clearAllPortalSessions()
+      throw new HidApiError(403, 'This account is locked right now. Contact support if you need help.')
+    }
+
+    return staffAccount
   })
 }
 

@@ -1,7 +1,7 @@
 {
   "name": "HID",
   "short_name": "HID",
-  "description": "Health Identity Directory",
+  "description": "Secure health identity and medical record access for patients and hospitals.",
   "start_url": "/",
   "scope": "/",
   "display": "standalone",

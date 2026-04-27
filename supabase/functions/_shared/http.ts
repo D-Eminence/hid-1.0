@@ -226,14 +226,17 @@ function sanitizeErrorMessage(message: string, status: number) {
   ) {
     return 'This account cannot perform that action right now.'
   }
-  if (lower.includes('account is inactive') || lower.includes('account is not active') || lower.includes('account is locked')) {
-    return 'This account is not active right now. Contact support if you need help.'
+  if (lower.includes('patient account has been deleted')) {
+    return 'This patient account has been deleted and can no longer be opened by a hospital.'
   }
-  if (lower.includes('account has been deleted') || lower.includes('patient account has been deleted')) {
-    return 'We could not verify those details.'
+  if (lower.includes('account has been deleted')) {
+    return 'This account has been deleted and is no longer available.'
   }
   if (lower.includes('patient account is locked')) {
     return 'This patient account is locked right now and cannot be opened by a hospital.'
+  }
+  if (lower.includes('account is inactive') || lower.includes('account is not active') || lower.includes('account is locked')) {
+    return 'This account is locked right now. Contact support if you need help.'
   }
   if (lower.includes('patient profile already exists')) {
     return 'An account with these details already exists. Sign in instead or enter the verification code sent to your email.'

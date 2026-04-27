@@ -3,6 +3,7 @@ import { BrowserRouter, Navigate, Route, Routes, useLocation, useParams } from '
 import { AppInstallPrompt } from './components/AppInstallPrompt'
 import { HIDLogo } from './components/HIDLogo'
 import { RouteObservability } from './components/RouteObservability'
+import { RouteSeo } from './components/RouteSeo'
 import { ToastProvider } from './components/toast'
 import { captureException } from './lib/observabilityBridge'
 import {
@@ -220,6 +221,7 @@ export default function App() {
         <ToastProvider />
         <DeferredSessionBootstrap />
         <RouteObservability />
+        <RouteSeo />
         <RouteWarmup />
         <AppInstallPrompt />
         <SetupBanner />

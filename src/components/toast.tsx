@@ -224,8 +224,17 @@ function normalizeToastMessage(message: string, type: ToastType) {
     if (lower.includes('unable to access this patient right now')) {
       return 'We could not open this patient right now. Check the HID code and Access PIN and try again.'
     }
+    if (lower.includes('patient account has been deleted')) {
+      return 'This patient account has been deleted and can no longer be opened by a hospital.'
+    }
+    if (lower.includes('account has been deleted')) {
+      return 'This account has been deleted and is no longer available.'
+    }
     if (lower.includes('patient account is locked')) {
       return 'This patient account is locked right now and cannot be opened by a hospital.'
+    }
+    if (lower.includes('account is inactive') || lower.includes('account is not active') || lower.includes('account is locked')) {
+      return 'This account is locked right now. Contact support if you need help.'
     }
     if (lower.includes('unable to save the medical record')) {
       return 'We could not save the medical record right now. Please try again.'
@@ -254,9 +263,7 @@ function normalizeToastMessage(message: string, type: ToastType) {
     if (lower.includes('authentication required') || lower.includes('missing authorization')) return 'Please sign in to continue.'
     if (
       lower.includes('patient was not found') ||
-      lower.includes('could not be verified') ||
-      lower.includes('account has been deleted') ||
-      lower.includes('patient account has been deleted')
+      lower.includes('could not be verified')
     ) return 'We could not verify those details.'
     if (lower.includes('access pin must be 4 to 8 digits')) return 'Access PIN must be 4 to 8 digits.'
     if (lower.includes('not found')) return 'We could not find the information you requested.'

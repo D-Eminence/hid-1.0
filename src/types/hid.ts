@@ -61,6 +61,7 @@ export interface HidStaffAccount {
   license_number: string | null
   role: HidStaffRole
   active: boolean
+  deleted_at?: string | null
   created_at: string
   updated_at: string
 }
