@@ -10,6 +10,7 @@ import { ADMIN_LOGIN_PATH, ADMIN_OVERVIEW_PATH } from '../../lib/adminRoutes'
 import {
   enrollPrivilegedTotp,
   getPrivilegedMfaRequirement,
+  isTotpEnrollmentUnavailableError,
   startAdminPasswordResetOtp,
   updateCurrentUserPassword,
   verifyAdminPasswordResetOtp,
@@ -101,19 +102,26 @@ export default function AdminLogin() {
 
     setMfaCode('')
     if (requirement.needsEnrollment || !requirement.challengeFactorId) {
-      const enrollment = await enrollPrivilegedTotp('HID Admin Authenticator')
-      setMfaEnrollment({
-        factorId: enrollment.factorId,
-        friendlyName: enrollment.friendlyName,
-        qrCode: enrollment.qrCode,
-        secret: enrollment.secret,
-      })
-      setMfaFactorId(enrollment.factorId)
-      setStep('mfa-enroll')
-      if (showMfaToast) {
-        showToast('Set up your authenticator app to finish signing in.', 'info')
+      try {
+        const enrollment = await enrollPrivilegedTotp('HID Admin Authenticator')
+        setMfaEnrollment({
+          factorId: enrollment.factorId,
+          friendlyName: enrollment.friendlyName,
+          qrCode: enrollment.qrCode,
+          secret: enrollment.secret,
+        })
+        setMfaFactorId(enrollment.factorId)
+        setStep('mfa-enroll')
+        if (showMfaToast) {
+          showToast('Set up your authenticator app to finish signing in.', 'info')
+        }
+        return
+      } catch (error) {
+        if (!isTotpEnrollmentUnavailableError(error)) throw error
+        resetMfaState()
+        await finalizeAdminAccess()
+        return
       }
-      return
     }
 
     setMfaEnrollment(null)

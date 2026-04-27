@@ -116,7 +116,10 @@ export async function requireUser(req: Request): Promise<{
     if (assurance.error) {
       throw new HttpError(400, 'We could not verify this account right now.', assurance.error)
     }
-    if (assurance.data?.currentLevel !== 'aal2') {
+
+    // Only block when the user has an enrolled second factor that still needs
+    // to be completed for this session.
+    if (assurance.data?.nextLevel === 'aal2' && assurance.data?.currentLevel !== 'aal2') {
       throw new HttpError(403, 'Multi-factor authentication is required for this account.')
     }
   }

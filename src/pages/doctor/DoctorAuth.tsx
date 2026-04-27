@@ -196,9 +196,6 @@ export default function DoctorAuth() {
         return
       } catch (error) {
         if (!isTotpEnrollmentUnavailableError(error)) throw error
-        if (showMfaToast) {
-          showToast('Authenticator setup is not available right now. You can continue without it for now.', 'info')
-        }
         finalizeStaffAccess(staffAccount)
         return
       }
