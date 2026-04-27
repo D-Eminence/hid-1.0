@@ -5,8 +5,8 @@ import { AuthShell } from '../../components/AuthShell'
 import { OtpInputs } from '../../components/OtpInputs'
 import { TurnstileWidget } from '../../components/TurnstileWidget'
 import { Button, Input, Select, showToast } from '../../components/ui'
+import { useCaptchaGate } from '../../hooks/useCaptchaGate'
 import { clearPatientSession, getPatientSession, setPatientSession } from '../../lib/auth'
-import { ensureCaptchaReady, isTurnstileConfigured } from '../../lib/captcha'
 import {
   completePatientPasswordReset,
   fetchMyPatient,
@@ -68,8 +68,6 @@ type ForgotState = {
   verificationToken: string
 }
 
-const TURNSTILE_ENABLED = isTurnstileConfigured()
-
 function emptyForgotState(): ForgotState {
   return {
     challengeId: '',
@@ -115,8 +113,15 @@ export default function PatientAuth() {
   const [forgot, setForgot] = useState<ForgotState>(() => emptyForgotState())
   const [forgotOtpVerified, setForgotOtpVerified] = useState(false)
   const [signupVerification, setSignupVerification] = useState({ email: '', password: '', code: '' })
-  const [captchaToken, setCaptchaToken] = useState<string | null>(null)
-  const [captchaResetKey, setCaptchaResetKey] = useState(0)
+  const {
+    captchaNotice,
+    captchaResetKey,
+    captchaToken,
+    captchaVisible,
+    onTokenChange: handleCaptchaTokenChange,
+    resetCaptcha,
+    runWithCaptcha,
+  } = useCaptchaGate()
 
   const canStartSignup = !!signup.firstName.trim() && !!signup.lastName.trim() && !!signup.email.trim() && !!signup.phone.trim() && !!signup.gender && signupAccepted
   const canSignIn = !!signin.identifier.trim() && !!signin.password
@@ -155,20 +160,9 @@ export default function PatientAuth() {
 
   useEffect(() => preloadRoutesAfterDelay(['patientProfile', 'patientRecords', 'patientHistory', 'patientNotifications']), [])
 
-  function requireCaptcha() {
-    if (!TURNSTILE_ENABLED && !ensureCaptchaReady(captchaToken)) {
-      showToast('Security check is not configured right now. Please contact support.', 'error')
-      return false
-    }
-    if (ensureCaptchaReady(captchaToken)) return true
-    showToast('Complete the security check before continuing.', 'error')
-    return false
-  }
-
-  function resetCaptcha() {
-    setCaptchaToken(null)
-    setCaptchaResetKey(current => current + 1)
-  }
+  useEffect(() => {
+    resetCaptcha()
+  }, [resetCaptcha, step])
 
   function goToSignUpPassword() {
     if (!signupAccepted) {
@@ -182,7 +176,7 @@ export default function PatientAuth() {
     setStep('password')
   }
 
-  async function finishSignup() {
+  function finishSignup() {
     if (!signupAccepted) {
       showToast('You must agree to the Terms of Service and Privacy Policy before creating an account', 'error')
       return
@@ -195,8 +189,10 @@ export default function PatientAuth() {
       showToast('Passwords do not match', 'error')
       return
     }
-    if (!requireCaptcha()) return
+    runWithCaptcha(() => void performSignup())
+  }
 
+  async function performSignup() {
     setLoading(true)
     try {
       const result = await patientSignUpWithPassword({
@@ -239,13 +235,15 @@ export default function PatientAuth() {
     }
   }
 
-  async function signIn() {
+  function signIn() {
     if (!canSignIn) {
       showToast('Enter your HID code or email and password', 'error')
       return
     }
-    if (!requireCaptcha()) return
+    runWithCaptcha(() => void performSignIn())
+  }
 
+  async function performSignIn() {
     setLoading(true)
     try {
       const profile = await patientSignIn(signin.identifier, signin.password, captchaToken)
@@ -302,13 +300,15 @@ export default function PatientAuth() {
     }
   }
 
-  async function resendSignupCode() {
+  function resendSignupCode() {
     if (!signupVerification.email) {
       showToast('Start sign-up again before requesting a new verification code.', 'error')
       return
     }
-    if (!requireCaptcha()) return
+    runWithCaptcha(() => void performResendSignupCode())
+  }
 
+  async function performResendSignupCode() {
     setLoading(true)
     try {
       await sendPatientVerificationEmail(signupVerification.email, captchaToken)
@@ -322,13 +322,15 @@ export default function PatientAuth() {
     }
   }
 
-  async function startForgotPassword() {
+  function startForgotPassword() {
     if (!canStartForgot) {
       showToast('Enter your HID code or email address first', 'error')
       return
     }
-    if (!requireCaptcha()) return
+    runWithCaptcha(() => void performStartForgotPassword())
+  }
 
+  async function performStartForgotPassword() {
     setLoading(true)
     try {
       const result = await startPatientPasswordReset(forgot.identifier, captchaToken)
@@ -478,7 +480,14 @@ export default function PatientAuth() {
             <Input type="password" placeholder="Password" value={signup.password} onChange={e => setSignup(v => ({ ...v, password: e.target.value }))} />
             <Input type="password" placeholder="Confirm Password" value={signup.confirmPassword} onChange={e => setSignup(v => ({ ...v, confirmPassword: e.target.value }))} />
           </div>
-          <TurnstileWidget action="patient-signup" onTokenChange={setCaptchaToken} resetKey={captchaResetKey} />
+          <TurnstileWidget
+            action="patient-signup"
+            message={captchaNotice?.message}
+            messageTone={captchaNotice?.tone}
+            onTokenChange={handleCaptchaTokenChange}
+            resetKey={captchaResetKey}
+            visible={captchaVisible}
+          />
           <div style={{ color: '#7d8797', fontSize: 11, lineHeight: 1.6, marginTop: 14, textAlign: 'left' }}>{PASSWORD_REQUIREMENTS_TEXT}</div>
           <Button loading={loading} onClick={finishSignup} style={actionButtonStyle(canFinishSignup)}>Create account</Button>
           <button onClick={() => setStep('signup')} style={{ marginTop: 12, border: 'none', background: 'none', color: '#1f8cff', fontSize: 11 }}>
@@ -526,7 +535,14 @@ export default function PatientAuth() {
               onComplete={verifySignupCode}
             />
           </div>
-          <TurnstileWidget action="patient-signup-verify" onTokenChange={setCaptchaToken} resetKey={captchaResetKey} />
+          <TurnstileWidget
+            action="patient-signup-verify"
+            message={captchaNotice?.message}
+            messageTone={captchaNotice?.tone}
+            onTokenChange={handleCaptchaTokenChange}
+            resetKey={captchaResetKey}
+            visible={captchaVisible}
+          />
           <Button loading={loading} onClick={() => void verifySignupCode()} style={actionButtonStyle(signupVerification.code.length === 6)}>
             Verify code
           </Button>
@@ -550,7 +566,14 @@ export default function PatientAuth() {
           <Input placeholder="HID Code or Email" value={signin.identifier} onChange={e => setSignin(v => ({ ...v, identifier: e.target.value }))} />
           <Input type="password" placeholder="Password" value={signin.password} onChange={e => setSignin(v => ({ ...v, password: e.target.value }))} />
         </div>
-        <TurnstileWidget action="patient-login" onTokenChange={setCaptchaToken} resetKey={captchaResetKey} />
+        <TurnstileWidget
+          action="patient-login"
+          message={captchaNotice?.message}
+          messageTone={captchaNotice?.tone}
+          onTokenChange={handleCaptchaTokenChange}
+          resetKey={captchaResetKey}
+          visible={captchaVisible}
+        />
         <Button loading={loading} onClick={signIn} style={actionButtonStyle(canSignIn)}>Sign in</Button>
         <p style={{ marginTop: 14, color: '#7d8797', fontSize: 11, lineHeight: 1.7 }}>
           Sign in with your HID code or your email address together with your password.
@@ -583,7 +606,14 @@ export default function PatientAuth() {
             <div style={{ marginTop: 22 }}>
               <Input placeholder="HID Code or Email Address" value={forgot.identifier} onChange={e => setForgot(v => ({ ...v, identifier: e.target.value }))} />
             </div>
-            <TurnstileWidget action="patient-reset-start" onTokenChange={setCaptchaToken} resetKey={captchaResetKey} />
+            <TurnstileWidget
+              action="patient-reset-start"
+              message={captchaNotice?.message}
+              messageTone={captchaNotice?.tone}
+              onTokenChange={handleCaptchaTokenChange}
+              resetKey={captchaResetKey}
+              visible={captchaVisible}
+            />
             <Button loading={loading} onClick={startForgotPassword} style={actionButtonStyle(canStartForgot)}>Send OTP</Button>
           </>
         ) : !forgotOtpVerified ? (

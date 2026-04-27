@@ -191,6 +191,21 @@ function normalizeToastMessage(message: string, type: ToastType) {
     if (lower.includes('complete the security check to continue')) {
       return 'Complete the security check before continuing.'
     }
+    if (lower.includes('complete the security check below to continue')) {
+      return 'Complete the security check below to continue.'
+    }
+    if (lower.includes('mfa enroll is disabled for totp') || lower.includes('totp enroll is disabled')) {
+      return 'Authenticator setup is not available right now. Ask an administrator to enable MFA, then try again.'
+    }
+    if (lower.includes('captcha verification') && lower.includes('failed')) {
+      return 'We could not complete the security check. Please try again.'
+    }
+    if (lower.includes('turnstile failed to load')) {
+      return 'Security check failed to load. Refresh and try again.'
+    }
+    if (lower.includes('captcha token') && (lower.includes('missing') || lower.includes('required'))) {
+      return 'Complete the security check before continuing.'
+    }
     if (lower.includes('unable to send') && lower.includes('verification code')) {
       return 'We could not send the verification code right now. Please try again.'
     }

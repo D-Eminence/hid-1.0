@@ -45,20 +45,45 @@ function loadTurnstileScript() {
 
 type TurnstileWidgetProps = {
   action: string
+  message?: string | null
+  messageTone?: 'error' | 'info'
   onTokenChange: (token: string | null) => void
   resetKey?: string | number
+  visible?: boolean
 }
 
-export function TurnstileWidget({ action, onTokenChange, resetKey }: TurnstileWidgetProps) {
+function noticeStyles(tone: 'error' | 'info') {
+  return tone === 'error'
+    ? {
+        background: '#fef2f2',
+        border: '#fecaca',
+        color: '#b91c1c',
+      }
+    : {
+        background: '#eff6ff',
+        border: '#bfdbfe',
+        color: '#1d4ed8',
+      }
+}
+
+export function TurnstileWidget({
+  action,
+  message,
+  messageTone = 'info',
+  onTokenChange,
+  resetKey,
+  visible = true,
+}: TurnstileWidgetProps) {
   const siteKey = getTurnstileSiteKey() || undefined
   const containerRef = useRef<HTMLDivElement | null>(null)
   const widgetIdRef = useRef<string | null>(null)
   const [error, setError] = useState('')
 
   useEffect(() => {
-    if (!siteKey || !containerRef.current) return
+    if (!siteKey || !containerRef.current || !visible) return
 
     let active = true
+    setError('')
     void loadTurnstileScript()
       .then(() => {
         if (!active || !containerRef.current || !window.turnstile) return
@@ -80,6 +105,7 @@ export function TurnstileWidget({ action, onTokenChange, resetKey }: TurnstileWi
           'expired-callback': () => {
             onTokenChange(null)
           },
+          size: 'flexible',
           sitekey: siteKey,
           theme: 'light',
         })
@@ -97,14 +123,36 @@ export function TurnstileWidget({ action, onTokenChange, resetKey }: TurnstileWi
         widgetIdRef.current = null
       }
     }
-  }, [action, onTokenChange, resetKey, siteKey])
+  }, [action, onTokenChange, resetKey, siteKey, visible])
 
-  if (!siteKey) return null
+  if (!siteKey || !visible) return null
+
+  const notice = error
+    ? { message: error, tone: 'error' as const }
+    : message
+      ? { message, tone: messageTone }
+      : null
+  const styles = notice ? noticeStyles(notice.tone) : null
 
   return (
-    <div style={{ marginTop: 14, display: 'grid', gap: 8 }}>
+    <div style={{ marginTop: 14, display: 'grid', gap: 10 }}>
+      {notice && styles ? (
+        <div
+          aria-live="polite"
+          style={{
+            background: styles.background,
+            border: `1px solid ${styles.border}`,
+            borderRadius: 12,
+            color: styles.color,
+            fontSize: 12,
+            lineHeight: 1.5,
+            padding: '10px 12px',
+          }}
+        >
+          {notice.message}
+        </div>
+      ) : null}
       <div ref={containerRef} />
-      {error ? <div style={{ color: '#b91c1c', fontSize: 11 }}>{error}</div> : null}
     </div>
   )
 }

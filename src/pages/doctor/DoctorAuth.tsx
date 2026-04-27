@@ -5,8 +5,8 @@ import { AuthShell } from '../../components/AuthShell'
 import { OtpInputs } from '../../components/OtpInputs'
 import { TurnstileWidget } from '../../components/TurnstileWidget'
 import { Button, Input, Select, showToast } from '../../components/ui'
+import { useCaptchaGate } from '../../hooks/useCaptchaGate'
 import { clearStaffSession, getStaffSession, setStaffSession, signOutAndClearSessions } from '../../lib/auth'
-import { ensureCaptchaReady, isTurnstileConfigured } from '../../lib/captcha'
 import { HOSPITAL_AUTH_PATH, HOSPITAL_DASHBOARD_PATH } from '../../lib/hospitalRoutes'
 import {
   enrollPrivilegedTotp,
@@ -34,8 +34,6 @@ type MfaEnrollmentState = {
   qrCode: string
   secret: string
 }
-
-const TURNSTILE_ENABLED = isTurnstileConfigured()
 
 function actionButtonStyle(active: boolean) {
   return { marginTop: 16, background: active ? '#1f8cff' : '#9aa6b2' }
@@ -84,12 +82,19 @@ export default function DoctorAuth() {
   const [confirmResetPassword, setConfirmResetPassword] = useState('')
   const [signupVerification, setSignupVerification] = useState({ email: '', password: '', code: '' })
   const [signupAccepted, setSignupAccepted] = useState(false)
-  const [captchaToken, setCaptchaToken] = useState<string | null>(null)
-  const [captchaResetKey, setCaptchaResetKey] = useState(0)
   const [pendingStaffAccount, setPendingStaffAccount] = useState<StaffAccount | null>(null)
   const [mfaCode, setMfaCode] = useState('')
   const [mfaFactorId, setMfaFactorId] = useState<string | null>(null)
   const [mfaEnrollment, setMfaEnrollment] = useState<MfaEnrollmentState | null>(null)
+  const {
+    captchaNotice,
+    captchaResetKey,
+    captchaToken,
+    captchaVisible,
+    onTokenChange: handleCaptchaTokenChange,
+    resetCaptcha,
+    runWithCaptcha,
+  } = useCaptchaGate()
 
   const canSubmitLogin = !!loginForm.hospitalName.trim() && !!loginForm.email.trim() && !!loginForm.password
   const canSubmitSignup =
@@ -140,20 +145,9 @@ export default function DoctorAuth() {
 
   useEffect(() => preloadRoutesAfterDelay(['doctorDashboard', 'doctorAccess', 'doctorHistory', 'doctorEmergency', 'doctorPatientRecords']), [])
 
-  function requireCaptcha() {
-    if (!TURNSTILE_ENABLED && !ensureCaptchaReady(captchaToken)) {
-      showToast('Security check is not configured right now. Please contact support.', 'error')
-      return false
-    }
-    if (ensureCaptchaReady(captchaToken)) return true
-    showToast('Complete the security check before continuing.', 'error')
-    return false
-  }
-
-  function resetCaptcha() {
-    setCaptchaToken(null)
-    setCaptchaResetKey(current => current + 1)
-  }
+  useEffect(() => {
+    resetCaptcha()
+  }, [resetCaptcha, step])
 
   function resetMfaState() {
     setPendingStaffAccount(null)
@@ -214,13 +208,15 @@ export default function DoctorAuth() {
     setStep('login')
   }
 
-  async function submitLogin() {
+  function submitLogin() {
     if (!canSubmitLogin) {
       showToast('Enter your hospital name, email, and password', 'error')
       return
     }
-    if (!requireCaptcha()) return
+    runWithCaptcha(() => void performLogin())
+  }
 
+  async function performLogin() {
     setLoading(true)
     try {
       const staffAccount = await providerSignIn(loginForm.hospitalName, loginForm.email, loginForm.password, captchaToken)
@@ -246,7 +242,7 @@ export default function DoctorAuth() {
     }
   }
 
-  async function submitHospitalSignup() {
+  function submitHospitalSignup() {
     if (!signupAccepted) {
       showToast('You must agree to the Terms of Service and Privacy Policy before creating an account', 'error')
       return
@@ -259,8 +255,10 @@ export default function DoctorAuth() {
       showToast('Passwords do not match', 'error')
       return
     }
-    if (!requireCaptcha()) return
+    runWithCaptcha(() => void performHospitalSignup())
+  }
 
+  async function performHospitalSignup() {
     setLoading(true)
     try {
       const result = await providerSignUp({
@@ -315,13 +313,15 @@ export default function DoctorAuth() {
     }
   }
 
-  async function resendSignupCode() {
+  function resendSignupCode() {
     if (!signupVerification.email) {
       showToast('Start sign-up again before requesting a new verification code.', 'error')
       return
     }
-    if (!requireCaptcha()) return
+    runWithCaptcha(() => void performResendSignupCode())
+  }
 
+  async function performResendSignupCode() {
     setLoading(true)
     try {
       await sendStaffVerificationEmail(signupVerification.email, captchaToken)
@@ -335,13 +335,15 @@ export default function DoctorAuth() {
     }
   }
 
-  async function startForgotPassword() {
+  function startForgotPassword() {
     if (!forgot.email.trim()) {
       showToast('Enter your email address first.', 'error')
       return
     }
-    if (!requireCaptcha()) return
+    runWithCaptcha(() => void performStartForgotPassword())
+  }
 
+  async function performStartForgotPassword() {
     setLoading(true)
     try {
       await sendStaffPasswordReset(forgot.email, `${window.location.origin}${HOSPITAL_AUTH_PATH}`, captchaToken)
@@ -482,7 +484,14 @@ export default function DoctorAuth() {
           {!forgotCodeSent ? (
             <>
               <Input placeholder="Email address" value={forgot.email} onChange={e => setForgot(current => ({ ...current, email: e.target.value }))} style={{ marginTop: 22 }} />
-              <TurnstileWidget action="staff-reset" onTokenChange={setCaptchaToken} resetKey={captchaResetKey} />
+              <TurnstileWidget
+                action="staff-reset"
+                message={captchaNotice?.message}
+                messageTone={captchaNotice?.tone}
+                onTokenChange={handleCaptchaTokenChange}
+                resetKey={captchaResetKey}
+                visible={captchaVisible}
+              />
               <Button loading={loading} onClick={startForgotPassword} style={actionButtonStyle(!!forgot.email.trim())}>Send OTP</Button>
             </>
           ) : !forgotOtpVerified ? (
@@ -538,7 +547,14 @@ export default function DoctorAuth() {
               onComplete={verifySignupCode}
             />
           </div>
-          <TurnstileWidget action="staff-signup-verify" onTokenChange={setCaptchaToken} resetKey={captchaResetKey} />
+          <TurnstileWidget
+            action="staff-signup-verify"
+            message={captchaNotice?.message}
+            messageTone={captchaNotice?.tone}
+            onTokenChange={handleCaptchaTokenChange}
+            resetKey={captchaResetKey}
+            visible={captchaVisible}
+          />
           <Button loading={loading} onClick={() => void verifySignupCode()} style={actionButtonStyle(signupVerification.code.length === 6)}>
             Verify code
           </Button>
@@ -591,7 +607,14 @@ export default function DoctorAuth() {
               <Input placeholder="Gmail address" type="email" value={loginForm.email} onChange={e => setLoginForm(v => ({ ...v, email: e.target.value }))} />
               <Input placeholder="Password" type="password" value={loginForm.password} onChange={e => setLoginForm(v => ({ ...v, password: e.target.value }))} />
             </div>
-            <TurnstileWidget action="staff-login" onTokenChange={setCaptchaToken} resetKey={captchaResetKey} />
+            <TurnstileWidget
+              action="staff-login"
+              message={captchaNotice?.message}
+              messageTone={captchaNotice?.tone}
+              onTokenChange={handleCaptchaTokenChange}
+              resetKey={captchaResetKey}
+              visible={captchaVisible}
+            />
             <Button disabled={!canSubmitLogin} loading={loading} onClick={submitLogin} style={actionButtonStyle(canSubmitLogin)}>
               Sign in
             </Button>
@@ -626,7 +649,14 @@ export default function DoctorAuth() {
               <Input placeholder="Password" type="password" value={signupForm.password} onChange={e => setSignupForm(v => ({ ...v, password: e.target.value }))} />
               <Input placeholder="Confirm Password" type="password" value={signupForm.confirmPassword} onChange={e => setSignupForm(v => ({ ...v, confirmPassword: e.target.value }))} />
             </div>
-            <TurnstileWidget action="staff-signup" onTokenChange={setCaptchaToken} resetKey={captchaResetKey} />
+            <TurnstileWidget
+              action="staff-signup"
+              message={captchaNotice?.message}
+              messageTone={captchaNotice?.tone}
+              onTokenChange={handleCaptchaTokenChange}
+              resetKey={captchaResetKey}
+              visible={captchaVisible}
+            />
             <div style={{ color: '#7d8797', fontSize: 11, lineHeight: 1.6, marginTop: 14 }}>{PASSWORD_REQUIREMENTS_TEXT}</div>
             <AuthLegalConsent checked={signupAccepted} onChange={setSignupAccepted} />
             <Button disabled={!canSubmitSignup} loading={loading} onClick={submitHospitalSignup} style={actionButtonStyle(canSubmitSignup)}>

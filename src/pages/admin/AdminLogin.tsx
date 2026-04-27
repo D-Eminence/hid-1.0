@@ -4,8 +4,8 @@ import { AuthShell } from '../../components/AuthShell'
 import { OtpInputs } from '../../components/OtpInputs'
 import { TurnstileWidget } from '../../components/TurnstileWidget'
 import { Button, Input, showToast } from '../../components/ui'
+import { useCaptchaGate } from '../../hooks/useCaptchaGate'
 import { clearAllPortalSessions, signOutAndClearSessions } from '../../lib/auth'
-import { ensureCaptchaReady, isTurnstileConfigured } from '../../lib/captcha'
 import { ADMIN_LOGIN_PATH, ADMIN_OVERVIEW_PATH } from '../../lib/adminRoutes'
 import {
   enrollPrivilegedTotp,
@@ -26,8 +26,6 @@ type EnrollmentState = {
   qrCode: string
   secret: string
 }
-
-const TURNSTILE_ENABLED = isTurnstileConfigured()
 
 async function getCurrentAppRole() {
   const user = await getSafeUser()
@@ -57,28 +55,20 @@ export default function AdminLogin() {
   const [otpVerified, setOtpVerified] = useState(false)
   const [resetPassword, setResetPassword] = useState('')
   const [confirmResetPassword, setConfirmResetPassword] = useState('')
-  const [captchaToken, setCaptchaToken] = useState<string | null>(null)
-  const [captchaResetKey, setCaptchaResetKey] = useState(0)
   const [mfaCode, setMfaCode] = useState('')
   const [mfaFactorId, setMfaFactorId] = useState<string | null>(null)
   const [mfaEnrollment, setMfaEnrollment] = useState<EnrollmentState | null>(null)
   const [loading, setLoading] = useState(false)
+  const {
+    captchaNotice,
+    captchaResetKey,
+    captchaToken,
+    captchaVisible,
+    onTokenChange: handleCaptchaTokenChange,
+    resetCaptcha,
+    runWithCaptcha,
+  } = useCaptchaGate()
   const canSubmitReset = isStrongPassword(resetPassword) && resetPassword === confirmResetPassword
-
-  function resetCaptcha() {
-    setCaptchaToken(null)
-    setCaptchaResetKey(current => current + 1)
-  }
-
-  function requireCaptcha() {
-    if (!TURNSTILE_ENABLED && !ensureCaptchaReady(captchaToken)) {
-      showToast('Security check is not configured right now. Please contact support.', 'error')
-      return false
-    }
-    if (ensureCaptchaReady(captchaToken)) return true
-    showToast('Complete the security check before continuing.', 'error')
-    return false
-  }
 
   function resetMfaState() {
     setMfaCode('')
@@ -168,13 +158,19 @@ export default function AdminLogin() {
     }
   }, [])
 
-  async function sendResetLink() {
+  useEffect(() => {
+    resetCaptcha()
+  }, [resetCaptcha, step])
+
+  function sendResetLink() {
     if (!email.trim()) {
       showToast('Enter your admin email address first.', 'error')
       return
     }
-    if (!requireCaptcha()) return
+    runWithCaptcha(() => void performSendResetLink())
+  }
 
+  async function performSendResetLink() {
     setLoading(true)
     try {
       await startAdminPasswordResetOtp(email, captchaToken)
@@ -237,13 +233,15 @@ export default function AdminLogin() {
     }
   }
 
-  async function submit() {
+  function submit() {
     if (!email.trim() || !password) {
       showToast('Enter your admin email address and password.', 'error')
       return
     }
-    if (!requireCaptcha()) return
+    runWithCaptcha(() => void performSubmit())
+  }
 
+  async function performSubmit() {
     setLoading(true)
     try {
       const { error } = await supabase.auth.signInWithPassword({
@@ -348,7 +346,14 @@ export default function AdminLogin() {
                 onChange={event => setEmail(event.target.value)}
                 autoComplete="email"
               />
-              <TurnstileWidget action="admin-reset" onTokenChange={setCaptchaToken} resetKey={captchaResetKey} />
+              <TurnstileWidget
+                action="admin-reset"
+                message={captchaNotice?.message}
+                messageTone={captchaNotice?.tone}
+                onTokenChange={handleCaptchaTokenChange}
+                resetKey={captchaResetKey}
+                visible={captchaVisible}
+              />
               <Button loading={loading} onClick={() => void sendResetLink()} fullWidth>
                 Send OTP
               </Button>
@@ -455,7 +460,14 @@ export default function AdminLogin() {
             }
           }}
         />
-        <TurnstileWidget action="admin-login" onTokenChange={setCaptchaToken} resetKey={captchaResetKey} />
+        <TurnstileWidget
+          action="admin-login"
+          message={captchaNotice?.message}
+          messageTone={captchaNotice?.tone}
+          onTokenChange={handleCaptchaTokenChange}
+          resetKey={captchaResetKey}
+          visible={captchaVisible}
+        />
         <Button loading={loading} onClick={() => void submit()} fullWidth>
           Sign In
         </Button>
