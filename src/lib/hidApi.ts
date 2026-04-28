@@ -632,19 +632,13 @@ async function requestSignupVerificationEmail(email: string, path: 'patient' | '
 
 function formatSignupAvailabilityConflict(result: SignupAvailabilityResponse) {
   if (result.emailInUse && result.phoneInUse) {
-    return 'That email address and phone number are already linked to HID accounts. Use different details and try again.'
+    return 'The information has already been used, Try to sign in.'
   }
   if (result.emailInUse) {
-    if (result.emailOwner === 'patient') {
-      return 'That email address is already linked to a patient HID account. Sign in instead or use a different email.'
-    }
-    if (result.emailOwner === 'hospital') {
-      return 'That email address is already linked to a hospital HID account. Sign in instead or use a different email.'
-    }
-    return 'That email address is already linked to an HID account. Sign in instead or use a different email.'
+    return 'The information has already been used, Try to sign in.'
   }
   if (result.phoneInUse) {
-    return 'That phone number is already linked to an HID account. Use a different phone number and try again.'
+    return 'The information has already been used, Try to sign in.'
   }
   return null
 }
@@ -701,7 +695,7 @@ async function assertNoSilentSignupConflict(params: {
 
   throw new HidApiError(
     409,
-    formatSignupAvailabilityConflict(availability) ?? 'That email address is already linked to an HID account. Sign in instead or use a different email.',
+    formatSignupAvailabilityConflict(availability) ?? 'The information has already been used, Try to sign in.',
     availability,
   )
 }
@@ -1571,7 +1565,7 @@ export async function patientSignUpWithPassword(params: PendingPatientSignup & {
 
   if (error) {
     if (isExistingAccountError(error)) {
-      throw new HidApiError(409, 'That email address is already linked to an HID account. Sign in instead.', error)
+      throw new HidApiError(409, 'The information has already been used, Try to sign in.', error)
     }
 
     throw new HidApiError(400, error.message, error)
@@ -1902,7 +1896,7 @@ export async function providerSignUp(params: {
     if (!isExistingAccountError(error)) {
       throw new HidApiError(400, error.message, error)
     }
-    throw new HidApiError(409, 'An account with this email already exists. Sign in instead.', error)
+    throw new HidApiError(409, 'The information has already been used, Try to sign in.', error)
   }
 
   await assertNoSilentSignupConflict({

@@ -239,19 +239,19 @@ function sanitizeErrorMessage(message: string, status: number) {
     return 'This account is locked right now. Contact support if you need help.'
   }
   if (lower.includes('patient profile already exists')) {
-    return 'An account with these details already exists. Sign in instead or enter the verification code sent to your email.'
+    return 'The information has already been used, Try to sign in.'
   }
   if (lower.includes('email address is already linked to an hid account')) {
-    return 'That email address is already linked to an HID account. Sign in instead.'
+    return 'The information has already been used, Try to sign in.'
   }
   if (lower.includes('phone number is already linked to another hid account')) {
-    return 'That phone number is already linked to another HID account.'
+    return 'The information has already been used, Try to sign in.'
   }
   if (lower.includes('email address and phone number are already linked')) {
-    return 'That email address and phone number are already linked to HID accounts.'
+    return 'The information has already been used, Try to sign in.'
   }
   if (lower.includes('already linked to a patient account')) {
-    return 'This email address is already linked to a patient account. Use a different email for the hospital account.'
+    return 'The information has already been used, Try to sign in.'
   }
   if (lower.includes('cannot be used for a hospital account')) {
     return 'This email address cannot be used for a hospital account. Use a different email address.'
@@ -282,7 +282,7 @@ function sanitizeErrorMessage(message: string, status: number) {
     lower.includes('idx_hid_patients_phone') ||
     lower.includes('idx_hid_patients_email')
   ) {
-    return 'That email address or phone number is already linked to another HID account.'
+    return 'The information has already been used, Try to sign in.'
   }
   if (
     lower.includes('column reference') ||

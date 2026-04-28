@@ -155,27 +155,27 @@ function normalizeToastMessage(message: string, type: ToastType) {
     if (lower.includes('failed to fetch') || lower.includes('networkerror') || lower.includes('load failed')) return 'We could not connect right now. Please try again.'
     if (lower.includes('hid code or access pin')) return 'The HID code or access PIN is not correct.'
     if (lower.includes('multiple (or no) rows returned') || lower.includes('0 rows')) return 'We could not find the information you requested.'
-    if (lower.includes('account for this hospital already exists')) return 'These details are already in use. Sign in instead or contact support.'
-    if (lower.includes('already linked to a patient account')) return 'These details are already in use. Try a different email address or sign in instead.'
+    if (lower.includes('account for this hospital already exists')) return 'The information has already been used, Try to sign in.'
+    if (lower.includes('already linked to a patient account')) return 'The information has already been used, Try to sign in.'
     if (lower.includes('cannot be used for a hospital account')) return 'These details cannot be used for this request. Try different details or contact support.'
     if (lower.includes('phone number is already linked') || lower.includes('email address or phone number is already linked')) {
-      return 'These details are already in use. Try different details or sign in instead.'
+      return 'The information has already been used, Try to sign in.'
     }
     if (lower.includes('email address is already linked to an hid account')) {
-      return 'These details are already in use. Sign in instead or use different details.'
+      return 'The information has already been used, Try to sign in.'
     }
     if (lower.includes('phone number is already linked to another hid account')) {
-      return 'These details are already in use. Try different details or sign in instead.'
+      return 'The information has already been used, Try to sign in.'
     }
     if (lower.includes('email address and phone number are already linked')) {
-      return 'These details are already in use. Try different details or sign in instead.'
+      return 'The information has already been used, Try to sign in.'
     }
     if (lower.includes('idx_hid_patients_phone') || lower.includes('idx_hid_patients_email')) {
-      return 'These details are already in use. Try different details or sign in instead.'
+      return 'The information has already been used, Try to sign in.'
     }
-    if (lower.includes('user already registered')) return 'These details are already in use. Sign in instead or try different details.'
-    if (lower.includes('duplicate key') || lower.includes('already exists')) return 'These details are already in use. Sign in instead or try different details.'
-    if (lower.includes('patient profile already exists')) return 'These details are already in use. Sign in instead or try different details.'
+    if (lower.includes('user already registered')) return 'The information has already been used, Try to sign in.'
+    if (lower.includes('duplicate key') || lower.includes('already exists')) return 'The information has already been used, Try to sign in.'
+    if (lower.includes('patient profile already exists')) return 'The information has already been used, Try to sign in.'
     if (lower.includes('you do not have permission to perform this action')) return 'Your account is signed in, but it is not allowed to do that yet.'
     if (lower.includes('permission denied') || lower.includes('not allowed') || lower.includes('cannot perform this action')) return 'This account cannot perform that action right now.'
     if (lower.includes('schema cache')) return 'This information could not be saved right now. Please try again.'
