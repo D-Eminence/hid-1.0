@@ -80,7 +80,10 @@ function isIgnoredSentryIssue(issue: SentryIssue) {
     text.includes('unknown error occurred when fetching the script') ||
     text.includes('importing a module script failed') ||
     text.includes('typeerror: load failed') ||
-    text.includes('failed to fetch dynamically imported module')
+    text.includes('failed to fetch dynamically imported module') ||
+    (text.includes('systemjs') && text.includes('/assets/')) ||
+    (text.includes('systemjs') && text.includes('docs/errors.md#3')) ||
+    (text.includes('legacy-') && text.includes('/assets/'))
   )
 }
 
@@ -988,7 +991,7 @@ Deno.serve(req => withErrorHandling(req, async () => {
       message: `${failedLoginAttempts} failed login attempts were recorded in the current window.`,
       title: 'Failed login spike',
     } : null,
-    otpSuccessRate != null && (posthog.otpStarted ?? 0) >= 10 && otpSuccessRate < 50 ? {
+    otpSuccessRate != null && (posthog.otpStarted ?? 0) >= 20 && otpSuccessRate < 35 ? {
       id: 'otp-success-drop',
       level: 'warning' as const,
       message: `OTP success rate is ${otpSuccessRate.toFixed(1)}%. Monitor verification drop-off and retry friction.`,

@@ -14,7 +14,10 @@ function isRecoverableImportError(error: unknown) {
     message.includes('error loading dynamically imported module') ||
     message.includes('failed to fetch dynamically imported module') ||
     message.includes('importing a module script failed') ||
-    message.includes('load failed')
+    message.includes('load failed') ||
+    (message.includes('systemjs') && message.includes('/assets/')) ||
+    (message.includes('systemjs') && message.includes('docs/errors.md#3')) ||
+    (message.includes('legacy-') && message.includes('/assets/'))
   )
 }
 

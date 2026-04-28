@@ -88,6 +88,9 @@ function shouldIgnoreSentryEvent(event: Record<string, any>) {
     text.includes('failed to fetch dynamically imported module') ||
     text.includes('importing a module script failed') ||
     text.includes('typeerror: load failed') ||
+    (text.includes('systemjs') && text.includes('/assets/')) ||
+    (text.includes('systemjs') && text.includes('docs/errors.md#3')) ||
+    (text.includes('legacy-') && text.includes('/assets/')) ||
     text.includes('lock broken by another request') ||
     text.includes('lock request is aborted') ||
     text.includes("steal' option") ||
