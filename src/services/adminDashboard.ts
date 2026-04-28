@@ -15,14 +15,18 @@ type EdgeEnvelope<T> = {
   data: T
 }
 
-const inflightOverviewRequests = new Map<AdminOverviewWindow, Promise<AdminDashboardOverview>>()
-const overviewCache = new Map<AdminOverviewWindow, { expiresAt: number; value: AdminDashboardOverview }>()
+const inflightOverviewRequests = new Map<string, Promise<AdminDashboardOverview>>()
+const overviewCache = new Map<string, { expiresAt: number; value: AdminDashboardOverview }>()
 const inflightUserSearchRequests = new Map<string, Promise<AdminManagedUser[]>>()
 const inflightDeletedUserRequests = new Map<string, Promise<AdminManagedUser[]>>()
 const userSearchCache = new Map<string, { expiresAt: number; value: AdminManagedUser[] }>()
 const deletedUserCache = new Map<string, { expiresAt: number; value: AdminManagedUser[] }>()
 const OVERVIEW_CACHE_TTL_MS = 30000
 const USER_SEARCH_CACHE_TTL_MS = 15000
+
+function overviewCacheKey(window: AdminOverviewWindow, date: string | null | undefined) {
+  return `${window}:${date?.trim() ?? ''}`
+}
 
 function fallbackErrorMessage(raw: string, status: number) {
   const lower = raw.toLowerCase()
@@ -219,13 +223,14 @@ async function callAdminUserManagement<T>(path: string, init: RequestInit, statu
   throw new HidApiError(statusFallback, 'Admin controls returned an unexpected response.')
 }
 
-export async function fetchAdminDashboardOverview(window: AdminOverviewWindow = '7d', options: { force?: boolean } = {}) {
-  const cached = overviewCache.get(window)
+export async function fetchAdminDashboardOverview(window: AdminOverviewWindow = '7d', options: { date?: string | null; force?: boolean } = {}) {
+  const cacheKey = overviewCacheKey(window, options.date)
+  const cached = overviewCache.get(cacheKey)
   if (!options.force && cached && cached.expiresAt > Date.now()) {
     return cached.value
   }
 
-  const existingRequest = inflightOverviewRequests.get(window)
+  const existingRequest = inflightOverviewRequests.get(cacheKey)
   if (existingRequest) {
     return existingRequest
   }
@@ -238,6 +243,9 @@ export async function fetchAdminDashboardOverview(window: AdminOverviewWindow = 
 
     const url = new URL(`${requireSupabaseUrl()}/functions/v1/admin-dashboard-overview`)
     url.searchParams.set('window', window)
+    if (options.date?.trim()) {
+      url.searchParams.set('date', options.date.trim())
+    }
     if (options.force) {
       url.searchParams.set('_ts', `${Date.now()}`)
     }
@@ -300,7 +308,7 @@ export async function fetchAdminDashboardOverview(window: AdminOverviewWindow = 
     }
 
     if (parsedPayload && typeof parsedPayload === 'object' && 'data' in parsedPayload) {
-      overviewCache.set(window, {
+      overviewCache.set(cacheKey, {
         expiresAt: Date.now() + OVERVIEW_CACHE_TTL_MS,
         value: parsedPayload.data,
       })
@@ -310,13 +318,13 @@ export async function fetchAdminDashboardOverview(window: AdminOverviewWindow = 
     throw new HidApiError(500, 'Admin dashboard returned an unexpected response.')
   })()
 
-  inflightOverviewRequests.set(window, request)
+  inflightOverviewRequests.set(cacheKey, request)
 
   try {
     return await request
   } finally {
-    if (inflightOverviewRequests.get(window) === request) {
-      inflightOverviewRequests.delete(window)
+    if (inflightOverviewRequests.get(cacheKey) === request) {
+      inflightOverviewRequests.delete(cacheKey)
     }
   }
 }

@@ -28,6 +28,14 @@ type SentryIssue = {
   permalink: string | null
 }
 
+type OverviewScope = {
+  bucket: 'hour' | 'day'
+  periodEnd: Date
+  periodStart: Date
+  selectedDate: string | null
+  windowKey: OverviewWindow
+}
+
 const POSTHOG_OTP_STARTED_EVENTS = [
   'patient_signup_pending_verification',
   'hospital_signup_pending_verification',
@@ -91,6 +99,12 @@ function parseWindow(raw: string | null): OverviewWindow {
   return '7d'
 }
 
+function parseSelectedDate(raw: string | null) {
+  if (!raw || !/^\d{4}-\d{2}-\d{2}$/.test(raw)) return null
+  const parsed = new Date(`${raw}T00:00:00.000Z`)
+  return Number.isNaN(parsed.getTime()) ? null : raw
+}
+
 function trimTrailingSlash(value: string) {
   return value.replace(/\/+$/, '')
 }
@@ -104,6 +118,14 @@ function startOfToday(now = new Date()) {
   return new Date(now.getFullYear(), now.getMonth(), now.getDate())
 }
 
+function startOfSelectedDate(raw: string) {
+  return new Date(`${raw}T00:00:00.000Z`)
+}
+
+function endOfDay(start: Date) {
+  return new Date(start.getTime() + 24 * 60 * 60 * 1000)
+}
+
 function startOfWindow(windowKey: OverviewWindow, now = new Date()) {
   const current = now.getTime()
   const durations = {
@@ -112,6 +134,27 @@ function startOfWindow(windowKey: OverviewWindow, now = new Date()) {
     '30d': 30 * 24 * 60 * 60 * 1000,
   }
   return new Date(current - durations[windowKey])
+}
+
+function createOverviewScope(windowKey: OverviewWindow, selectedDate: string | null, now = new Date()): OverviewScope {
+  if (selectedDate) {
+    const periodStart = startOfSelectedDate(selectedDate)
+    return {
+      bucket: 'hour',
+      periodEnd: endOfDay(periodStart),
+      periodStart,
+      selectedDate,
+      windowKey,
+    }
+  }
+
+  return {
+    bucket: WINDOW_MAP[windowKey].bucket,
+    periodEnd: now,
+    periodStart: startOfWindow(windowKey, now),
+    selectedDate: null,
+    windowKey,
+  }
 }
 
 function parseNumeric(value: unknown) {
@@ -133,17 +176,23 @@ function toTimestamp(value: unknown) {
   return new Date().toISOString()
 }
 
-function aggregateTimeline(timestamps: string[], windowKey: OverviewWindow): MetricPoint[] {
-  const config = WINDOW_MAP[windowKey]
+function isWithinRange(timestamp: string | null | undefined, rangeStart: Date, rangeEnd: Date) {
+  if (!timestamp) return false
+  const time = new Date(timestamp).getTime()
+  return Number.isFinite(time) && time >= rangeStart.getTime() && time < rangeEnd.getTime()
+}
+
+function aggregateTimeline(timestamps: string[], windowKey: OverviewWindow, bucketOverride?: 'hour' | 'day'): MetricPoint[] {
+  const bucket = bucketOverride ?? WINDOW_MAP[windowKey].bucket
   const buckets = new Map<string, number>()
 
   timestamps.forEach(timestamp => {
     const date = new Date(timestamp)
     if (Number.isNaN(date.getTime())) return
-    const bucket = config.bucket === 'hour'
+    const bucketTimestamp = bucket === 'hour'
       ? new Date(date.getFullYear(), date.getMonth(), date.getDate(), date.getHours()).toISOString()
       : new Date(date.getFullYear(), date.getMonth(), date.getDate()).toISOString()
-    buckets.set(bucket, (buckets.get(bucket) ?? 0) + 1)
+    buckets.set(bucketTimestamp, (buckets.get(bucketTimestamp) ?? 0) + 1)
   })
 
   return Array.from(buckets.entries())
@@ -326,7 +375,7 @@ function buildSentryCulpritBreakdown(issues: SentryIssue[]) {
     .slice(0, 6)
 }
 
-async function loadSentryOverview(windowKey: OverviewWindow) {
+async function loadSentryOverview(scope: OverviewScope) {
   const authToken = getRequiredSecret('SENTRY_AUTH_TOKEN')
   const orgSlug = getRequiredSecret('SENTRY_ORG_SLUG')
   const projectList = (getRequiredSecret('SENTRY_PROJECT_SLUGS') ?? getRequiredSecret('SENTRY_PROJECT_SLUG') ?? '')
@@ -354,7 +403,6 @@ async function loadSentryOverview(windowKey: OverviewWindow) {
     }
   }
 
-  const config = WINDOW_MAP[windowKey]
   const headers = { Authorization: `Bearer ${authToken}` }
 
   try {
@@ -363,10 +411,10 @@ async function loadSentryOverview(windowKey: OverviewWindow) {
         `${baseUrl}/api/0/projects/${encodeURIComponent(orgSlug)}/${encodeURIComponent(projectSlug)}/issues/?query=${encodeURIComponent('is:unresolved')}&limit=5`,
         { headers }
       )
-      const since = startOfWindow(windowKey).toISOString()
-      const until = new Date().toISOString()
+      const since = scope.periodStart.toISOString()
+      const until = scope.periodEnd.toISOString()
       const stats = await fetchJson(
-        `${baseUrl}/api/0/projects/${encodeURIComponent(orgSlug)}/${encodeURIComponent(projectSlug)}/stats/?stat=received&since=${encodeURIComponent(since)}&until=${encodeURIComponent(until)}&resolution=${encodeURIComponent(config.bucket === 'hour' ? '1h' : '1d')}`,
+        `${baseUrl}/api/0/projects/${encodeURIComponent(orgSlug)}/${encodeURIComponent(projectSlug)}/stats/?stat=received&since=${encodeURIComponent(since)}&until=${encodeURIComponent(until)}&resolution=${encodeURIComponent(scope.bucket === 'hour' ? '1h' : '1d')}`,
         { headers }
       ).catch(() => [])
 
@@ -377,6 +425,7 @@ async function loadSentryOverview(windowKey: OverviewWindow) {
     }))
 
     const combinedIssues = results.flatMap(result => result.issues)
+      .filter(issue => !scope.selectedDate || isWithinRange(issue.lastSeen, scope.periodStart, scope.periodEnd))
       .sort((left, right) => new Date(right.lastSeen ?? 0).getTime() - new Date(left.lastSeen ?? 0).getTime())
     const actionableIssues = combinedIssues.filter(issue => !isIgnoredSentryIssue(issue)).slice(0, 8)
     const issuesByLevel = buildSentryLevelBreakdown(actionableIssues)
@@ -484,7 +533,11 @@ async function runPosthogQuery(baseUrl: string, projectId: string, apiKey: strin
   })
 }
 
-async function loadPosthogOverview(windowKey: OverviewWindow) {
+function toPosthogDateTime(value: Date) {
+  return value.toISOString().slice(0, 19).replace('T', ' ')
+}
+
+async function loadPosthogOverview(scope: OverviewScope) {
   const apiKey = getRequiredSecret('POSTHOG_PERSONAL_API_KEY')
   const projectId = getRequiredSecret('POSTHOG_PROJECT_ID')
   const baseUrl = trimTrailingSlash(optionalEnv('POSTHOG_HOST', 'https://us.posthog.com'))
@@ -509,9 +562,8 @@ async function loadPosthogOverview(windowKey: OverviewWindow) {
     }
   }
 
-  const config = WINDOW_MAP[windowKey]
-  const bucketExpression = config.bucket === 'hour' ? 'toStartOfHour(timestamp)' : 'toStartOfDay(timestamp)'
-  const intervalExpression = `INTERVAL ${config.posthogInterval}`
+  const bucketExpression = scope.bucket === 'hour' ? 'toStartOfHour(timestamp)' : 'toStartOfDay(timestamp)'
+  const rangeCondition = `timestamp >= toDateTime('${toPosthogDateTime(scope.periodStart)}') AND timestamp < toDateTime('${toPosthogDateTime(scope.periodEnd)}')`
 
   try {
     const [
@@ -527,17 +579,17 @@ async function loadPosthogOverview(windowKey: OverviewWindow) {
       webVitalsResponse,
       pageviewTrendResponse,
     ] = await Promise.all([
-      runPosthogQuery(baseUrl, projectId, apiKey, `SELECT count() AS events FROM events WHERE timestamp >= now() - ${intervalExpression}`),
-      runPosthogQuery(baseUrl, projectId, apiKey, `SELECT count(DISTINCT coalesce(person_id, distinct_id)) AS users FROM events WHERE timestamp >= now() - ${intervalExpression}`),
-      runPosthogQuery(baseUrl, projectId, apiKey, `SELECT event AS name, count() AS total FROM events WHERE timestamp >= now() - ${intervalExpression} GROUP BY event ORDER BY total DESC LIMIT 8`),
-      runPosthogQuery(baseUrl, projectId, apiKey, `SELECT ${bucketExpression} AS bucket, count() AS total FROM events WHERE timestamp >= now() - ${intervalExpression} GROUP BY bucket ORDER BY bucket ASC`),
-      runPosthogQuery(baseUrl, projectId, apiKey, `SELECT count(DISTINCT coalesce(person_id, distinct_id)) AS total FROM events WHERE timestamp >= now() - ${intervalExpression} AND event IN (${toHogQlList(POSTHOG_OTP_STARTED_EVENTS)})`),
-      runPosthogQuery(baseUrl, projectId, apiKey, `SELECT count(DISTINCT coalesce(person_id, distinct_id)) AS total FROM events WHERE timestamp >= now() - ${intervalExpression} AND event IN (${toHogQlList(POSTHOG_OTP_COMPLETED_EVENTS)})`),
-      runPosthogQuery(baseUrl, projectId, apiKey, `SELECT count() AS total FROM events WHERE timestamp >= now() - ${intervalExpression} AND event = '$pageview'`),
-      runPosthogQuery(baseUrl, projectId, apiKey, `SELECT count() AS total FROM events WHERE timestamp >= now() - ${intervalExpression} AND event = '$autocapture'`),
-      runPosthogQuery(baseUrl, projectId, apiKey, `SELECT count() AS total FROM events WHERE timestamp >= now() - ${intervalExpression} AND event = '$identify'`),
-      runPosthogQuery(baseUrl, projectId, apiKey, `SELECT count() AS total FROM events WHERE timestamp >= now() - ${intervalExpression} AND event IN ('$web_vitals', 'web_vitals', 'Web vitals')`),
-      runPosthogQuery(baseUrl, projectId, apiKey, `SELECT ${bucketExpression} AS bucket, count() AS total FROM events WHERE timestamp >= now() - ${intervalExpression} AND event = '$pageview' GROUP BY bucket ORDER BY bucket ASC`),
+      runPosthogQuery(baseUrl, projectId, apiKey, `SELECT count() AS events FROM events WHERE ${rangeCondition}`),
+      runPosthogQuery(baseUrl, projectId, apiKey, `SELECT count(DISTINCT coalesce(person_id, distinct_id)) AS users FROM events WHERE ${rangeCondition}`),
+      runPosthogQuery(baseUrl, projectId, apiKey, `SELECT event AS name, count() AS total FROM events WHERE ${rangeCondition} GROUP BY event ORDER BY total DESC LIMIT 8`),
+      runPosthogQuery(baseUrl, projectId, apiKey, `SELECT ${bucketExpression} AS bucket, count() AS total FROM events WHERE ${rangeCondition} GROUP BY bucket ORDER BY bucket ASC`),
+      runPosthogQuery(baseUrl, projectId, apiKey, `SELECT count(DISTINCT coalesce(person_id, distinct_id)) AS total FROM events WHERE ${rangeCondition} AND event IN (${toHogQlList(POSTHOG_OTP_STARTED_EVENTS)})`),
+      runPosthogQuery(baseUrl, projectId, apiKey, `SELECT count(DISTINCT coalesce(person_id, distinct_id)) AS total FROM events WHERE ${rangeCondition} AND event IN (${toHogQlList(POSTHOG_OTP_COMPLETED_EVENTS)})`),
+      runPosthogQuery(baseUrl, projectId, apiKey, `SELECT count() AS total FROM events WHERE ${rangeCondition} AND event = '$pageview'`),
+      runPosthogQuery(baseUrl, projectId, apiKey, `SELECT count() AS total FROM events WHERE ${rangeCondition} AND event = '$autocapture'`),
+      runPosthogQuery(baseUrl, projectId, apiKey, `SELECT count() AS total FROM events WHERE ${rangeCondition} AND event = '$identify'`),
+      runPosthogQuery(baseUrl, projectId, apiKey, `SELECT count() AS total FROM events WHERE ${rangeCondition} AND event IN ('$web_vitals', 'web_vitals', 'Web vitals')`),
+      runPosthogQuery(baseUrl, projectId, apiKey, `SELECT ${bucketExpression} AS bucket, count() AS total FROM events WHERE ${rangeCondition} AND event = '$pageview' GROUP BY bucket ORDER BY bucket ASC`),
     ])
 
     const eventRows = normalizeRows(eventsResponse)
@@ -686,13 +738,21 @@ Deno.serve(req => withErrorHandling(req, async () => {
   const adminClient = createAdminClient()
   const url = new URL(req.url)
   const windowKey = parseWindow(url.searchParams.get('window'))
-  const periodStart = startOfWindow(windowKey)
-  const todayStart = startOfToday()
+  const selectedDate = parseSelectedDate(url.searchParams.get('date'))
+  const scope = createOverviewScope(windowKey, selectedDate)
+  const periodStart = scope.periodStart
+  const periodEnd = scope.periodEnd
+  const focusDayStart = selectedDate ? scope.periodStart : startOfToday()
+  const focusDayEnd = selectedDate ? scope.periodEnd : new Date()
 
   const authUsersPromise = listAllAuthUsers(adminClient)
   const patientAuthUsersPromise = adminClient
     .from('hid_patients')
     .select('auth_user_id')
+    .is('deleted_at', null)
+  const totalPatientsCountPromise = adminClient
+    .from('hid_patients')
+    .select('id', { count: 'exact', head: true })
     .is('deleted_at', null)
   const staffAuthUsersPromise = adminClient
     .from('hid_staff_accounts')
@@ -714,10 +774,12 @@ Deno.serve(req => withErrorHandling(req, async () => {
     .select('id', { count: 'exact', head: true })
     .is('deleted_at', null)
     .gte('created_at', periodStart.toISOString())
+    .lt('created_at', periodEnd.toISOString())
 
   const [
     authUsers,
     patientAuthUsersResponse,
+    totalPatientsCountResponse,
     staffAuthUsersResponse,
     totalRecordsResponse,
     windowRecordsResponse,
@@ -739,28 +801,30 @@ Deno.serve(req => withErrorHandling(req, async () => {
   ] = await Promise.all([
     authUsersPromise,
     patientAuthUsersPromise,
+    totalPatientsCountPromise,
     staffAuthUsersPromise,
     adminClient.from('hid_medical_records').select('id', { count: 'exact', head: true }),
-    adminClient.from('hid_medical_records').select('id, patient_id, created_at, created_by_staff_account_id').gte('created_at', periodStart.toISOString()),
-    adminClient.from('hid_medical_record_files').select('id, created_at').gte('created_at', periodStart.toISOString()),
+    adminClient.from('hid_medical_records').select('id, patient_id, created_at, created_by_staff_account_id').gte('created_at', periodStart.toISOString()).lt('created_at', periodEnd.toISOString()),
+    adminClient.from('hid_medical_record_files').select('id, created_at').gte('created_at', periodStart.toISOString()).lt('created_at', periodEnd.toISOString()),
     adminClient.from('hid_medical_records').select('id', { count: 'exact', head: true }).not('created_by_staff_account_id', 'is', null),
     adminClient.from('hid_organizations').select('id', { count: 'exact', head: true }),
     adminClient.from('hid_staff_accounts').select('id', { count: 'exact', head: true }),
     adminClient.from('hid_staff_accounts').select('id', { count: 'exact', head: true }).eq('active', true),
     adminClient.from('hid_medical_record_files').select('id, original_file_name, mime_type, created_at, uploaded_by_user_profile_id, patient_id').order('created_at', { ascending: false }).limit(8),
-    adminClient.from('hid_password_failed_verification_attempts').select('user_id, last_failed_at').gte('last_failed_at', periodStart.toISOString()),
-    adminClient.from('hid_mfa_failed_verification_attempts').select('user_id, last_failed_at').gte('last_failed_at', periodStart.toISOString()),
-    adminClient.from('hid_auth_challenges').select('id, created_at, verified_at').gte('created_at', periodStart.toISOString()),
-    adminClient.from('hid_audit_events').select('event_id').gte('created_at', periodStart.toISOString()).ilike('action', '%break_glass%'),
+    adminClient.from('hid_password_failed_verification_attempts').select('user_id, last_failed_at').gte('last_failed_at', periodStart.toISOString()).lt('last_failed_at', periodEnd.toISOString()),
+    adminClient.from('hid_mfa_failed_verification_attempts').select('user_id, last_failed_at').gte('last_failed_at', periodStart.toISOString()).lt('last_failed_at', periodEnd.toISOString()),
+    adminClient.from('hid_auth_challenges').select('id, created_at, verified_at').gte('created_at', periodStart.toISOString()).lt('created_at', periodEnd.toISOString()),
+    adminClient.from('hid_audit_events').select('event_id').gte('created_at', periodStart.toISOString()).lt('created_at', periodEnd.toISOString()).ilike('action', '%break_glass%'),
     responseTimeProbe,
     storageBytesPromise,
     accountCreatedCountPromise,
-    loadSentryOverview(windowKey),
-    loadPosthogOverview(windowKey),
+    loadSentryOverview(scope),
+    loadPosthogOverview(scope),
   ])
 
   if (totalRecordsResponse.error) throw new HttpError(400, totalRecordsResponse.error.message, totalRecordsResponse.error)
   if (patientAuthUsersResponse.error) throw new HttpError(400, patientAuthUsersResponse.error.message, patientAuthUsersResponse.error)
+  if (totalPatientsCountResponse.error) throw new HttpError(400, totalPatientsCountResponse.error.message, totalPatientsCountResponse.error)
   if (staffAuthUsersResponse.error) throw new HttpError(400, staffAuthUsersResponse.error.message, staffAuthUsersResponse.error)
   if (windowRecordsResponse.error) throw new HttpError(400, windowRecordsResponse.error.message, windowRecordsResponse.error)
   if (windowUploadsResponse.error) throw new HttpError(400, windowUploadsResponse.error.message, windowUploadsResponse.error)
@@ -788,12 +852,13 @@ Deno.serve(req => withErrorHandling(req, async () => {
 
   const apiResponseTimeMs = responseTimeProbeResult.durationMs
   const totalUsers = reportableAuthUsers.length
+  const totalPatients = totalPatientsCountResponse.count ?? 0
   const verifiedUsers = reportableAuthUsers.filter(isConfirmedAuthUser).length
   const unverifiedUsers = Math.max(totalUsers - verifiedUsers, 0)
-  const newSignupsToday = reportableAuthUsers.filter(user => isOnOrAfter(user.created_at as string | null, todayStart)).length
-  const newSignupsWindow = reportableAuthUsers.filter(user => isOnOrAfter(user.created_at as string | null, periodStart)).length
-  const activeUsers24h = reportableAuthUsers.filter(user => isOnOrAfter(user.last_sign_in_at as string | null, startOfWindow('24h'))).length
-  const activeUsersWindow = reportableAuthUsers.filter(user => isOnOrAfter(user.last_sign_in_at as string | null, periodStart)).length
+  const newSignupsToday = reportableAuthUsers.filter(user => isWithinRange(user.created_at as string | null, focusDayStart, focusDayEnd)).length
+  const newSignupsWindow = reportableAuthUsers.filter(user => isWithinRange(user.created_at as string | null, periodStart, periodEnd)).length
+  const activeUsers24h = reportableAuthUsers.filter(user => isWithinRange(user.last_sign_in_at as string | null, focusDayStart, focusDayEnd)).length
+  const activeUsersWindow = reportableAuthUsers.filter(user => isWithinRange(user.last_sign_in_at as string | null, periodStart, periodEnd)).length
 
   const recentAuthUsers = reportableAuthUsers
     .slice()
@@ -814,8 +879,9 @@ Deno.serve(req => withErrorHandling(req, async () => {
   const userGrowth = aggregateTimeline(
     reportableAuthUsers
       .map(user => typeof user.created_at === 'string' ? user.created_at : null)
-      .filter((value): value is string => Boolean(value) && isOnOrAfter(value, periodStart)),
-    windowKey
+      .filter((value): value is string => Boolean(value) && isWithinRange(value, periodStart, periodEnd)),
+    windowKey,
+    scope.bucket
   )
 
   const recentUsers = reportableAuthUsers
@@ -845,11 +911,12 @@ Deno.serve(req => withErrorHandling(req, async () => {
     (windowUploadRows.length > 0 ? windowUploadRows : windowRecordRows)
       .map(upload => typeof upload.created_at === 'string' ? upload.created_at : null)
       .filter((value): value is string => Boolean(value)),
-    windowKey
+    windowKey,
+    scope.bucket
   )
 
   const uploadedToday = (windowUploadRows.length > 0 ? windowUploadRows : windowRecordRows)
-    .filter(upload => isOnOrAfter(upload.created_at as string | null, todayStart)).length
+    .filter(upload => isWithinRange(upload.created_at as string | null, focusDayStart, focusDayEnd)).length
   const averagePerUser = totalUsers === 0 ? 0 : Number(((totalRecordsResponse.count ?? 0) / totalUsers).toFixed(1))
 
   const recentUploadRows = (recentUploadsResponse.data ?? []) as Array<Record<string, unknown>>
@@ -978,6 +1045,7 @@ Deno.serve(req => withErrorHandling(req, async () => {
         suspiciousActivityCount,
       },
       sentry,
+      selectedDate,
       system: {
         apiResponseTimeMs,
         errorRate,
@@ -992,6 +1060,7 @@ Deno.serve(req => withErrorHandling(req, async () => {
         newSignupsToday,
         newSignupsWindow,
         recentUsers,
+        totalPatients,
         totalUsers,
         unverifiedUsers,
         verifiedUsers,

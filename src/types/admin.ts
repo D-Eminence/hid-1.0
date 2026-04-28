@@ -97,6 +97,7 @@ export interface AdminPosthogOverview extends AdminObservabilityProviderBase {
 
 export interface AdminUserMetrics {
   totalUsers: number
+  totalPatients: number
   newSignupsToday: number
   newSignupsWindow: number
   activeUsers24h: number
@@ -145,6 +146,7 @@ export interface AdminDashboardOverview {
   records: AdminRecordMetrics
   security: AdminSecurityMetrics
   sentry: AdminSentryOverview
+  selectedDate: string | null
   system: AdminSystemMetrics
   users: AdminUserMetrics
   window: AdminOverviewWindow

@@ -5,7 +5,7 @@ import type { AdminDashboardOverview, AdminOverviewWindow } from '../types/admin
 
 const REFRESH_INTERVAL_MS = 60000
 
-export function useAdminDashboard(windowKey: AdminOverviewWindow) {
+export function useAdminDashboard(windowKey: AdminOverviewWindow, selectedDate: string | null) {
   const [data, setData] = useState<AdminDashboardOverview | null>(null)
   const [loading, setLoading] = useState(true)
   const [refreshing, setRefreshing] = useState(false)
@@ -27,7 +27,7 @@ export function useAdminDashboard(windowKey: AdminOverviewWindow) {
       setRefreshing(true)
     }
     try {
-      const next = await fetchAdminDashboardOverview(windowKey, { force })
+      const next = await fetchAdminDashboardOverview(windowKey, { date: selectedDate, force })
       setData(next)
       setError(null)
       return next
@@ -53,7 +53,7 @@ export function useAdminDashboard(windowKey: AdminOverviewWindow) {
       setRefreshing(false)
       if (!silent) setLoading(false)
     }
-  }, [windowKey])
+  }, [selectedDate, windowKey])
 
   const refresh = useCallback(async (silent = false) => (
     runRequest({

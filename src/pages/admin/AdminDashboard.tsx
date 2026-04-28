@@ -70,6 +70,13 @@ function formatRelativeTime(value: string | null) {
   return `${diffDays} day${diffDays === 1 ? '' : 's'} ago`
 }
 
+function formatDayLabel(value: string | null) {
+  if (!value) return null
+  const date = new Date(`${value}T00:00:00`)
+  if (Number.isNaN(date.getTime())) return value
+  return date.toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' })
+}
+
 function formatLabelValue(value: string | number | null | undefined) {
   if (value == null || value === '') return 'Not available'
   return String(value)
@@ -230,6 +237,7 @@ function readinessTone(ready: boolean) {
 export default function AdminDashboard() {
   const [viewerEmail, setViewerEmail] = useState<string | null>(null)
   const [windowKey, setWindowKey] = useState<AdminOverviewWindow>('7d')
+  const [selectedDate, setSelectedDate] = useState<string | null>(null)
   const [searchQuery, setSearchQuery] = useState('')
   const [directoryQuery, setDirectoryQuery] = useState('')
   const [directoryResults, setDirectoryResults] = useState<AdminManagedUser[]>([])
@@ -242,7 +250,7 @@ export default function AdminDashboard() {
   const [actioning, setActioning] = useState<AdminUserManagementAction | null>(null)
   const [activeSection, setActiveSection] = useState('dashboard')
   const [viewportWidth, setViewportWidth] = useState(() => (typeof window !== 'undefined' ? window.innerWidth : 1440))
-  const { data, error, loading, refreshing, refresh } = useAdminDashboard(windowKey)
+  const { data, error, loading, refreshing, refresh } = useAdminDashboard(windowKey, selectedDate)
 
   useEffect(() => {
     void loadViewer()
@@ -450,6 +458,8 @@ export default function AdminDashboard() {
 
   const notificationsCount = filteredAlerts.filter(alert => alert.level !== 'info').length
   const verifiedRate = data?.users.totalUsers ? (data.users.verifiedUsers / data.users.totalUsers) * 100 : null
+  const activeOverviewDate = data?.selectedDate ?? selectedDate
+  const activeOverviewDayLabel = formatDayLabel(activeOverviewDate)
   const sentryConfigured = Boolean(data?.sentry.configured)
   const posthogConfigured = Boolean(data?.posthog.configured)
   const otpSuccessLabel = data?.security.otpSuccessRate == null ? 'No recent OTP activity' : 'Verification completion rate'
@@ -561,6 +571,7 @@ export default function AdminDashboard() {
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap' }}>
           <div style={{ fontSize: 11, color: 'var(--admin-muted)' }}>
             Updated {formatRelativeTime(data?.checkedAt ?? null)}
+            {activeOverviewDayLabel ? ` • Overview for ${activeOverviewDayLabel}` : ''}
             {searchQuery ? ` • Filtered by "${searchQuery}"` : ''}
             {error ? ' • Live data issue detected' : ''}
           </div>
@@ -568,11 +579,14 @@ export default function AdminDashboard() {
             {windowOptions.map(option => (
               <button
                 key={option.key}
-                onClick={() => setWindowKey(option.key)}
+                onClick={() => {
+                  setSelectedDate(null)
+                  setWindowKey(option.key)
+                }}
                 style={{
                   border: '1px solid var(--admin-border)',
-                  background: option.key === windowKey ? 'rgba(26, 111, 212, 0.08)' : '#fff',
-                  color: option.key === windowKey ? 'var(--admin-accent)' : '#7a8899',
+                  background: option.key === windowKey && !activeOverviewDate ? 'rgba(26, 111, 212, 0.08)' : '#fff',
+                  color: option.key === windowKey && !activeOverviewDate ? 'var(--admin-accent)' : '#7a8899',
                   borderRadius: 8,
                   padding: '6px 10px',
                   fontSize: 10.5,
@@ -583,6 +597,26 @@ export default function AdminDashboard() {
                 {option.label}
               </button>
             ))}
+            <input
+              type="date"
+              value={selectedDate ?? ''}
+              max={new Date().toISOString().slice(0, 10)}
+              onChange={event => setSelectedDate(event.target.value || null)}
+              style={{
+                height: 34,
+                borderRadius: 8,
+                border: '1px solid var(--admin-border)',
+                padding: '0 10px',
+                fontSize: 11.5,
+                background: '#fff',
+                color: 'var(--admin-text)',
+              }}
+            />
+            {activeOverviewDate && (
+              <Button size="sm" variant="outline" onClick={() => setSelectedDate(null)}>
+                Clear Day
+              </Button>
+            )}
             <Button size="sm" variant="outline" loading={refreshing} onClick={() => { void refresh().catch(() => undefined) }}>
               Refresh
             </Button>
@@ -593,9 +627,10 @@ export default function AdminDashboard() {
           <div>
             {sectionLabel('User Metrics')}
             <div style={metricGridStyle}>
-              <AdminMetricCard accent="var(--admin-accent)" icon={metricIcon('users')} title="Total Users" value={data?.users.totalUsers ?? null} trendLabel={`+${formatCompact(data?.users.newSignupsWindow ?? null)} in selected window`} trendTone="positive" helper="All registered users" />
-              <AdminMetricCard accent="var(--admin-accent)" icon={metricIcon('plus')} title="New Signups Today" value={data?.users.newSignupsToday ?? null} trendLabel={`${formatCompact(data?.users.newSignupsWindow ?? null)} this window`} trendTone="positive" helper="New accounts created today" />
-              <AdminMetricCard accent="var(--admin-accent)" icon={metricIcon('activity')} title="Active (24h)" value={data?.users.activeUsers24h ?? null} trendLabel={`${formatCompact(data?.users.activeUsersWindow ?? null)} in selected range`} trendTone="critical" helper="Users active in the last day" />
+              <AdminMetricCard accent="var(--admin-accent)" icon={metricIcon('users')} title="Total Users" value={data?.users.totalUsers ?? null} trendLabel={`+${formatCompact(data?.users.newSignupsWindow ?? null)} in selected range`} trendTone="positive" helper="All registered users" />
+              <AdminMetricCard accent="var(--admin-accent)" icon={metricIcon('users')} title="Total Patients" value={data?.users.totalPatients ?? null} trendLabel={`${formatCompact(data?.users.totalUsers ?? null)} total users`} trendTone="positive" helper="Registered patient accounts" />
+              <AdminMetricCard accent="var(--admin-accent)" icon={metricIcon('plus')} title={activeOverviewDate ? 'New Signups On Day' : 'New Signups Today'} value={data?.users.newSignupsToday ?? null} trendLabel={`${formatCompact(data?.users.newSignupsWindow ?? null)} this range`} trendTone="positive" helper={activeOverviewDate ? 'New accounts created on the selected day' : 'New accounts created today'} />
+              <AdminMetricCard accent="var(--admin-accent)" icon={metricIcon('activity')} title={activeOverviewDate ? 'Active On Day' : 'Active (24h)'} value={data?.users.activeUsers24h ?? null} trendLabel={`${formatCompact(data?.users.activeUsersWindow ?? null)} in selected range`} trendTone="critical" helper={activeOverviewDate ? 'Users active on the selected day' : 'Users active in the last day'} />
               <AdminMetricCard accent="var(--admin-accent)" icon={metricIcon('check')} title="Verified Users" value={verifiedRate} valueFormatter={formatPercentage} trendLabel={`${formatCompact(data?.users.unverifiedUsers ?? null)} pending`} trendTone="positive" helper="Verified vs unverified accounts" />
             </div>
           </div>
