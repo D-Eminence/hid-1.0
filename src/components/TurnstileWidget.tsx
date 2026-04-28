@@ -1,10 +1,9 @@
-import React, { useCallback, useEffect, useRef, useState } from 'react'
+import React, { useEffect, useRef, useState } from 'react'
 import { getTurnstileSiteKey } from '../lib/captcha'
 
 declare global {
   interface Window {
     turnstile?: {
-      execute: (widgetId: string) => void
       remove: (widgetId: string) => void
       render: (container: HTMLElement, options: Record<string, unknown>) => string
       reset: (widgetId?: string) => void
@@ -57,7 +56,6 @@ type TurnstileWidgetProps = {
   onTokenChange: (token: string | null) => void
   preload?: boolean
   resetKey?: string | number
-  token?: string | null
   visible?: boolean
 }
 
@@ -82,32 +80,13 @@ export function TurnstileWidget({
   onTokenChange,
   preload = false,
   resetKey,
-  token,
   visible = true,
 }: TurnstileWidgetProps) {
   const siteKey = getTurnstileSiteKey() || undefined
   const containerRef = useRef<HTMLDivElement | null>(null)
   const widgetIdRef = useRef<string | null>(null)
   const [error, setError] = useState('')
-  const [widgetReady, setWidgetReady] = useState(false)
-  const [verifying, setVerifying] = useState(false)
   const shouldLoad = visible || preload
-
-  const beginVerification = useCallback(() => {
-    if (!widgetIdRef.current || !window.turnstile) {
-      setError('Security check is still loading. Please wait a moment and try again.')
-      return
-    }
-
-    if (token) {
-      onTokenChange(null)
-    }
-
-    setError('')
-    setVerifying(true)
-    window.turnstile.reset(widgetIdRef.current)
-    window.turnstile.execute(widgetIdRef.current)
-  }, [onTokenChange, token])
 
   useEffect(() => {
     if (!siteKey || !shouldLoad) return
@@ -133,8 +112,6 @@ export function TurnstileWidget({
 
     let active = true
     setError('')
-    setWidgetReady(false)
-    setVerifying(false)
     void loadTurnstileScript()
       .then(() => {
         if (!active || !containerRef.current || !window.turnstile) return
@@ -149,18 +126,14 @@ export function TurnstileWidget({
           callback: (token: string) => {
             onTokenChange(token)
             setError('')
-            setVerifying(false)
           },
-          execution: 'execute',
           'error-callback': () => {
             onTokenChange(null)
             setError('We could not complete the security check. Check your connection and verify again.')
-            setVerifying(false)
           },
           'expired-callback': () => {
             onTokenChange(null)
-            setError('The security check expired. Verify again to continue.')
-            setVerifying(false)
+            setError('')
           },
           'refresh-expired': 'manual',
           'refresh-timeout': 'manual',
@@ -171,17 +144,13 @@ export function TurnstileWidget({
           'timeout-callback': () => {
             onTokenChange(null)
             setError('The security check timed out. Verify again to continue.')
-            setVerifying(false)
           },
         })
-        setWidgetReady(true)
       })
       .catch(() => {
         if (!active) return
         onTokenChange(null)
         setError('Security check failed to load. Refresh and try again.')
-        setWidgetReady(false)
-        setVerifying(false)
       })
 
     return () => {
@@ -193,101 +162,36 @@ export function TurnstileWidget({
     }
   }, [action, onTokenChange, resetKey, siteKey, visible])
 
-  useEffect(() => {
-    if (!visible) return
-
-    if (token) {
-      setVerifying(false)
-      setError('')
-    }
-  }, [token, visible])
-
   if (!siteKey || (!visible && !preload)) return null
 
   if (!visible) return null
 
-  const activeNotice = error
+  const notice = error
     ? { message: error, tone: 'error' as const }
-    : verifying
-      ? { message: 'Verifying security check...', tone: 'info' as const }
-      : token
-        ? { message: 'Security check complete. You can continue.', tone: 'info' as const }
-        : message
-          ? { message, tone: messageTone }
-          : { message: 'Select "Verify you\'re human" to continue.', tone: 'info' as const }
-
-  const styles = noticeStyles(activeNotice.tone)
-  const showPlaceholder = !widgetReady
-  const buttonLabel = token ? 'Verified' : verifying ? 'Verifying...' : 'Verify you\'re human'
-  const buttonStyles = token
-    ? {
-        background: '#f0fdf4',
-        border: '1px solid #86efac',
-        color: '#166534',
-      }
-    : {
-        background: '#ffffff',
-        border: '1px solid #cbd5e1',
-        color: '#0f172a',
-      }
+    : message
+      ? { message, tone: messageTone }
+      : null
+  const styles = notice ? noticeStyles(notice.tone) : null
 
   return (
     <div style={{ marginTop: 14, display: 'grid', gap: 10 }}>
-      <div
-        aria-live="polite"
-        style={{
-          background: styles.background,
-          border: `1px solid ${styles.border}`,
-          borderRadius: 12,
-          color: styles.color,
-          fontSize: 12,
-          lineHeight: 1.5,
-          padding: '10px 12px',
-        }}
-      >
-        {activeNotice.message}
-      </div>
-      <button
-        type="button"
-        disabled={!widgetReady || verifying || !!token}
-        onClick={beginVerification}
-        style={{
-          alignItems: 'center',
-          borderRadius: 10,
-          cursor: !widgetReady || verifying || token ? 'not-allowed' : 'pointer',
-          display: 'inline-flex',
-          fontSize: 13,
-          fontWeight: 600,
-          gap: 8,
-          justifyContent: 'center',
-          opacity: !widgetReady || verifying || token ? 0.7 : 1,
-          padding: '10px 14px',
-          transition: 'opacity 0.15s ease, transform 0.08s ease',
-          ...buttonStyles,
-        }}
-      >
-        {buttonLabel}
-      </button>
-      {showPlaceholder ? (
+      {notice && styles ? (
         <div
-          aria-hidden="true"
+          aria-live="polite"
           style={{
-            alignItems: 'center',
-            background: '#f8fafc',
-            border: '1px dashed #cbd5e1',
+            background: styles.background,
+            border: `1px solid ${styles.border}`,
             borderRadius: 12,
-            color: '#64748b',
-            display: 'flex',
+            color: styles.color,
             fontSize: 12,
-            justifyContent: 'center',
-            minHeight: 74,
-            padding: '12px 14px',
+            lineHeight: 1.5,
+            padding: '10px 12px',
           }}
         >
-          Loading security check...
+          {notice.message}
         </div>
       ) : null}
-      <div ref={containerRef} style={showPlaceholder ? { minHeight: 0 } : undefined} />
+      <div ref={containerRef} />
     </div>
   )
 }

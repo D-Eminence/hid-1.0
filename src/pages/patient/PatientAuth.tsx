@@ -506,7 +506,6 @@ export default function PatientAuth() {
             onTokenChange={handleCaptchaTokenChange}
             preload={step === 'password'}
             resetKey={captchaResetKey}
-            token={captchaToken}
             visible={captchaVisible}
           />
           <div style={{ color: '#7d8797', fontSize: 11, lineHeight: 1.6, marginTop: 14, textAlign: 'left' }}>{PASSWORD_REQUIREMENTS_TEXT}</div>
@@ -586,7 +585,6 @@ export default function PatientAuth() {
           onTokenChange={handleCaptchaTokenChange}
           preload={step === 'signin' && (!!signin.identifier.trim() || !!signin.password)}
           resetKey={captchaResetKey}
-          token={captchaToken}
           visible={captchaVisible}
         />
         <Button loading={loading} onClick={signIn} style={actionButtonStyle(canSignIn)}>Sign in</Button>
@@ -628,7 +626,6 @@ export default function PatientAuth() {
               onTokenChange={handleCaptchaTokenChange}
               preload={step === 'forgot' && !forgot.challengeId && !!forgot.identifier.trim()}
               resetKey={captchaResetKey}
-              token={captchaToken}
               visible={captchaVisible}
             />
             <Button loading={loading} onClick={startForgotPassword} style={actionButtonStyle(canStartForgot)}>Send OTP</Button>

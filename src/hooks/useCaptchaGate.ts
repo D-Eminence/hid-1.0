@@ -3,7 +3,7 @@ import { showToast } from '../components/ui'
 import { ensureCaptchaReady, isTurnstileConfigured } from '../lib/captcha'
 
 type CaptchaNoticeTone = 'error' | 'info'
-const DEFAULT_CAPTCHA_MESSAGE = 'Select "Verify you\'re human" to continue.'
+const DEFAULT_CAPTCHA_MESSAGE = 'Verify you\'re human before continuing.'
 
 type CaptchaGateOptions = {
   requiredMessage?: string
@@ -35,7 +35,7 @@ export function useCaptchaGate() {
     setCaptchaNotice(current => (
       current?.tone === 'error'
         ? current
-        : { message, tone: 'info' }
+        : null
     ))
   }, [captchaToken, turnstileConfigured])
 
@@ -55,9 +55,7 @@ export function useCaptchaGate() {
     setCaptchaNotice(current => (
       current?.tone === 'error'
         ? current
-        : current
-          ? { ...current, message: DEFAULT_CAPTCHA_MESSAGE }
-          : { message: DEFAULT_CAPTCHA_MESSAGE, tone: 'info' }
+        : null
     ))
   }, [])
 
@@ -77,10 +75,8 @@ export function useCaptchaGate() {
 
     pendingActionRef.current = action
     setCaptchaVisible(true)
-    setCaptchaNotice({
-      message: options.requiredMessage ?? DEFAULT_CAPTCHA_MESSAGE,
-      tone: 'info',
-    })
+    setCaptchaNotice(null)
+    showToast(options.requiredMessage ?? DEFAULT_CAPTCHA_MESSAGE, 'error')
     return false
   }, [captchaToken, turnstileConfigured])
 

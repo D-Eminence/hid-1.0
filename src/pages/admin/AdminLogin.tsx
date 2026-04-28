@@ -383,7 +383,6 @@ export default function AdminLogin() {
                 onTokenChange={handleCaptchaTokenChange}
                 preload={step === 'forgot' && !otpSent && !!email.trim()}
                 resetKey={captchaResetKey}
-                token={captchaToken}
                 visible={captchaVisible}
               />
               <Button loading={loading} onClick={() => void sendResetLink()} fullWidth>
@@ -500,7 +499,6 @@ export default function AdminLogin() {
           onTokenChange={handleCaptchaTokenChange}
           preload={step === 'login' && (!!email.trim() || !!password)}
           resetKey={captchaResetKey}
-          token={captchaToken}
           visible={captchaVisible}
         />
         <Button loading={loading} onClick={() => void submit()} fullWidth>

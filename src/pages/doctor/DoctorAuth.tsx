@@ -524,7 +524,6 @@ export default function DoctorAuth() {
                 onTokenChange={handleCaptchaTokenChange}
                 preload={step === 'forgot' && !forgotCodeSent && !!forgot.email.trim()}
                 resetKey={captchaResetKey}
-                token={captchaToken}
                 visible={captchaVisible}
               />
               <Button loading={loading} onClick={startForgotPassword} style={actionButtonStyle(!!forgot.email.trim())}>Send OTP</Button>
@@ -641,7 +640,6 @@ export default function DoctorAuth() {
               onTokenChange={handleCaptchaTokenChange}
               preload={step === 'login' && (!!loginForm.email.trim() || !!loginForm.password)}
               resetKey={captchaResetKey}
-              token={captchaToken}
               visible={captchaVisible}
             />
             <Button disabled={!canSubmitLogin} loading={loading} onClick={submitLogin} style={actionButtonStyle(canSubmitLogin)}>
@@ -685,7 +683,6 @@ export default function DoctorAuth() {
               onTokenChange={handleCaptchaTokenChange}
               preload={step === 'signup' && (!!signupForm.email.trim() || !!signupForm.password || !!signupForm.confirmPassword)}
               resetKey={captchaResetKey}
-              token={captchaToken}
               visible={captchaVisible}
             />
             <div style={{ color: '#7d8797', fontSize: 11, lineHeight: 1.6, marginTop: 14 }}>{PASSWORD_REQUIREMENTS_TEXT}</div>
