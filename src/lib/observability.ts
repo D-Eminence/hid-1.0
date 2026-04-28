@@ -84,6 +84,10 @@ function shouldIgnoreSentryEvent(event: Record<string, any>) {
     text.includes('networkerror when attempting to fetch resource') ||
     text.includes('authretryablefetcherror') ||
     (text.includes('request took too long') && text.includes('check your internet connection')) ||
+    text.includes('error loading dynamically imported module') ||
+    text.includes('failed to fetch dynamically imported module') ||
+    text.includes('importing a module script failed') ||
+    text.includes('typeerror: load failed') ||
     text.includes('lock broken by another request') ||
     text.includes('lock request is aborted') ||
     text.includes("steal' option") ||

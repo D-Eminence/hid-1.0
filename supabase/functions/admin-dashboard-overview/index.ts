@@ -58,6 +58,7 @@ function isIgnoredSentryIssue(issue: SentryIssue) {
     text.includes('networkerror when attempting to fetch resource') ||
     text.includes('authretryablefetcherror') ||
     (text.includes('request took too long') && text.includes('check your internet connection')) ||
+    text.includes('error loading dynamically imported module') ||
     text.includes('invalid login credentials') ||
     text.includes('token has expired or is invalid') ||
     text.includes('authapierror') ||
@@ -720,6 +721,7 @@ Deno.serve(req => withErrorHandling(req, async () => {
     staffAuthUsersResponse,
     totalRecordsResponse,
     windowRecordsResponse,
+    windowUploadsResponse,
     providerRecordCountResponse,
     organizationsCountResponse,
     totalProvidersCountResponse,
@@ -740,6 +742,7 @@ Deno.serve(req => withErrorHandling(req, async () => {
     staffAuthUsersPromise,
     adminClient.from('hid_medical_records').select('id', { count: 'exact', head: true }),
     adminClient.from('hid_medical_records').select('id, patient_id, created_at, created_by_staff_account_id').gte('created_at', periodStart.toISOString()),
+    adminClient.from('hid_medical_record_files').select('id, created_at').gte('created_at', periodStart.toISOString()),
     adminClient.from('hid_medical_records').select('id', { count: 'exact', head: true }).not('created_by_staff_account_id', 'is', null),
     adminClient.from('hid_organizations').select('id', { count: 'exact', head: true }),
     adminClient.from('hid_staff_accounts').select('id', { count: 'exact', head: true }),
@@ -760,6 +763,7 @@ Deno.serve(req => withErrorHandling(req, async () => {
   if (patientAuthUsersResponse.error) throw new HttpError(400, patientAuthUsersResponse.error.message, patientAuthUsersResponse.error)
   if (staffAuthUsersResponse.error) throw new HttpError(400, staffAuthUsersResponse.error.message, staffAuthUsersResponse.error)
   if (windowRecordsResponse.error) throw new HttpError(400, windowRecordsResponse.error.message, windowRecordsResponse.error)
+  if (windowUploadsResponse.error) throw new HttpError(400, windowUploadsResponse.error.message, windowUploadsResponse.error)
   if (providerRecordCountResponse.error) throw new HttpError(400, providerRecordCountResponse.error.message, providerRecordCountResponse.error)
   if (organizationsCountResponse.error) throw new HttpError(400, organizationsCountResponse.error.message, organizationsCountResponse.error)
   if (totalProvidersCountResponse.error) throw new HttpError(400, totalProvidersCountResponse.error.message, totalProvidersCountResponse.error)
@@ -836,14 +840,16 @@ Deno.serve(req => withErrorHandling(req, async () => {
     })
 
   const windowRecordRows = (windowRecordsResponse.data ?? []) as Array<Record<string, unknown>>
+  const windowUploadRows = (windowUploadsResponse.data ?? []) as Array<Record<string, unknown>>
   const recordUploads = aggregateTimeline(
-    windowRecordRows
-      .map(record => typeof record.created_at === 'string' ? record.created_at : null)
+    (windowUploadRows.length > 0 ? windowUploadRows : windowRecordRows)
+      .map(upload => typeof upload.created_at === 'string' ? upload.created_at : null)
       .filter((value): value is string => Boolean(value)),
     windowKey
   )
 
-  const uploadedToday = windowRecordRows.filter(record => isOnOrAfter(record.created_at as string | null, todayStart)).length
+  const uploadedToday = (windowUploadRows.length > 0 ? windowUploadRows : windowRecordRows)
+    .filter(upload => isOnOrAfter(upload.created_at as string | null, todayStart)).length
   const averagePerUser = totalUsers === 0 ? 0 : Number(((totalRecordsResponse.count ?? 0) / totalUsers).toFixed(1))
 
   const recentUploadRows = (recentUploadsResponse.data ?? []) as Array<Record<string, unknown>>
@@ -921,11 +927,23 @@ Deno.serve(req => withErrorHandling(req, async () => {
       message: `OTP success rate is ${otpSuccessRate.toFixed(1)}%. Monitor verification drop-off and retry friction.`,
       title: 'OTP completion dropped',
     } : null,
+    (sentry.criticalIssues ?? 0) > 0 ? {
+      id: 'critical-frontend-issues',
+      level: 'critical' as const,
+      message: `${sentry.criticalIssues} active critical Sentry issue${sentry.criticalIssues === 1 ? '' : 's'} need attention in the selected window.`,
+      title: 'Critical frontend issues',
+    } : null,
     apiResponseTimeMs >= 800 ? {
       id: 'slow-api',
       level: 'warning' as const,
       message: `Current API probe took ${apiResponseTimeMs} ms. Monitor Supabase latency before launch.`,
       title: 'Slow API response',
+    } : null,
+    recordUploads.length === 0 ? {
+      id: 'no-recent-uploads',
+      level: 'info' as const,
+      message: 'No record uploads were observed in the selected window. New uploads will appear here as activity resumes.',
+      title: 'No recent uploads',
     } : null,
     !sentry.configured || !posthog.configured ? {
       id: 'observability-setup',

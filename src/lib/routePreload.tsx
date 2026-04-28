@@ -11,6 +11,7 @@ function isRecoverableImportError(error: unknown) {
   if (!(error instanceof Error)) return false
   const message = error.message.toLowerCase()
   return (
+    message.includes('error loading dynamically imported module') ||
     message.includes('failed to fetch dynamically imported module') ||
     message.includes('importing a module script failed') ||
     message.includes('load failed')

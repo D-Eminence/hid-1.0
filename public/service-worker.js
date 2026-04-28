@@ -1,6 +1,5 @@
-const CACHE_VERSION = 'hid-static-v2026-04-20-2'
+const CACHE_VERSION = 'hid-static-v2026-04-28-1'
 const STATIC_CACHE_URLS = [
-  '/',
   '/manifest.webmanifest',
   '/hid-logo.png',
   '/favicon.ico',
@@ -41,18 +40,7 @@ self.addEventListener('fetch', event => {
   if (url.pathname.startsWith('/auth/') || url.pathname.startsWith('/functions/')) return
 
   if (request.mode === 'navigate') {
-    event.respondWith(
-      fetch(request)
-        .then(response => {
-          const responseClone = response.clone()
-          caches.open(CACHE_VERSION).then(cache => cache.put('/', responseClone)).catch(() => undefined)
-          return response
-        })
-        .catch(async () => {
-          const cache = await caches.open(CACHE_VERSION)
-          return (await cache.match('/')) || Response.error()
-        })
-    )
+    event.respondWith(fetch(request))
     return
   }
 
