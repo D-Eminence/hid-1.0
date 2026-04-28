@@ -105,6 +105,13 @@ type PrivilegedMfaRequirement = {
   required: boolean
 }
 
+type SignupAvailabilityResponse = {
+  accountType: 'patient' | 'hospital'
+  emailInUse: boolean
+  emailOwner: 'patient' | 'hospital' | 'account' | null
+  phoneInUse: boolean
+}
+
 type TotpEnrollment = {
   factorId: string
   friendlyName: string | null
@@ -616,6 +623,61 @@ async function requestSignupVerificationEmail(email: string, path: 'patient' | '
 
   if (error) {
     throw new HidApiError(400, error.message, error)
+  }
+}
+
+function formatSignupAvailabilityConflict(result: SignupAvailabilityResponse) {
+  if (result.emailInUse && result.phoneInUse) {
+    return 'That email address and phone number are already linked to HID accounts. Use different details and try again.'
+  }
+  if (result.emailInUse) {
+    if (result.emailOwner === 'patient') {
+      return 'That email address is already linked to a patient HID account. Sign in instead or use a different email.'
+    }
+    if (result.emailOwner === 'hospital') {
+      return 'That email address is already linked to a hospital HID account. Sign in instead or use a different email.'
+    }
+    return 'That email address is already linked to an HID account. Sign in instead or use a different email.'
+  }
+  if (result.phoneInUse) {
+    return 'That phone number is already linked to an HID account. Use a different phone number and try again.'
+  }
+  return null
+}
+
+async function checkSignupAvailability(params: {
+  accountType: 'patient' | 'hospital'
+  email?: string | null
+  phone?: string | null
+}) {
+  const normalizedEmail = normalizeOptionalText(params.email?.trim().toLowerCase())
+  const normalizedPhone = normalizeOptionalText(normalizePhone(params.phone ?? ''))
+  const cacheKey = `signup-availability:${params.accountType}:${normalizedEmail ?? ''}:${normalizedPhone ?? ''}`
+
+  return loadCachedView(
+    cacheKey,
+    () => edgeRequest<SignupAvailabilityResponse>('signup-availability', {
+      method: 'POST',
+      requireAuth: false,
+      body: {
+        accountType: params.accountType,
+        email: normalizedEmail,
+        phone: normalizedPhone,
+      },
+    }),
+    8_000,
+  )
+}
+
+async function assertSignupAvailability(params: {
+  accountType: 'patient' | 'hospital'
+  email?: string | null
+  phone?: string | null
+}) {
+  const result = await checkSignupAvailability(params)
+  const conflictMessage = formatSignupAvailabilityConflict(result)
+  if (conflictMessage) {
+    throw new HidApiError(409, conflictMessage, result)
   }
 }
 
@@ -1461,6 +1523,11 @@ export async function patientSignUpWithPassword(params: PendingPatientSignup & {
     phone: normalizedPhone,
   }
 
+  await assertSignupAvailability({
+    accountType: 'patient',
+    email: normalizedEmail,
+    phone: normalizedPhone,
+  })
   await clearConflictingAuthSession(normalizedEmail)
 
   const redirectTo = authRedirectUrl('patient')
@@ -1707,6 +1774,10 @@ export async function sendPatientVerificationEmail(email: string, captchaToken?:
 }
 
 export async function providerActivateInvite(params: PendingStaffOnboarding & { email: string; password: string; captchaToken?: string | null }) {
+  await assertSignupAvailability({
+    accountType: 'hospital',
+    email: params.email,
+  })
   await clearConflictingAuthSession(params.email)
 
   const pendingData: PendingStaffOnboarding = {
@@ -1759,6 +1830,10 @@ export async function providerSignUp(params: {
 }) {
   const hospitalName = params.hospitalName.trim()
   const normalizedEmail = params.email.trim().toLowerCase()
+  await assertSignupAvailability({
+    accountType: 'hospital',
+    email: normalizedEmail,
+  })
   await clearConflictingAuthSession(normalizedEmail)
 
   const pendingData: PendingStaffOnboarding = {
