@@ -117,7 +117,9 @@ export default function PatientAuth() {
     captchaResetKey,
     captchaToken,
     captchaVisible,
+    hideCaptcha,
     onTokenChange: handleCaptchaTokenChange,
+    primeCaptcha,
     resetCaptcha,
     runWithCaptcha,
   } = useCaptchaGate()
@@ -127,6 +129,9 @@ export default function PatientAuth() {
   const canFinishSignup = signupAccepted && isStrongPassword(signup.password) && signup.password === signup.confirmPassword
   const canStartForgot = !!forgot.identifier.trim()
   const canResetPassword = forgotOtpVerified && isStrongPassword(forgot.password) && forgot.password === forgot.confirmPassword
+  const signupCaptchaReady = step === 'password' && !!signup.password && !!signup.confirmPassword
+  const signinCaptchaReady = step === 'signin' && canSignIn
+  const forgotCaptchaReady = step === 'forgot' && !forgot.challengeId && canStartForgot
 
   useEffect(() => {
     if (!existingSession && !hasStoredSupabaseAuthSession()) {
@@ -160,6 +165,15 @@ export default function PatientAuth() {
   useEffect(() => {
     resetCaptcha()
   }, [resetCaptcha, step])
+
+  useEffect(() => {
+    if (signupCaptchaReady || signinCaptchaReady || forgotCaptchaReady) {
+      primeCaptcha()
+      return
+    }
+
+    hideCaptcha()
+  }, [captchaVisible, forgotCaptchaReady, hideCaptcha, primeCaptcha, signinCaptchaReady, signupCaptchaReady])
 
   function goToSignUpPassword() {
     if (!signupAccepted) {
@@ -490,7 +504,9 @@ export default function PatientAuth() {
             message={captchaNotice?.message}
             messageTone={captchaNotice?.tone}
             onTokenChange={handleCaptchaTokenChange}
+            preload={step === 'password'}
             resetKey={captchaResetKey}
+            token={captchaToken}
             visible={captchaVisible}
           />
           <div style={{ color: '#7d8797', fontSize: 11, lineHeight: 1.6, marginTop: 14, textAlign: 'left' }}>{PASSWORD_REQUIREMENTS_TEXT}</div>
@@ -568,7 +584,9 @@ export default function PatientAuth() {
           message={captchaNotice?.message}
           messageTone={captchaNotice?.tone}
           onTokenChange={handleCaptchaTokenChange}
+          preload={step === 'signin' && (!!signin.identifier.trim() || !!signin.password)}
           resetKey={captchaResetKey}
+          token={captchaToken}
           visible={captchaVisible}
         />
         <Button loading={loading} onClick={signIn} style={actionButtonStyle(canSignIn)}>Sign in</Button>
@@ -608,7 +626,9 @@ export default function PatientAuth() {
               message={captchaNotice?.message}
               messageTone={captchaNotice?.tone}
               onTokenChange={handleCaptchaTokenChange}
+              preload={step === 'forgot' && !forgot.challengeId && !!forgot.identifier.trim()}
               resetKey={captchaResetKey}
+              token={captchaToken}
               visible={captchaVisible}
             />
             <Button loading={loading} onClick={startForgotPassword} style={actionButtonStyle(canStartForgot)}>Send OTP</Button>

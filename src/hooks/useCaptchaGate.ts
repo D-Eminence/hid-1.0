@@ -3,6 +3,7 @@ import { showToast } from '../components/ui'
 import { ensureCaptchaReady, isTurnstileConfigured } from '../lib/captcha'
 
 type CaptchaNoticeTone = 'error' | 'info'
+const DEFAULT_CAPTCHA_MESSAGE = 'Select "Verify you\'re human" to continue.'
 
 type CaptchaGateOptions = {
   requiredMessage?: string
@@ -27,6 +28,23 @@ export function useCaptchaGate() {
     setCaptchaResetKey(current => current + 1)
   }, [])
 
+  const primeCaptcha = useCallback((message = DEFAULT_CAPTCHA_MESSAGE) => {
+    if (!turnstileConfigured || captchaToken) return
+
+    setCaptchaVisible(true)
+    setCaptchaNotice(current => (
+      current?.tone === 'error'
+        ? current
+        : { message, tone: 'info' }
+    ))
+  }, [captchaToken, turnstileConfigured])
+
+  const hideCaptcha = useCallback(() => {
+    if (pendingActionRef.current || captchaToken) return
+    setCaptchaVisible(false)
+    setCaptchaNotice(current => (current?.tone === 'error' ? current : null))
+  }, [captchaToken])
+
   const onTokenChange = useCallback((token: string | null) => {
     setCaptchaToken(token)
     if (token) {
@@ -38,8 +56,8 @@ export function useCaptchaGate() {
       current?.tone === 'error'
         ? current
         : current
-          ? { ...current, message: 'Complete the security check below to continue.' }
-          : null
+          ? { ...current, message: DEFAULT_CAPTCHA_MESSAGE }
+          : { message: DEFAULT_CAPTCHA_MESSAGE, tone: 'info' }
     ))
   }, [])
 
@@ -60,7 +78,7 @@ export function useCaptchaGate() {
     pendingActionRef.current = action
     setCaptchaVisible(true)
     setCaptchaNotice({
-      message: options.requiredMessage ?? 'Complete the security check below to continue.',
+      message: options.requiredMessage ?? DEFAULT_CAPTCHA_MESSAGE,
       tone: 'info',
     })
     return false
@@ -79,7 +97,9 @@ export function useCaptchaGate() {
     captchaResetKey,
     captchaToken,
     captchaVisible,
+    hideCaptcha,
     onTokenChange,
+    primeCaptcha,
     resetCaptcha,
     runWithCaptcha,
   }

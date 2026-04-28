@@ -65,11 +65,15 @@ export default function AdminLogin() {
     captchaResetKey,
     captchaToken,
     captchaVisible,
+    hideCaptcha,
     onTokenChange: handleCaptchaTokenChange,
+    primeCaptcha,
     resetCaptcha,
     runWithCaptcha,
   } = useCaptchaGate()
   const canSubmitReset = isStrongPassword(resetPassword) && resetPassword === confirmResetPassword
+  const loginCaptchaReady = step === 'login' && !!email.trim() && !!password
+  const forgotCaptchaReady = step === 'forgot' && !otpSent && !!email.trim()
 
   function resetMfaState() {
     setMfaCode('')
@@ -169,6 +173,15 @@ export default function AdminLogin() {
   useEffect(() => {
     resetCaptcha()
   }, [resetCaptcha, step])
+
+  useEffect(() => {
+    if (loginCaptchaReady || forgotCaptchaReady) {
+      primeCaptcha()
+      return
+    }
+
+    hideCaptcha()
+  }, [captchaVisible, forgotCaptchaReady, hideCaptcha, loginCaptchaReady, primeCaptcha])
 
   function sendResetLink() {
     if (!email.trim()) {
@@ -357,6 +370,7 @@ export default function AdminLogin() {
               <Input
                 label="Admin Email"
                 type="email"
+                placeholder="admin@gmail.com"
                 value={email}
                 onChange={event => setEmail(event.target.value)}
                 autoComplete="off"
@@ -367,7 +381,9 @@ export default function AdminLogin() {
                 message={captchaNotice?.message}
                 messageTone={captchaNotice?.tone}
                 onTokenChange={handleCaptchaTokenChange}
+                preload={step === 'forgot' && !otpSent && !!email.trim()}
                 resetKey={captchaResetKey}
+                token={captchaToken}
                 visible={captchaVisible}
               />
               <Button loading={loading} onClick={() => void sendResetLink()} fullWidth>
@@ -457,6 +473,7 @@ export default function AdminLogin() {
         <Input
           label="Admin Email"
           type="email"
+          placeholder="admin@gmail.com"
           value={email}
           onChange={event => setEmail(event.target.value)}
           autoComplete="off"
@@ -481,7 +498,9 @@ export default function AdminLogin() {
           message={captchaNotice?.message}
           messageTone={captchaNotice?.tone}
           onTokenChange={handleCaptchaTokenChange}
+          preload={step === 'login' && (!!email.trim() || !!password)}
           resetKey={captchaResetKey}
+          token={captchaToken}
           visible={captchaVisible}
         />
         <Button loading={loading} onClick={() => void submit()} fullWidth>

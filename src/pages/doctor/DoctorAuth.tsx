@@ -91,7 +91,9 @@ export default function DoctorAuth() {
     captchaResetKey,
     captchaToken,
     captchaVisible,
+    hideCaptcha,
     onTokenChange: handleCaptchaTokenChange,
+    primeCaptcha,
     resetCaptcha,
     runWithCaptcha,
   } = useCaptchaGate()
@@ -108,6 +110,16 @@ export default function DoctorAuth() {
   const canSubmitReset = isStrongPassword(resetPassword) && resetPassword === confirmResetPassword
   const stateOptions = (signupForm.country ? STATES_BY_COUNTRY[signupForm.country] ?? [] : []).map(value => ({ value, label: value }))
   const showStateSelect = stateOptions.length > 0
+  const loginCaptchaReady = step === 'login' && canSubmitLogin
+  const signupCaptchaReady =
+    step === 'signup' &&
+    !!signupForm.hospitalName.trim() &&
+    !!signupForm.email.trim() &&
+    !!signupForm.state.trim() &&
+    !!signupForm.country.trim() &&
+    !!signupForm.password &&
+    !!signupForm.confirmPassword
+  const forgotCaptchaReady = step === 'forgot' && !forgotCodeSent && !!forgot.email.trim()
 
   useEffect(() => {
     if (inRecoveryMode) return
@@ -146,6 +158,15 @@ export default function DoctorAuth() {
   useEffect(() => {
     resetCaptcha()
   }, [resetCaptcha, step])
+
+  useEffect(() => {
+    if (loginCaptchaReady || signupCaptchaReady || forgotCaptchaReady) {
+      primeCaptcha()
+      return
+    }
+
+    hideCaptcha()
+  }, [captchaVisible, forgotCaptchaReady, hideCaptcha, loginCaptchaReady, primeCaptcha, signupCaptchaReady])
 
   function resetMfaState() {
     setPendingStaffAccount(null)
@@ -501,7 +522,9 @@ export default function DoctorAuth() {
                 message={captchaNotice?.message}
                 messageTone={captchaNotice?.tone}
                 onTokenChange={handleCaptchaTokenChange}
+                preload={step === 'forgot' && !forgotCodeSent && !!forgot.email.trim()}
                 resetKey={captchaResetKey}
+                token={captchaToken}
                 visible={captchaVisible}
               />
               <Button loading={loading} onClick={startForgotPassword} style={actionButtonStyle(!!forgot.email.trim())}>Send OTP</Button>
@@ -616,7 +639,9 @@ export default function DoctorAuth() {
               message={captchaNotice?.message}
               messageTone={captchaNotice?.tone}
               onTokenChange={handleCaptchaTokenChange}
+              preload={step === 'login' && (!!loginForm.email.trim() || !!loginForm.password)}
               resetKey={captchaResetKey}
+              token={captchaToken}
               visible={captchaVisible}
             />
             <Button disabled={!canSubmitLogin} loading={loading} onClick={submitLogin} style={actionButtonStyle(canSubmitLogin)}>
@@ -658,7 +683,9 @@ export default function DoctorAuth() {
               message={captchaNotice?.message}
               messageTone={captchaNotice?.tone}
               onTokenChange={handleCaptchaTokenChange}
+              preload={step === 'signup' && (!!signupForm.email.trim() || !!signupForm.password || !!signupForm.confirmPassword)}
               resetKey={captchaResetKey}
+              token={captchaToken}
               visible={captchaVisible}
             />
             <div style={{ color: '#7d8797', fontSize: 11, lineHeight: 1.6, marginTop: 14 }}>{PASSWORD_REQUIREMENTS_TEXT}</div>

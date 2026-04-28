@@ -114,6 +114,29 @@ function fallbackErrorMessage(raw: string) {
   return 'That action could not be completed right now. Please try again.'
 }
 
+function isSensitiveAccountMessage(lower: string) {
+  return (
+    (
+      lower.includes('account') ||
+      lower.includes('patient') ||
+      lower.includes('hospital') ||
+      lower.includes('email') ||
+      lower.includes('phone')
+    ) &&
+    (
+      lower.includes('already exists') ||
+      lower.includes('already linked') ||
+      lower.includes('cannot be used') ||
+      lower.includes('deleted') ||
+      lower.includes('locked') ||
+      lower.includes('inactive') ||
+      lower.includes('not active') ||
+      lower.includes('incomplete') ||
+      lower.includes('finishing setup')
+    )
+  )
+}
+
 function normalizeToastMessage(message: string, type: ToastType) {
   const raw = `${message ?? ''}`.replace(/\s+/g, ' ').trim()
   if (!raw) return type === 'error' ? 'Something went wrong. Please try again.' : 'Done.'
@@ -132,27 +155,27 @@ function normalizeToastMessage(message: string, type: ToastType) {
     if (lower.includes('failed to fetch') || lower.includes('networkerror') || lower.includes('load failed')) return 'We could not connect right now. Please try again.'
     if (lower.includes('hid code or access pin')) return 'The HID code or access PIN is not correct.'
     if (lower.includes('multiple (or no) rows returned') || lower.includes('0 rows')) return 'We could not find the information you requested.'
-    if (lower.includes('account for this hospital already exists')) return 'A hospital account already exists for this location. Sign in or contact support.'
-    if (lower.includes('already linked to a patient account')) return 'This email address is already linked to a patient account. Use a different email for the hospital account.'
-    if (lower.includes('cannot be used for a hospital account')) return 'This email address cannot be used for a hospital account. Use a different email address.'
+    if (lower.includes('account for this hospital already exists')) return 'These details are already in use. Sign in instead or contact support.'
+    if (lower.includes('already linked to a patient account')) return 'These details are already in use. Try a different email address or sign in instead.'
+    if (lower.includes('cannot be used for a hospital account')) return 'These details cannot be used for this request. Try different details or contact support.'
     if (lower.includes('phone number is already linked') || lower.includes('email address or phone number is already linked')) {
-      return 'That email address or phone number is already linked to another HID account.'
+      return 'These details are already in use. Try different details or sign in instead.'
     }
     if (lower.includes('email address is already linked to an hid account')) {
-      return 'That email address is already linked to an HID account. Sign in instead.'
+      return 'These details are already in use. Sign in instead or use different details.'
     }
     if (lower.includes('phone number is already linked to another hid account')) {
-      return 'That phone number is already linked to another HID account.'
+      return 'These details are already in use. Try different details or sign in instead.'
     }
     if (lower.includes('email address and phone number are already linked')) {
-      return 'That email address and phone number are already linked to HID accounts.'
+      return 'These details are already in use. Try different details or sign in instead.'
     }
     if (lower.includes('idx_hid_patients_phone') || lower.includes('idx_hid_patients_email')) {
-      return 'That email address or phone number is already linked to another HID account.'
+      return 'These details are already in use. Try different details or sign in instead.'
     }
-    if (lower.includes('user already registered')) return 'An account with these details already exists. Sign in instead, or enter the verification code sent to your email.'
-    if (lower.includes('duplicate key') || lower.includes('already exists')) return 'An account with these details already exists. Sign in instead or use a different email.'
-    if (lower.includes('patient profile already exists')) return 'An account with these details already exists. Sign in instead or enter the verification code sent to your email.'
+    if (lower.includes('user already registered')) return 'These details are already in use. Sign in instead or try different details.'
+    if (lower.includes('duplicate key') || lower.includes('already exists')) return 'These details are already in use. Sign in instead or try different details.'
+    if (lower.includes('patient profile already exists')) return 'These details are already in use. Sign in instead or try different details.'
     if (lower.includes('you do not have permission to perform this action')) return 'Your account is signed in, but it is not allowed to do that yet.'
     if (lower.includes('permission denied') || lower.includes('not allowed') || lower.includes('cannot perform this action')) return 'This account cannot perform that action right now.'
     if (lower.includes('schema cache')) return 'This information could not be saved right now. Please try again.'
@@ -171,13 +194,13 @@ function normalizeToastMessage(message: string, type: ToastType) {
     }
     if (lower.includes('hospital name, state, and country are required')) return 'Please enter hospital name, state, and country.'
     if (lower.includes('no active staff invite') || lower.includes('staff invite is incomplete')) {
-      return 'This hospital account is not ready yet. Sign up again with the same email or sign in to continue setup.'
+      return 'This account is not ready to continue right now. Please try again shortly or contact support.'
     }
     if (lower.includes('hospital account setup is incomplete')) {
-      return 'This hospital account still needs setup. Sign in again or retry signup with the same email.'
+      return 'This account is not ready to continue right now. Please try again shortly or contact support.'
     }
     if (lower.includes('hospital account is still finishing setup') || lower.includes('staff onboarding could not be completed')) {
-      return 'Your hospital account is still finishing setup. Sign in again in a moment.'
+      return 'This account is not ready to continue right now. Please try again shortly or contact support.'
     }
     if (lower.includes('verify the email to finish creating') || lower.includes('verification code sent to your email')) {
       return 'Enter the 6-digit verification code sent to your email to continue.'
@@ -189,10 +212,10 @@ function normalizeToastMessage(message: string, type: ToastType) {
       return 'This email address could not be used for verification. Please try again.'
     }
     if (lower.includes('complete the security check to continue')) {
-      return 'Complete the security check before continuing.'
+      return 'Verify you\'re human before continuing.'
     }
     if (lower.includes('complete the security check below to continue')) {
-      return 'Complete the security check below to continue.'
+      return 'Select "Verify you\'re human" to continue.'
     }
     if (lower.includes('mfa enroll is disabled for totp') || lower.includes('totp enroll is disabled')) {
       return 'Authenticator setup is not available right now. Ask an administrator to enable MFA, then try again.'
@@ -204,7 +227,7 @@ function normalizeToastMessage(message: string, type: ToastType) {
       return 'Security check failed to load. Refresh and try again.'
     }
     if (lower.includes('captcha token') && (lower.includes('missing') || lower.includes('required'))) {
-      return 'Complete the security check before continuing.'
+      return 'Verify you\'re human before continuing.'
     }
     if (lower.includes('unable to send') && lower.includes('verification code')) {
       return 'We could not send the verification code right now. Please try again.'
@@ -225,16 +248,16 @@ function normalizeToastMessage(message: string, type: ToastType) {
       return 'We could not open this patient right now. Check the HID code and Access PIN and try again.'
     }
     if (lower.includes('patient account has been deleted')) {
-      return 'This patient account has been deleted and can no longer be opened by a hospital.'
+      return 'This account is not available right now. Contact support if you need help.'
     }
     if (lower.includes('account has been deleted')) {
-      return 'This account has been deleted and is no longer available.'
+      return 'This account is not available right now. Contact support if you need help.'
     }
     if (lower.includes('patient account is locked')) {
-      return 'This patient account is locked right now and cannot be opened by a hospital.'
+      return 'This account is not available right now. Contact support if you need help.'
     }
     if (lower.includes('account is inactive') || lower.includes('account is not active') || lower.includes('account is locked')) {
-      return 'This account is locked right now. Contact support if you need help.'
+      return 'This account is not available right now. Contact support if you need help.'
     }
     if (lower.includes('unable to save the medical record')) {
       return 'We could not save the medical record right now. Please try again.'
@@ -268,6 +291,7 @@ function normalizeToastMessage(message: string, type: ToastType) {
     if (lower.includes('access pin must be 4 to 8 digits')) return 'Access PIN must be 4 to 8 digits.'
     if (lower.includes('not found')) return 'We could not find the information you requested.'
     if (lower.includes('expired')) return 'This session has expired. Please try again.'
+    if (isSensitiveAccountMessage(lower)) return 'This request could not be completed with those details. Please try again or contact support.'
   }
 
   const readable = toReadableSentence(raw)
