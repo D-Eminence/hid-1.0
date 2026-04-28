@@ -390,6 +390,10 @@ function isExistingAccountError(error: unknown) {
   return lower.includes('already registered') || lower.includes('already exists')
 }
 
+function hasSilentExistingSignupConflict(user: { identities?: Array<unknown> | null } | null | undefined) {
+  return Boolean(user && Array.isArray(user.identities) && user.identities.length === 0)
+}
+
 function isPatientProfileConflictError(error: unknown) {
   if (!error || typeof error !== 'object') return false
   const candidate = error as { code?: string; message?: string }
@@ -679,6 +683,27 @@ async function assertSignupAvailability(params: {
   if (conflictMessage) {
     throw new HidApiError(409, conflictMessage, result)
   }
+}
+
+async function assertNoSilentSignupConflict(params: {
+  accountType: 'patient' | 'hospital'
+  email?: string | null
+  phone?: string | null
+  user: { identities?: Array<unknown> | null } | null | undefined
+}) {
+  if (!hasSilentExistingSignupConflict(params.user)) return
+
+  const availability = await checkSignupAvailability({
+    accountType: params.accountType,
+    email: params.email,
+    phone: params.phone,
+  })
+
+  throw new HidApiError(
+    409,
+    formatSignupAvailabilityConflict(availability) ?? 'That email address is already linked to an HID account. Sign in instead or use a different email.',
+    availability,
+  )
 }
 
 function toFriendlyFactorLabel(value: unknown) {
@@ -1552,6 +1577,13 @@ export async function patientSignUpWithPassword(params: PendingPatientSignup & {
     throw new HidApiError(400, error.message, error)
   }
 
+  await assertNoSilentSignupConflict({
+    accountType: 'patient',
+    email: normalizedEmail,
+    phone: normalizedPhone,
+    user: data.user,
+  })
+
   if (data.session) {
     const profile = await ensurePatientProfileRegistered(pendingData)
     return {
@@ -1805,6 +1837,12 @@ export async function providerActivateInvite(params: PendingStaffOnboarding & { 
     throw new HidApiError(400, error.message, error)
   }
 
+  await assertNoSilentSignupConflict({
+    accountType: 'hospital',
+    email: params.email,
+    user: data.user,
+  })
+
   if (data.session) {
     const staffAccount = await ensureStaffAccountReady(pendingData)
     return {
@@ -1866,6 +1904,12 @@ export async function providerSignUp(params: {
     }
     throw new HidApiError(409, 'An account with this email already exists. Sign in instead.', error)
   }
+
+  await assertNoSilentSignupConflict({
+    accountType: 'hospital',
+    email: normalizedEmail,
+    user: data.user,
+  })
 
   if (data.session) {
     await assertHospitalAccountCompatibleEmail()
