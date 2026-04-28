@@ -1,4 +1,4 @@
-import { useEffect } from 'react'
+import { useEffect, useMemo } from 'react'
 import { useLocation } from 'react-router-dom'
 
 type RouteMeta = {
@@ -10,7 +10,7 @@ type RouteMeta = {
 
 const SITE_ORIGIN = 'https://healthidentitydirectory.com'
 const SITE_IMAGE = `${SITE_ORIGIN}/hid-logo.png`
-const DEFAULT_DESCRIPTION = 'HID helps patients and hospitals securely access health identities, medical records, and care workflows across the Health Identity Directory network.'
+const DEFAULT_DESCRIPTION = 'HID gives every patient a secure, unified health identity so complete medical history is available at any hospital, anywhere, anytime.'
 
 function resolveRouteMeta(pathname: string): RouteMeta {
   if (pathname === '/') {
@@ -18,7 +18,7 @@ function resolveRouteMeta(pathname: string): RouteMeta {
       canonical: `${SITE_ORIGIN}/`,
       description: DEFAULT_DESCRIPTION,
       robots: 'index,follow,max-image-preview:large,max-snippet:-1,max-video-preview:-1',
-      title: 'HID | Secure Health Identity Directory for Patients and Hospitals',
+      title: 'HID | Health Identity Directory',
     }
   }
 
@@ -54,7 +54,7 @@ function resolveRouteMeta(pathname: string): RouteMeta {
       canonical: `${SITE_ORIGIN}${pathname}`,
       description: DEFAULT_DESCRIPTION,
       robots: 'noindex,nofollow',
-      title: 'HID | Secure Health Identity Directory',
+      title: 'HID | Health Identity Directory',
     }
   }
 
@@ -62,7 +62,7 @@ function resolveRouteMeta(pathname: string): RouteMeta {
     canonical: `${SITE_ORIGIN}/`,
     description: DEFAULT_DESCRIPTION,
     robots: 'noindex,nofollow',
-    title: 'HID | Secure Health Identity Directory',
+    title: 'HID | Health Identity Directory',
   }
 }
 
@@ -75,6 +75,7 @@ function ensureMeta(selector: string, attribute: 'name' | 'property', value: str
     element.setAttribute(attribute, value)
     document.head.appendChild(element)
   }
+  if (element.content === content) return
   element.content = content
 }
 
@@ -87,15 +88,18 @@ function ensureCanonical(href: string) {
     canonical.rel = 'canonical'
     document.head.appendChild(canonical)
   }
+  if (canonical.href === href) return
   canonical.href = href
 }
 
 export function RouteSeo() {
   const location = useLocation()
+  const meta = useMemo(() => resolveRouteMeta(location.pathname), [location.pathname])
 
   useEffect(() => {
-    const meta = resolveRouteMeta(location.pathname)
-    document.title = meta.title
+    if (document.title !== meta.title) {
+      document.title = meta.title
+    }
     ensureCanonical(meta.canonical)
     ensureMeta('meta[name="description"]', 'name', 'description', meta.description)
     ensureMeta('meta[name="robots"]', 'name', 'robots', meta.robots)
@@ -108,7 +112,7 @@ export function RouteSeo() {
     ensureMeta('meta[name="twitter:description"]', 'name', 'twitter:description', meta.description)
     ensureMeta('meta[name="twitter:image"]', 'name', 'twitter:image', SITE_IMAGE)
     ensureMeta('meta[name="twitter:image:alt"]', 'name', 'twitter:image:alt', 'HID Health Identity Directory logo')
-  }, [location.pathname])
+  }, [meta])
 
   return null
 }
