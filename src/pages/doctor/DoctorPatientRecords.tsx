@@ -8,7 +8,6 @@ import { getStaffSession, signOutAndClearSessions } from '../../lib/auth'
 import { subscribeToAccessChanges } from '../../lib/accessRealtime'
 import {
   readDoctorDashboardSnapshot,
-  readDoctorPatientRecordsSnapshot,
   seedDoctorDashboardCache,
   seedDoctorPatientRecordsCache,
 } from '../../lib/experienceWarmup'
@@ -38,9 +37,6 @@ export default function DoctorPatientRecords() {
   const { hidCode = '' } = useParams()
   const session = useMemo(() => getStaffSession(), [])
   const normalizedHidCode = hidCode.trim().toUpperCase()
-  const cachedRecordsView = useMemo(() => (
-    session ? readDoctorPatientRecordsSnapshot(session.id, normalizedHidCode) : null
-  ), [normalizedHidCode, session])
   const cachedDashboard = useMemo(() => (
     session ? readDoctorDashboardSnapshot(session.id) : null
   ), [session])
@@ -52,12 +48,11 @@ export default function DoctorPatientRecords() {
       new Date(item.expires_at).getTime() > Date.now()
     ) ?? null
   ), [cachedDashboard, normalizedHidCode])
-  const canHydrateFromCache = Boolean(cachedRecordsView && initialActiveRequest?.grant_id)
-  const [patient, setPatient] = useState<Patient | null>(() => canHydrateFromCache ? (cachedRecordsView?.patient ?? null) : null)
-  const [records, setRecords] = useState<MedicalRecord[]>(() => canHydrateFromCache ? (cachedRecordsView?.records ?? []) : [])
-  const [recordFiles, setRecordFiles] = useState<Record<string, MedicalRecordFile[]>>(() => canHydrateFromCache ? (cachedRecordsView?.recordFiles ?? {}) : {})
+  const [patient, setPatient] = useState<Patient | null>(null)
+  const [records, setRecords] = useState<MedicalRecord[]>([])
+  const [recordFiles, setRecordFiles] = useState<Record<string, MedicalRecordFile[]>>({})
   const [activeRequest, setActiveRequest] = useState<HidStaffDashboardRequest | null>(initialActiveRequest)
-  const [loading, setLoading] = useState(!canHydrateFromCache)
+  const [loading, setLoading] = useState(true)
   const [search, setSearch] = useState('')
   const [open, setOpen] = useState(false)
   const [saving, setSaving] = useState(false)
@@ -79,8 +74,8 @@ export default function DoctorPatientRecords() {
       navigate(HOSPITAL_ACCESS_PATH)
       return
     }
-    void loadPageData(canHydrateFromCache)
-  }, [canHydrateFromCache, navigate, normalizedHidCode, session])
+    void loadPageData(false, true)
+  }, [navigate, normalizedHidCode, session])
 
   useEffect(() => {
     if (!activeRequest?.grant_id || !normalizedHidCode || !session) return
@@ -116,9 +111,13 @@ export default function DoctorPatientRecords() {
       }
     }
 
-    const unsubscribe = subscribeToAccessChanges(() => {
+    const unsubscribe = subscribeToAccessChanges(change => {
       if (document.visibilityState === 'visible') {
-        void verifyGrant()
+        if (change.table.startsWith('hid_medical_record')) {
+          void loadPageData(true, true)
+        } else {
+          void verifyGrant()
+        }
       }
     })
     const interval = window.setInterval(() => {
@@ -142,13 +141,13 @@ export default function DoctorPatientRecords() {
     }
   }, [activeRequest?.grant_id, navigate, normalizedHidCode, session])
 
-  async function loadPageData(silent = false) {
+  async function loadPageData(silent = false, forceRefresh = false) {
     if (!session || !normalizedHidCode) return
     if (!silent) setLoading(true)
     try {
       const [dashboard, recordsView] = await Promise.all([
-        fetchStaffDashboard(),
-        fetchPatientRecordsView(normalizedHidCode),
+        fetchStaffDashboard({ forceRefresh }),
+        fetchPatientRecordsView(normalizedHidCode, { forceRefresh: true }),
       ])
       seedDoctorDashboardCache(session.id, dashboard)
       seedDoctorPatientRecordsCache(session.id, normalizedHidCode, recordsView)
@@ -264,7 +263,7 @@ export default function DoctorPatientRecords() {
         notes: recordForm.roleNote.trim() || null,
         uploads: recordForm.uploads,
       })
-      await loadPageData(true)
+      await loadPageData(true, true)
       showToast('Medical record saved.', 'success')
     } catch (error) {
       setRecords(current => current.filter(item => item.id !== optimisticEntry.record.id))

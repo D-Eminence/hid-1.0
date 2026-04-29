@@ -7,11 +7,11 @@ import { VoiceToTextButton } from '../../components/VoiceToTextButton'
 import { getStaffSession, signOutAndClearSessions } from '../../lib/auth'
 import { subscribeToAccessChanges } from '../../lib/accessRealtime'
 import {
-  prefetchDoctorPatientRecordsCache,
   readDoctorPatientRecordsSnapshot,
   seedDoctorDashboardCache,
   seedDoctorPatientRecordsCache,
 } from '../../lib/experienceWarmup'
+import { isCompleteHidInput, normalizeHidInput } from '../../lib/hidInput'
 import { HOSPITAL_AUTH_PATH } from '../../lib/hospitalRoutes'
 import {
   buildOptimisticMedicalRecord,
@@ -41,7 +41,7 @@ const ACCESS_GRANT_FALLBACK_POLL_MS = 60000
 export default function DoctorEmergency() {
   const navigate = useNavigate()
   const session = useMemo(() => getStaffSession(), [])
-  const [hidCode, setHidCode] = useState('')
+  const [hidCode, setHidCode] = useState('HID-')
   const [staffName, setStaffName] = useState(session?.fullName ?? '')
   const [reason, setReason] = useState('')
   const [loading, setLoading] = useState(false)
@@ -74,7 +74,7 @@ export default function DoctorEmergency() {
 
   function validate() {
     const nextErrors: Record<string, string> = {}
-    if (!hidCode.trim()) nextErrors.hid = 'HID code is required'
+    if (!isCompleteHidInput(hidCode)) nextErrors.hid = 'HID code is required'
     if (!staffName.trim()) nextErrors.staff = 'Staff name is required'
     if (!reason.trim()) nextErrors.reason = 'Reason is required for emergency access'
     setErrors(nextErrors)
@@ -85,13 +85,13 @@ export default function DoctorEmergency() {
     event.preventDefault()
     if (!session || !validate()) return
 
-    const normalizedHidCode = hidCode.trim().toUpperCase()
+    const normalizedHidCode = normalizeHidInput(hidCode)
     setLoading(true)
     setData(null)
     setSessionRecords([])
 
     try {
-      const response = await breakGlassAccess(normalizedHidCode, reason.trim(), 30)
+      const response = await breakGlassAccess(normalizedHidCode, reason.trim(), 60, staffName)
       setActiveGrantId(response.grant_id)
       const cachedView = readDoctorPatientRecordsSnapshot(session.id, normalizedHidCode)
       if (cachedView) {
@@ -99,12 +99,8 @@ export default function DoctorEmergency() {
           patient: cachedView.patient,
         })
       }
-      const view = await fetchPatientRecordsView(normalizedHidCode)
+      const view = await fetchPatientRecordsView(normalizedHidCode, { forceRefresh: true })
       seedDoctorPatientRecordsCache(session.id, normalizedHidCode, view)
-      void prefetchDoctorPatientRecordsCache({
-        sessionId: session.id,
-        hidCode: normalizedHidCode,
-      })
       setData({
         patient: view.patient,
       })
@@ -227,7 +223,7 @@ export default function DoctorEmergency() {
         uploads: recordForm.uploads,
       })
 
-      const view = await fetchPatientRecordsView(data.patient.hid_code)
+      const view = await fetchPatientRecordsView(data.patient.hid_code, { forceRefresh: true })
       seedDoctorPatientRecordsCache(session.id, data.patient.hid_code, view)
       const createdRecord = view.records.find(record => record.id === created.record_id)
       if (!createdRecord) {
@@ -325,7 +321,7 @@ export default function DoctorEmergency() {
                   label="HID Code *"
                   placeholder="e.g. HID-ABCD-EFGH-1234"
                   value={hidCode}
-                  onChange={event => setHidCode(event.target.value.toUpperCase())}
+                  onChange={event => setHidCode(normalizeHidInput(event.target.value))}
                   error={errors.hid}
                   style={{ fontFamily: 'monospace', letterSpacing: '1px' }}
                 />

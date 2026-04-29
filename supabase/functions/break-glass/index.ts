@@ -7,6 +7,7 @@ type Payload = {
   patientIdentifier: string
   reason: string
   durationMinutes?: number
+  staffDisplayName?: string | null
 }
 
 Deno.serve(req => withErrorHandling(req, async () => {
@@ -29,6 +30,7 @@ Deno.serve(req => withErrorHandling(req, async () => {
     p_patient_identifier: patientIdentifier,
     p_reason: asTrimmedString(body.reason, 'reason'),
     p_duration_minutes: asPositiveInt(body.durationMinutes, 'durationMinutes', 30, 240),
+    p_staff_display_name: typeof body.staffDisplayName === 'string' ? body.staffDisplayName.trim() : null,
   })
 
   if (error) throw new HttpError(403, error.message, error)

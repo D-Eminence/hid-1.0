@@ -101,7 +101,7 @@ export function PortalShell({
 
     async function loadUnread() {
       try {
-        const count = await countUnreadNotifications()
+        const count = await countUnreadNotifications({ forceRefresh: true })
         if (!active) return
         setHasUnreadNotifications(count > 0)
       } catch {

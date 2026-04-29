@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { PortalShell } from '../../components/PortalShell'
-import { Badge, Button, Card, PageLoader, showToast } from '../../components/ui'
+import { Badge, Button, Card, Input, Modal, PageLoader, Textarea, showToast } from '../../components/ui'
 import { getPatientSession, signOutAndClearSessions } from '../../lib/auth'
 import { subscribeToAccessChanges } from '../../lib/accessRealtime'
 import { readPatientHistorySnapshot, readPatientProfileSnapshot, seedPatientHistoryCache, seedPatientProfileCache } from '../../lib/experienceWarmup'
@@ -41,6 +41,43 @@ function getAccessLabel(request: AccessRequest) {
   return request.request_type === 'emergency' ? 'Emergency Access' : 'Standard Access'
 }
 
+type ActiveAccessGroup = {
+  grants: AccessRequest[]
+  id: string
+  primary: AccessRequest
+}
+
+function groupActiveAccess(grants: AccessRequest[]): ActiveAccessGroup[] {
+  const groups = new Map<string, AccessRequest[]>()
+
+  grants.forEach(grant => {
+    const key = [
+      grant.doctor_account_id,
+      grant.request_type,
+      grant.doctor_name.trim().toLowerCase(),
+    ].join(':')
+    groups.set(key, [...(groups.get(key) ?? []), grant])
+  })
+
+  return Array.from(groups.entries())
+    .map(([key, entries]) => {
+      const sorted = [...entries].sort((left, right) => {
+        const leftTime = new Date(left.access_expires_at ?? left.approved_at ?? left.created_at).getTime()
+        const rightTime = new Date(right.access_expires_at ?? right.approved_at ?? right.created_at).getTime()
+        return rightTime - leftTime
+      })
+
+      const primary = sorted[0] as AccessRequest
+
+      return {
+        grants: sorted,
+        id: key,
+        primary,
+      }
+    })
+    .sort((left, right) => new Date(right.primary.approved_at ?? right.primary.created_at).getTime() - new Date(left.primary.approved_at ?? left.primary.created_at).getTime())
+}
+
 export default function PatientHistory() {
   const navigate = useNavigate()
   const session = useMemo(() => getPatientSession(), [])
@@ -55,6 +92,10 @@ export default function PatientHistory() {
   const [activeGrants, setActiveGrants] = useState<AccessRequest[]>(() => cachedHistory?.activeGrants ?? [])
   const [loading, setLoading] = useState(!cachedHistory && !cachedPatient)
   const [actingId, setActingId] = useState('')
+  const [logSearch, setLogSearch] = useState('')
+  const [logDate, setLogDate] = useState('')
+  const [revokeGroup, setRevokeGroup] = useState<ActiveAccessGroup | null>(null)
+  const [customRevokeReason, setCustomRevokeReason] = useState('')
 
   useEffect(() => {
     if (!session) {
@@ -82,7 +123,7 @@ export default function PatientHistory() {
     try {
       const [nextPatient, history] = await Promise.all([
         fetchMyPatient(),
-        fetchPatientHistory(session.hidCode),
+        fetchPatientHistory(session.hidCode, { forceRefresh: silent }),
       ])
       seedPatientProfileCache(nextPatient)
       seedPatientHistoryCache(session.hidCode, history)
@@ -102,13 +143,17 @@ export default function PatientHistory() {
     navigate('/patient')
   }
 
-  async function revokeGrant(grant: AccessRequest) {
-    setActingId(grant.id)
+  async function revokeGrantGroup(group: ActiveAccessGroup, reason?: string | null) {
+    setActingId(group.id)
     const previousGrants = activeGrants
-    setActiveGrants(current => current.filter(item => item.id !== grant.id))
+    const revokedIds = new Set(group.grants.map(item => item.id))
+    const revokeReason = reason ?? undefined
+    setActiveGrants(current => current.filter(item => !revokedIds.has(item.id)))
     try {
-      await revokeAccessGrant(grant.id)
+      await Promise.all(group.grants.map(grant => revokeAccessGrant(grant.id, revokeReason)))
       showToast('Access revoked.', 'success')
+      setRevokeGroup(null)
+      setCustomRevokeReason('')
       void loadHistoryData(true)
     } catch (error) {
       setActiveGrants(previousGrants)
@@ -118,6 +163,25 @@ export default function PatientHistory() {
       setActingId('')
     }
   }
+
+  const activeAccessGroups = useMemo(() => groupActiveAccess(activeGrants), [activeGrants])
+  const filteredLogs = useMemo(() => {
+    const query = logSearch.trim().toLowerCase()
+    return logs.filter(log => {
+      const dateKey = new Date(log.access_time).toISOString().slice(0, 10)
+      const matchesDate = !logDate || dateKey === logDate
+      const matchesSearch = !query || [
+        log.hid_code,
+        log.accessed_by,
+        log.reason ?? '',
+        getAccessLogLabel(log),
+        formatDateTime(log.access_time),
+        dateKey,
+      ].some(value => value.toLowerCase().includes(query))
+
+      return matchesDate && matchesSearch
+    })
+  }, [logDate, logSearch, logs])
 
   if (!session) return null
   if (loading) {
@@ -152,12 +216,13 @@ export default function PatientHistory() {
         <div style={{ fontSize: 24, fontWeight: 700, color: '#111827' }}>Active access</div>
         <div style={{ color: '#8a95a6', marginTop: 6, fontSize: 13 }}>Providers that currently have access to your records.</div>
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(248px, 1fr))', gap: 18, marginTop: 24 }}>
-          {activeGrants.map(request => {
+          {activeAccessGroups.map(group => {
+            const request = group.primary
             const isEmergency = request.request_type === 'emergency'
             const accent = isEmergency ? '#ff2d35' : '#1877e6'
             return (
               <div
-                key={request.id}
+                key={group.id}
                 style={{
                   borderRadius: 20,
                   background: '#fff',
@@ -204,7 +269,12 @@ export default function PatientHistory() {
                         <path d="M5.2 13.3V9.5h5.6v3.8M5 5.5h6M5 7.5h6" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" />
                       </svg>
                     </span>
-                    <div style={{ fontSize: 18, fontWeight: 500, color: '#334155', lineHeight: 1.25 }}>{request.doctor_name}</div>
+                    <div>
+                      <div style={{ fontSize: 18, fontWeight: 500, color: '#334155', lineHeight: 1.25 }}>{request.doctor_name}</div>
+                      {group.grants.length > 1 && (
+                        <div style={{ fontSize: 11, color: '#8a95a6', marginTop: 3 }}>{group.grants.length} active sessions grouped</div>
+                      )}
+                    </div>
                   </div>
                 </div>
 
@@ -221,7 +291,7 @@ export default function PatientHistory() {
                   <div style={{ padding: '12px 0', borderBottom: '1px solid #f1f5f9' }}>
                     <div style={{ fontWeight: 700, color: '#111827' }}>Used by:</div>
                     <div style={{ marginTop: 4, fontSize: 12, color: '#334155', lineHeight: 1.55 }}>
-                      <div>1 Provider</div>
+                      <div>{request.doctor_name}</div>
                       <div>{isEmergency ? 'Emergency session' : 'Approved provider session'}</div>
                     </div>
                   </div>
@@ -241,20 +311,33 @@ export default function PatientHistory() {
                     </div>
                   </div>
 
-                  <Button size="sm" variant="danger" loading={actingId === request.id} onClick={() => void revokeGrant(request)} style={{ marginTop: 8 }}>
+                  <Button size="sm" variant="danger" loading={actingId === group.id} onClick={() => setRevokeGroup(group)} style={{ marginTop: 8 }}>
                     Revoke access
                   </Button>
                 </div>
               </div>
             )
           })}
-          {activeGrants.length === 0 && <div style={{ color: '#6b7280' }}>No active provider access right now.</div>}
+          {activeAccessGroups.length === 0 && <div style={{ color: '#6b7280' }}>No active provider access right now.</div>}
         </div>
       </Card>
 
       <Card style={{ borderRadius: 24 }}>
         <div style={{ fontSize: 24, fontWeight: 700, color: '#111827' }}>Access Logs</div>
         <div style={{ color: '#8a95a6', marginTop: 6, fontSize: 13 }}>Security-relevant activity related to your record access.</div>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 12, marginTop: 18 }}>
+          <Input
+            placeholder="Search by provider, action, reason, or date"
+            value={logSearch}
+            onChange={event => setLogSearch(event.target.value)}
+          />
+          <Input
+            type="date"
+            value={logDate}
+            onChange={event => setLogDate(event.target.value)}
+            aria-label="Filter logs by date"
+          />
+        </div>
         <div style={{ overflowX: 'auto', marginTop: 20 }}>
           <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
             <thead>
@@ -266,7 +349,7 @@ export default function PatientHistory() {
               </tr>
             </thead>
             <tbody>
-              {logs.map(log => (
+              {filteredLogs.map(log => (
                 <tr key={log.id} style={{ borderTop: '1px solid #edf1f5' }}>
                   <td style={{ padding: '12px 10px', fontWeight: 600 }}>{log.accessed_by}</td>
                   <td style={{ padding: '12px 10px' }}>{getAccessLogLabel(log)}</td>
@@ -277,8 +360,49 @@ export default function PatientHistory() {
             </tbody>
           </table>
           {logs.length === 0 && <div style={{ color: '#6b7280', marginTop: 12 }}>No access history yet.</div>}
+          {logs.length > 0 && filteredLogs.length === 0 && <div style={{ color: '#6b7280', marginTop: 12 }}>No access logs match that search.</div>}
         </div>
       </Card>
+
+      <Modal open={!!revokeGroup} onClose={() => { setRevokeGroup(null); setCustomRevokeReason('') }} title="Revoke provider access">
+        {revokeGroup && (
+          <div style={{ display: 'grid', gap: 14 }}>
+            <div style={{ color: '#4b5563', fontSize: 13, lineHeight: 1.7 }}>
+              This will close {revokeGroup.grants.length > 1 ? `${revokeGroup.grants.length} active sessions` : 'this active session'} for {revokeGroup.primary.doctor_name}.
+            </div>
+            <div style={{ display: 'grid', gap: 10 }}>
+              {[
+                'No longer needed',
+                'Provider not recognized',
+                'Privacy concern',
+                'Access opened by mistake',
+              ].map(reason => (
+                <Button key={reason} variant="outline" fullWidth loading={actingId === revokeGroup.id} onClick={() => void revokeGrantGroup(revokeGroup, reason)}>
+                  {reason}
+                </Button>
+              ))}
+            </div>
+            <Textarea
+              label="Other reason"
+              value={customRevokeReason}
+              onChange={event => setCustomRevokeReason(event.target.value)}
+              placeholder="Optional reason for this revocation"
+            />
+            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10 }}>
+              <Button variant="secondary" onClick={() => { setRevokeGroup(null); setCustomRevokeReason('') }}>
+                Cancel
+              </Button>
+              <Button
+                variant="danger"
+                loading={actingId === revokeGroup.id}
+                onClick={() => void revokeGrantGroup(revokeGroup, customRevokeReason.trim() || 'Revoked by patient')}
+              >
+                Revoke now
+              </Button>
+            </div>
+          </div>
+        )}
+      </Modal>
     </PortalShell>
   )
 }

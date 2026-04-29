@@ -210,6 +210,7 @@ export interface HidStaffDashboardRequest {
   approved_at: string | null
   expires_at: string | null
   hospital_name: string | null
+  staff_display_name?: string | null
 }
 
 export interface HidStaffDashboardEvent {

@@ -491,6 +491,7 @@ async function edgeRequest<T>(functionName: string, options: EdgeRequestOptions 
       method,
       headers,
       body: options.body !== undefined ? JSON.stringify(options.body) : undefined,
+      cache: 'no-store',
     })
   } catch (error) {
     if (isAbortError(error) || (error instanceof Error && error.message.toLowerCase().includes('took too long'))) {
@@ -1261,7 +1262,11 @@ export async function setMyPatientAccessPin(accessPin?: string | null) {
   return response
 }
 
-export async function countUnreadNotifications() {
+export async function countUnreadNotifications(options: { forceRefresh?: boolean } = {}) {
+  if (options.forceRefresh) {
+    viewCache.delete('notifications:count:self')
+  }
+
   return loadCachedView('notifications:count:self', async () => {
     const { count, error } = await dataTable('hid_notifications')
       .select('id', { count: 'exact', head: true })
@@ -1275,8 +1280,13 @@ export async function countUnreadNotifications() {
   }, NOTIFICATIONS_CACHE_TTL_MS)
 }
 
-export async function listNotifications(hidCode: string) {
-  return loadCachedView(`notifications:list:${hidCode}`, async () => {
+export async function listNotifications(hidCode: string, options: { forceRefresh?: boolean } = {}) {
+  const cacheKey = `notifications:list:${hidCode}`
+  if (options.forceRefresh) {
+    viewCache.delete(cacheKey)
+  }
+
+  return loadCachedView(cacheKey, async () => {
     const { data, error } = await dataTable('hid_notifications')
       .select('id,user_profile_id,patient_id,title,message,type,read_at,created_at')
       .order('created_at', { ascending: false })
@@ -1289,8 +1299,13 @@ export async function listNotifications(hidCode: string) {
   }, NOTIFICATIONS_CACHE_TTL_MS)
 }
 
-export async function listUnreadNotifications(hidCode: string, limit = 20) {
-  return loadCachedView(`notifications:unread:${hidCode}:${limit}`, async () => {
+export async function listUnreadNotifications(hidCode: string, limit = 20, options: { forceRefresh?: boolean } = {}) {
+  const cacheKey = `notifications:unread:${hidCode}:${limit}`
+  if (options.forceRefresh) {
+    viewCache.delete(cacheKey)
+  }
+
+  return loadCachedView(cacheKey, async () => {
     const { data, error } = await dataTable('hid_notifications')
       .select('id,user_profile_id,patient_id,title,message,type,read_at,created_at')
       .is('read_at', null)
@@ -1357,7 +1372,7 @@ export async function fetchPatientRecordsView(patientIdentifier?: string, option
       recordFiles,
       rawPatient: bundle.patient,
     }
-  })
+  }, patientIdentifier ? 0 : VIEW_CACHE_TTL_MS)
 }
 
 export async function createMedicalRecordWithUploads({
@@ -1480,8 +1495,13 @@ export async function uploadRecordFiles(recordId: string, uploads: UploadDraft[]
   }
 }
 
-export async function fetchPatientHistory(hidCode: string): Promise<HistoryView> {
-  return loadCachedView(`history:${hidCode}`, async () => {
+export async function fetchPatientHistory(hidCode: string, options: { forceRefresh?: boolean } = {}): Promise<HistoryView> {
+  const cacheKey = `history:${hidCode}`
+  if (options.forceRefresh) {
+    viewCache.delete(cacheKey)
+  }
+
+  return loadCachedView(cacheKey, async () => {
     const history = await edgeRequest<HidPatientHistoryResponse>('patient-history-list')
 
     return {
@@ -2011,7 +2031,7 @@ export async function fetchStaffDashboard(options: { forceRefresh?: boolean } = 
   return loadCachedView(`staff-dashboard:${authUserId}`, async () => edgeRequest<HidStaffDashboardResponse>('staff-dashboard'))
 }
 
-export async function createAccessRequest(patientIdentifier: string, reason: string, durationMinutes = 60) {
+export async function createAccessRequest(patientIdentifier: string, reason: string, durationMinutes = 60, staffDisplayName?: string | null) {
   const response = await edgeRequest<{ request_id: string; patient_id: string }>('access-request-create', {
     method: 'POST',
     body: {
@@ -2019,6 +2039,7 @@ export async function createAccessRequest(patientIdentifier: string, reason: str
       scope: 'write_records',
       reason,
       durationMinutes,
+      staffDisplayName: normalizeOptionalText(staffDisplayName),
     },
   })
   invalidateViewCache('history:')
@@ -2026,13 +2047,14 @@ export async function createAccessRequest(patientIdentifier: string, reason: str
   return response
 }
 
-export async function accessPatientWithPin(patientIdentifier: string, accessPin: string, durationMinutes = 60) {
+export async function accessPatientWithPin(patientIdentifier: string, accessPin: string, durationMinutes = 60, staffDisplayName?: string | null) {
   const response = await edgeRequest<{ request_id: string | null; grant_id: string; patient_id: string }>('access-request-create', {
     method: 'POST',
     body: {
       patientIdentifier,
       accessPin,
       durationMinutes,
+      staffDisplayName: normalizeOptionalText(staffDisplayName),
     },
   })
   invalidateViewCache('history:')
@@ -2041,13 +2063,14 @@ export async function accessPatientWithPin(patientIdentifier: string, accessPin:
   return response
 }
 
-export async function breakGlassAccess(patientIdentifier: string, reason: string, durationMinutes = 30) {
+export async function breakGlassAccess(patientIdentifier: string, reason: string, durationMinutes = 30, staffDisplayName?: string | null) {
   const response = await edgeRequest<{ request_id: string; grant_id: string }>('break-glass', {
     method: 'POST',
     body: {
       patientIdentifier,
       reason,
       durationMinutes,
+      staffDisplayName: normalizeOptionalText(staffDisplayName),
     },
   })
   invalidateViewCache('history:')

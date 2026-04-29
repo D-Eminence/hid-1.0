@@ -9,6 +9,7 @@ type Payload = {
   scope?: 'read_records' | 'write_records'
   reason?: string | null
   durationMinutes?: number
+  staffDisplayName?: string | null
 }
 
 Deno.serve(req => withErrorHandling(req, async () => {
@@ -35,12 +36,14 @@ Deno.serve(req => withErrorHandling(req, async () => {
         p_patient_identifier: patientIdentifier,
         p_access_pin: accessPin,
         p_duration_minutes: durationMinutes,
+        p_staff_display_name: typeof body.staffDisplayName === 'string' ? body.staffDisplayName.trim() : null,
       })
     : await client.rpc('hid_create_access_request', {
         p_patient_identifier: patientIdentifier,
         p_scope: asTrimmedString(body.scope ?? 'write_records', 'scope'),
         p_reason: asTrimmedString(body.reason, 'reason'),
         p_duration_minutes: durationMinutes,
+        p_staff_display_name: typeof body.staffDisplayName === 'string' ? body.staffDisplayName.trim() : null,
       })
 
   if (error) throw new HttpError(403, error.message, error)

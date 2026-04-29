@@ -60,6 +60,7 @@ export default function DoctorHistory() {
   const [logs, setLogs] = useState<HospitalAccessLog[]>(() => cachedDashboard ? toHospitalLogs(cachedDashboard) : [])
   const [loading, setLoading] = useState(!cachedDashboard)
   const [search, setSearch] = useState('')
+  const [dateFilter, setDateFilter] = useState('')
   const [filter, setFilter] = useState<'all' | 'standard' | 'emergency'>('all')
   const [selected, setSelected] = useState<HospitalAccessLog | null>(null)
   const [isCompact, setIsCompact] = useState(() => (typeof window !== 'undefined' ? window.innerWidth < 900 : false))
@@ -77,7 +78,7 @@ export default function DoctorHistory() {
 
     const unsubscribe = subscribeToAccessChanges(() => {
       if (document.visibilityState === 'visible') {
-        void loadLogs(true)
+        void loadLogs(true, true)
       }
     })
 
@@ -91,11 +92,11 @@ export default function DoctorHistory() {
     return () => window.removeEventListener('resize', handleResize)
   }, [])
 
-  async function loadLogs(silent = false) {
+  async function loadLogs(silent = false, forceRefresh = false) {
     if (!session) return
     if (!silent) setLoading(true)
     try {
-      const nextDashboard = await fetchStaffDashboard()
+      const nextDashboard = await fetchStaffDashboard({ forceRefresh })
       seedDoctorDashboardCache(session.id, nextDashboard)
       setDashboard(nextDashboard)
       setLogs(toHospitalLogs(nextDashboard))
@@ -113,13 +114,18 @@ export default function DoctorHistory() {
   }
 
   const filtered = logs.filter(log => {
+    const normalizedSearch = search.toLowerCase()
+    const logDate = new Date(log.access_time).toISOString().slice(0, 10)
     const matchSearch =
-      log.hid_code.toLowerCase().includes(search.toLowerCase()) ||
-      log.accessed_by.toLowerCase().includes(search.toLowerCase()) ||
-      log.action.toLowerCase().includes(search.toLowerCase()) ||
-      (log.patient_name ?? '').toLowerCase().includes(search.toLowerCase())
+      log.hid_code.toLowerCase().includes(normalizedSearch) ||
+      log.accessed_by.toLowerCase().includes(normalizedSearch) ||
+      log.action.toLowerCase().includes(normalizedSearch) ||
+      logDate.includes(normalizedSearch) ||
+      formatDateTime(log.access_time).toLowerCase().includes(normalizedSearch) ||
+      (log.patient_name ?? '').toLowerCase().includes(normalizedSearch)
     const matchFilter = filter === 'all' || log.access_type === filter
-    return matchSearch && matchFilter
+    const matchDate = !dateFilter || logDate === dateFilter
+    return matchSearch && matchFilter && matchDate
   })
 
   const emergencyCount = logs.filter(log => log.access_type === 'emergency').length
@@ -166,12 +172,20 @@ export default function DoctorHistory() {
         </div>
 
         <Card padding={14}>
-          <div style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
+          <div style={{ display: 'flex', gap: 12, alignItems: 'center', flexWrap: 'wrap' }}>
             <div style={{ flex: 1 }}>
               <Input
-                placeholder="Search by HID code, patient name, or action..."
+                placeholder="Search by HID code, patient name, action, or date..."
                 value={search}
                 onChange={event => setSearch(event.target.value)}
+              />
+            </div>
+            <div style={{ minWidth: 160 }}>
+              <Input
+                type="date"
+                value={dateFilter}
+                onChange={event => setDateFilter(event.target.value)}
+                aria-label="Filter access logs by date"
               />
             </div>
             <div style={{ display: 'flex', gap: 8 }}>
@@ -197,7 +211,7 @@ export default function DoctorHistory() {
                 </button>
               ))}
             </div>
-            <Button variant="outline" onClick={() => void loadLogs()} size="sm">Refresh</Button>
+            <Button variant="outline" onClick={() => void loadLogs(false, true)} size="sm">Refresh</Button>
           </div>
         </Card>
 

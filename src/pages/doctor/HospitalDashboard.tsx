@@ -62,18 +62,18 @@ export default function HospitalDashboard() {
 
     const unsubscribe = subscribeToAccessChanges(() => {
       if (document.visibilityState === 'visible') {
-        void loadDashboard(true)
+        void loadDashboard(true, true)
       }
     })
 
     return unsubscribe
   }, [session])
 
-  async function loadDashboard(silent = false) {
+  async function loadDashboard(silent = false, forceRefresh = false) {
     if (!session) return
     if (!silent) setLoading(true)
     try {
-      const nextDashboard = await fetchStaffDashboard()
+      const nextDashboard = await fetchStaffDashboard({ forceRefresh })
       seedDoctorDashboardCache(session.id, nextDashboard)
       setDashboard(nextDashboard)
     } catch (error) {

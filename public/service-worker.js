@@ -1,4 +1,4 @@
-const CACHE_VERSION = 'hid-static-v2026-04-28-1'
+const CACHE_VERSION = 'hid-static-v2026-04-29-1'
 const STATIC_CACHE_URLS = [
   '/manifest.webmanifest',
   '/hid-logo.png',
@@ -57,6 +57,26 @@ self.addEventListener('fetch', event => {
         }
         return response
       })
+    })
+  )
+})
+
+self.addEventListener('notificationclick', event => {
+  event.notification.close()
+  event.waitUntil(
+    self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then(clients => {
+      const targetUrl = new URL('/patient/notifications', self.location.origin).href
+      const existingClient = clients.find(client => client.url.startsWith(self.location.origin))
+
+      if (existingClient) {
+        existingClient.focus()
+        existingClient.navigate(targetUrl)
+        return
+      }
+
+      if (self.clients.openWindow) {
+        return self.clients.openWindow(targetUrl)
+      }
     })
   )
 })

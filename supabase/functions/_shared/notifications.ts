@@ -34,6 +34,16 @@ type AccountDeletionDeliveryInput = {
   expiresInMinutes: number
 }
 
+type PatientRecordAccessAlertInput = {
+  accessedAt: string
+  accessType: string
+  actorName: string
+  email: string | null
+  hidCode: string
+  hospitalName: string | null
+  patientName: string
+}
+
 function maskEmailAddress(value: string | null) {
   if (!value) return null
   const trimmed = value.trim().toLowerCase()
@@ -173,6 +183,51 @@ function renderAccountDeletionEmail({
   `
 }
 
+function renderPatientRecordAccessAlertEmail({
+  accessedAt,
+  accessType,
+  actorName,
+  hidCode,
+  hospitalName,
+  patientName,
+}: {
+  accessedAt: string
+  accessType: string
+  actorName: string
+  hidCode: string
+  hospitalName: string | null
+  patientName: string
+}) {
+  const providerLabel = hospitalName ? `${actorName} at ${hospitalName}` : actorName
+  return `
+    <div style="font-family:Arial,sans-serif;background:#f5f7fb;padding:24px;color:#111827">
+      <div style="max-width:560px;margin:0 auto;background:#ffffff;border:1px solid #e5e7eb;border-radius:16px;overflow:hidden">
+        <div style="padding:24px 28px;background:#1a6fd4;color:#ffffff">
+          <div style="font-size:24px;font-weight:700">Record Access Alert</div>
+          <div style="font-size:12px;opacity:0.85;margin-top:4px">Health Identity Directory</div>
+        </div>
+        <div style="padding:28px">
+          <p style="margin:0 0 12px;font-size:14px">Hello ${patientName || 'there'},</p>
+          <p style="margin:0 0 18px;font-size:14px;line-height:1.7">
+            ${providerLabel} opened your HID medical records for account ${hidCode}.
+          </p>
+          <div style="margin:0 0 18px;padding:16px;border:1px solid #bfdbfe;border-radius:12px;background:#eff6ff">
+            <div style="font-size:12px;color:#6b7280;text-transform:uppercase;letter-spacing:0.08em;margin-bottom:8px">Access Details</div>
+            <div style="font-size:14px;line-height:1.8">
+              <strong>Provider:</strong> ${providerLabel}<br />
+              <strong>Access type:</strong> ${accessType}<br />
+              <strong>Time:</strong> ${accessedAt}
+            </div>
+          </div>
+          <p style="margin:0;font-size:14px;line-height:1.7">
+            If you do not recognize this access, sign in to HID and revoke the active provider access from Access History.
+          </p>
+        </div>
+      </div>
+    </div>
+  `
+}
+
 export async function sendPatientPasswordResetCode(input: PasswordResetDeliveryInput) {
   if (!input.email) {
     throw new HttpError(400, 'This account does not have an email address for password reset.')
@@ -284,4 +339,24 @@ export async function sendAccountDeletionCode(input: AccountDeletionDeliveryInpu
     ],
     errors: [],
   }
+}
+
+export async function sendPatientRecordAccessAlert(input: PatientRecordAccessAlertInput) {
+  const errors: string[] = []
+
+  if (input.email) {
+    try {
+      await sendTransactionalEmail(
+        input.email,
+        'Your HID record was accessed',
+        renderPatientRecordAccessAlertEmail(input),
+      )
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Unable to send the record access email.'
+      errors.push(message)
+      console.error('patient record access email failed', message)
+    }
+  }
+
+  return errors
 }

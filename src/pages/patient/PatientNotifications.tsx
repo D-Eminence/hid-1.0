@@ -61,7 +61,7 @@ export default function PatientNotifications() {
     try {
       const [nextPatient, nextNotifications] = await Promise.all([
         fetchMyPatient(),
-        listNotifications(session.hidCode),
+        listNotifications(session.hidCode, { forceRefresh: silent }),
       ])
       seedPatientProfileCache(nextPatient)
       seedPatientNotificationsCache(session.hidCode, {

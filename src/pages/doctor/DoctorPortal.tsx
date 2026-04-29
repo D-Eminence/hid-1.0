@@ -7,11 +7,11 @@ import { VoiceToTextButton } from '../../components/VoiceToTextButton'
 import { getStaffSession, signOutAndClearSessions } from '../../lib/auth'
 import { subscribeToAccessChanges } from '../../lib/accessRealtime'
 import {
-  prefetchDoctorPatientRecordsCache,
   readDoctorPatientRecordsSnapshot,
   seedDoctorDashboardCache,
   seedDoctorPatientRecordsCache,
 } from '../../lib/experienceWarmup'
+import { isCompleteHidInput, normalizeHidInput } from '../../lib/hidInput'
 import { HOSPITAL_AUTH_PATH, HOSPITAL_EMERGENCY_PATH, getHospitalPatientRecordsPath } from '../../lib/hospitalRoutes'
 import {
   buildOptimisticMedicalRecord,
@@ -38,7 +38,7 @@ const ACCESS_GRANT_FALLBACK_POLL_MS = 60000
 export default function DoctorPortal() {
   const navigate = useNavigate()
   const session = useMemo(() => getStaffSession(), [])
-  const [hidCode, setHidCode] = useState('')
+  const [hidCode, setHidCode] = useState('HID-')
   const [pin, setPin] = useState('')
   const [staffName, setStaffName] = useState(session?.fullName ?? '')
   const [loading, setLoading] = useState(false)
@@ -70,16 +70,16 @@ export default function DoctorPortal() {
 
   function validate() {
     const nextErrors: Record<string, string> = {}
-    if (!hidCode.trim()) nextErrors.hid = 'HID code is required'
+    if (!isCompleteHidInput(hidCode)) nextErrors.hid = 'HID code is required'
     if (!pin.trim()) nextErrors.pin = 'Access PIN is required'
     if (!staffName.trim()) nextErrors.staff = 'Staff name is required'
     setErrors(nextErrors)
     return Object.keys(nextErrors).length === 0
   }
 
-  async function loadPatientView(normalizedHidCode: string) {
+  async function loadPatientView(normalizedHidCode: string, forceRefresh = false) {
     if (!session) throw new Error('Please sign in to continue.')
-    const view = await fetchPatientRecordsView(normalizedHidCode)
+    const view = await fetchPatientRecordsView(normalizedHidCode, { forceRefresh })
     seedDoctorPatientRecordsCache(session.id, normalizedHidCode, view)
     setData({
       patient: view.patient,
@@ -93,12 +93,12 @@ export default function DoctorPortal() {
     event.preventDefault()
     if (!session || !validate()) return
 
-    const normalizedHidCode = hidCode.trim().toUpperCase()
+    const normalizedHidCode = normalizeHidInput(hidCode)
     setLoading(true)
     setData(null)
 
     try {
-      const response = await accessPatientWithPin(normalizedHidCode, pin.trim(), 60)
+      const response = await accessPatientWithPin(normalizedHidCode, pin.trim(), 60, staffName)
       setActiveGrantId(response.grant_id)
       const cachedView = readDoctorPatientRecordsSnapshot(session.id, normalizedHidCode)
       if (cachedView) {
@@ -108,11 +108,7 @@ export default function DoctorPortal() {
           recordFiles: cachedView.recordFiles,
         })
       }
-      const view = await loadPatientView(normalizedHidCode)
-      void prefetchDoctorPatientRecordsCache({
-        sessionId: session.id,
-        hidCode: normalizedHidCode,
-      })
+      const view = await loadPatientView(normalizedHidCode, true)
       showToast(`Access granted. Patient: ${view.patient.full_name}`, 'success')
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Unable to access this patient right now.'
@@ -156,9 +152,13 @@ export default function DoctorPortal() {
       }
     }
 
-    const unsubscribe = subscribeToAccessChanges(() => {
+    const unsubscribe = subscribeToAccessChanges(change => {
       if (document.visibilityState === 'visible') {
-        void verifyGrant()
+        if (change.table.startsWith('hid_medical_record')) {
+          void loadPatientView(data.patient.hid_code, true)
+        } else {
+          void verifyGrant()
+        }
       }
     })
     const interval = window.setInterval(() => {
@@ -232,7 +232,7 @@ export default function DoctorPortal() {
         notes: recordForm.roleNote.trim() || null,
         uploads: recordForm.uploads,
       })
-      await loadPatientView(data.patient.hid_code)
+      await loadPatientView(data.patient.hid_code, true)
       showToast('Medical record added successfully', 'success')
     } catch (error) {
       setData(current => current ? {
@@ -321,7 +321,7 @@ export default function DoctorPortal() {
                   label="HID Code *"
                   placeholder="e.g. HID-ABCD-EFGH-1234"
                   value={hidCode}
-                  onChange={event => setHidCode(event.target.value.toUpperCase())}
+                  onChange={event => setHidCode(normalizeHidInput(event.target.value))}
                   error={errors.hid}
                   style={{ fontFamily: 'monospace', letterSpacing: '1px' }}
                 />

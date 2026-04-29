@@ -1,9 +1,27 @@
 import { supabase } from './supabase'
 
-type Listener = () => void
+type AccessRealtimeTable =
+  | 'hid_access_requests'
+  | 'hid_access_grants'
+  | 'hid_audit_events'
+  | 'hid_medical_records'
+  | 'hid_medical_record_versions'
+  | 'hid_medical_record_files'
+
+type AccessRealtimeChange = {
+  table: AccessRealtimeTable
+}
+
+type Listener = (change: AccessRealtimeChange) => void
 
 const listeners = new Set<Listener>()
 let activeChannel: ReturnType<typeof supabase.channel> | null = null
+
+function notify(table: AccessRealtimeTable) {
+  listeners.forEach(listener => {
+    listener({ table })
+  })
+}
 
 function ensureChannel() {
   if (activeChannel) return activeChannel
@@ -18,9 +36,7 @@ function ensureChannel() {
         table: 'hid_access_requests',
       },
       () => {
-        listeners.forEach(listener => {
-          listener()
-        })
+        notify('hid_access_requests')
       }
     )
     .on(
@@ -31,9 +47,7 @@ function ensureChannel() {
         table: 'hid_access_grants',
       },
       () => {
-        listeners.forEach(listener => {
-          listener()
-        })
+        notify('hid_access_grants')
       }
     )
     .on(
@@ -44,9 +58,40 @@ function ensureChannel() {
         table: 'hid_audit_events',
       },
       () => {
-        listeners.forEach(listener => {
-          listener()
-        })
+        notify('hid_audit_events')
+      }
+    )
+    .on(
+      'postgres_changes',
+      {
+        event: '*',
+        schema: 'public',
+        table: 'hid_medical_records',
+      },
+      () => {
+        notify('hid_medical_records')
+      }
+    )
+    .on(
+      'postgres_changes',
+      {
+        event: '*',
+        schema: 'public',
+        table: 'hid_medical_record_versions',
+      },
+      () => {
+        notify('hid_medical_record_versions')
+      }
+    )
+    .on(
+      'postgres_changes',
+      {
+        event: '*',
+        schema: 'public',
+        table: 'hid_medical_record_files',
+      },
+      () => {
+        notify('hid_medical_record_files')
       }
     )
     .subscribe()
