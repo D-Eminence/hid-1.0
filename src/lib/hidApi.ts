@@ -945,6 +945,157 @@ function toLegacyAccessLog(hidCode: string, event: HidHistoryEvent): AccessLog {
   }
 }
 
+type RawPatientHistoryRequest = {
+  id: string
+  requester_staff_account_id: string
+  staff_display_name?: string | null
+  scope: HidHistoryPendingRequest['scope']
+  status: HidHistoryPendingRequest['status']
+  reason: string | null
+  break_glass: boolean | null
+  created_at: string
+  approved_at: string | null
+}
+
+type RawPatientHistoryGrant = {
+  id: string
+  request_id: string | null
+  staff_account_id: string
+  staff_display_name?: string | null
+  scope: HidHistoryActiveGrant['scope']
+  status: HidHistoryActiveGrant['status']
+  reason: string | null
+  starts_at: string
+  expires_at: string
+}
+
+type RawPatientHistoryEvent = {
+  event_id: string
+  action: string
+  actor_role: string | null
+  resource_type: string
+  reason: string | null
+  request_id: string | null
+  metadata: unknown
+  created_at: string
+}
+
+function metadataRecord(value: unknown): Record<string, unknown> {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return {}
+  return value as Record<string, unknown>
+}
+
+function metadataText(metadata: Record<string, unknown>, keys: string[]) {
+  for (const key of keys) {
+    const value = metadata[key]
+    if (typeof value === 'string' && value.trim()) return value.trim()
+  }
+  return null
+}
+
+function shouldUsePatientHistoryTableFallback(error: unknown) {
+  if (!(error instanceof HidApiError)) return false
+  return error.status >= 500 || error.message.toLowerCase().includes('temporarily unavailable')
+}
+
+async function selectPatientHistoryRows<T>(
+  tableName: string,
+  selectWithDisplayName: string,
+  selectWithoutDisplayName: string,
+  configure: (query: any) => any
+) {
+  let result = await configure(dataTable(tableName).select(selectWithDisplayName))
+
+  if (result.error && `${result.error.message ?? ''}`.toLowerCase().includes('staff_display_name')) {
+    result = await configure(dataTable(tableName).select(selectWithoutDisplayName))
+  }
+
+  if (result.error) {
+    throw new HidApiError(400, result.error.message, result.error)
+  }
+
+  return (result.data ?? []) as T[]
+}
+
+async function fetchPatientHistoryFromTables(hidCode: string): Promise<HistoryView> {
+  const [pendingRows, grantRows, eventResult] = await Promise.all([
+    selectPatientHistoryRows<RawPatientHistoryRequest>(
+      'hid_access_requests',
+      'id, requester_staff_account_id, staff_display_name, scope, status, reason, break_glass, created_at, approved_at',
+      'id, requester_staff_account_id, scope, status, reason, break_glass, created_at, approved_at',
+      query => query.eq('status', 'pending').order('created_at', { ascending: false })
+    ),
+    selectPatientHistoryRows<RawPatientHistoryGrant>(
+      'hid_access_grants',
+      'id, request_id, staff_account_id, staff_display_name, scope, status, reason, starts_at, expires_at',
+      'id, request_id, staff_account_id, scope, status, reason, starts_at, expires_at',
+      query => query.eq('status', 'active').gt('expires_at', new Date().toISOString()).order('starts_at', { ascending: false })
+    ),
+    dataTable('hid_audit_events')
+      .select('event_id, action, actor_role, resource_type, reason, request_id, metadata, created_at')
+      .order('created_at', { ascending: false })
+      .limit(50),
+  ])
+
+  if (eventResult.error) {
+    throw new HidApiError(400, eventResult.error.message, eventResult.error)
+  }
+
+  const pendingRequests = pendingRows.map(row => toLegacyAccessRequest(hidCode, {
+    request_id: row.id,
+    staff_account_id: row.requester_staff_account_id,
+    staff_name: row.staff_display_name?.trim() || 'Provider',
+    staff_role: 'doctor',
+    hospital_name: null,
+    scope: row.scope,
+    status: row.status,
+    reason: row.reason ?? 'Access request',
+    break_glass: Boolean(row.break_glass),
+    created_at: row.created_at,
+    approved_at: row.approved_at,
+  }))
+
+  const activeGrants = grantRows.map(row => toLegacyAccessRequest(hidCode, {
+    grant_id: row.id,
+    request_id: row.request_id,
+    staff_account_id: row.staff_account_id,
+    staff_name: row.staff_display_name?.trim() || 'Provider',
+    staff_role: 'doctor',
+    hospital_name: null,
+    scope: row.scope,
+    status: row.status,
+    reason: row.reason ?? 'Access currently active',
+    starts_at: row.starts_at,
+    expires_at: row.expires_at,
+    break_glass: row.scope === 'break_glass',
+  }))
+
+  const logs = ((eventResult.data ?? []) as RawPatientHistoryEvent[]).map(row => {
+    const metadata = metadataRecord(row.metadata)
+    const event: HidHistoryEvent = {
+      event_id: row.event_id,
+      action: row.action,
+      resource_type: row.resource_type,
+      reason: row.reason,
+      created_at: row.created_at,
+      actor_name: metadataText(metadata, ['staff_display_name', 'staff_name', 'actor_name', 'provider_name']) ?? 'System',
+      actor_role: row.actor_role ?? metadataText(metadata, ['actor_role', 'staff_role']) ?? 'system',
+      hospital_name: metadataText(metadata, ['hospital_name']),
+      metadata: {
+        ...metadata,
+        request_id: typeof metadata.request_id === 'string' ? metadata.request_id : row.request_id,
+      },
+    }
+    return toLegacyAccessLog(hidCode, event)
+  })
+
+  return {
+    pendingRequests,
+    activeGrants,
+    logs,
+  }
+}
+
 function toLegacyNotification(notification: HidNotification, hidCode: string): Notification {
   return {
     id: notification.id,
@@ -1502,7 +1653,15 @@ export async function fetchPatientHistory(hidCode: string, options: { forceRefre
   }
 
   return loadCachedView(cacheKey, async () => {
-    const history = await edgeRequest<HidPatientHistoryResponse>('patient-history-list')
+    let history: HidPatientHistoryResponse
+    try {
+      history = await edgeRequest<HidPatientHistoryResponse>('patient-history-list')
+    } catch (error) {
+      if (shouldUsePatientHistoryTableFallback(error)) {
+        return fetchPatientHistoryFromTables(hidCode)
+      }
+      throw error
+    }
 
     return {
       pendingRequests: history.pending_requests.map(item => toLegacyAccessRequest(hidCode, item)),
