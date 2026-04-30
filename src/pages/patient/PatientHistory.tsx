@@ -121,11 +121,16 @@ export default function PatientHistory() {
     if (!session) return
     if (!silent) setLoading(true)
     try {
+      const patientPromise = patient
+        ? Promise.resolve(patient)
+        : fetchMyPatient()
       const [nextPatient, history] = await Promise.all([
-        fetchMyPatient(),
+        patientPromise,
         fetchPatientHistory(session.hidCode, { forceRefresh: silent }),
       ])
-      seedPatientProfileCache(nextPatient)
+      if (!patient) {
+        seedPatientProfileCache(nextPatient)
+      }
       seedPatientHistoryCache(session.hidCode, history)
       setPatient(nextPatient)
       setActiveGrants(history.activeGrants)

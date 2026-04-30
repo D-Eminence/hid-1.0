@@ -112,6 +112,10 @@ type SignupAvailabilityResponse = {
   phoneInUse: boolean
 }
 
+type NotificationCountResponse = {
+  count: number
+}
+
 type TotpEnrollment = {
   factorId: string
   friendlyName: string | null
@@ -995,7 +999,13 @@ function metadataText(metadata: Record<string, unknown>, keys: string[]) {
 
 function shouldUsePatientHistoryTableFallback(error: unknown) {
   if (!(error instanceof HidApiError)) return false
-  return error.status >= 500 || error.message.toLowerCase().includes('temporarily unavailable')
+  const lower = error.message.toLowerCase()
+  return (
+    error.status >= 500 ||
+    lower.includes('temporarily unavailable') ||
+    lower.includes('statement timeout') ||
+    lower.includes('canceling statement due to statement timeout')
+  )
 }
 
 async function selectPatientHistoryRows<T>(
@@ -1419,15 +1429,14 @@ export async function countUnreadNotifications(options: { forceRefresh?: boolean
   }
 
   return loadCachedView('notifications:count:self', async () => {
-    const { count, error } = await dataTable('hid_notifications')
-      .select('id', { count: 'exact', head: true })
-      .is('read_at', null)
+    const response = await edgeRequest<NotificationCountResponse>('notifications-list', {
+      query: {
+        countOnly: '1',
+        unreadOnly: '1',
+      },
+    })
 
-    if (error) {
-      throw new HidApiError(400, error.message, error)
-    }
-
-    return count ?? 0
+    return Number.isFinite(response.count) ? response.count : 0
   }, NOTIFICATIONS_CACHE_TTL_MS)
 }
 
@@ -1438,15 +1447,13 @@ export async function listNotifications(hidCode: string, options: { forceRefresh
   }
 
   return loadCachedView(cacheKey, async () => {
-    const { data, error } = await dataTable('hid_notifications')
-      .select('id,user_profile_id,patient_id,title,message,type,read_at,created_at')
-      .order('created_at', { ascending: false })
+    const data = await edgeRequest<HidNotification[]>('notifications-list', {
+      query: {
+        limit: 200,
+      },
+    })
 
-    if (error) {
-      throw new HidApiError(400, error.message, error)
-    }
-
-    return ((data as HidNotification[] | null) ?? []).map(item => toLegacyNotification(item, hidCode))
+    return (data ?? []).map(item => toLegacyNotification(item, hidCode))
   }, NOTIFICATIONS_CACHE_TTL_MS)
 }
 
@@ -1457,17 +1464,14 @@ export async function listUnreadNotifications(hidCode: string, limit = 20, optio
   }
 
   return loadCachedView(cacheKey, async () => {
-    const { data, error } = await dataTable('hid_notifications')
-      .select('id,user_profile_id,patient_id,title,message,type,read_at,created_at')
-      .is('read_at', null)
-      .order('created_at', { ascending: false })
-      .limit(limit)
+    const data = await edgeRequest<HidNotification[]>('notifications-list', {
+      query: {
+        limit,
+        unreadOnly: '1',
+      },
+    })
 
-    if (error) {
-      throw new HidApiError(400, error.message, error)
-    }
-
-    return ((data as HidNotification[] | null) ?? []).map(item => toLegacyNotification(item, hidCode))
+    return (data ?? []).map(item => toLegacyNotification(item, hidCode))
   }, NOTIFICATIONS_CACHE_TTL_MS)
 }
 

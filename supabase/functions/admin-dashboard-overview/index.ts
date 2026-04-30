@@ -64,8 +64,10 @@ function isIgnoredSentryIssue(issue: SentryIssue) {
 
   return (
     text.includes('networkerror when attempting to fetch resource') ||
+    (text.includes('typeerror: failed to fetch') && text.includes('supabase.co')) ||
     text.includes('authretryablefetcherror') ||
     (text.includes('request took too long') && text.includes('check your internet connection')) ||
+    text.includes('canceling statement due to statement timeout') ||
     text.includes('error loading dynamically imported module') ||
     text.includes('invalid login credentials') ||
     text.includes('token has expired or is invalid') ||
