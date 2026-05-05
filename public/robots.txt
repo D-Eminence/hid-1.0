@@ -1,17 +1,4 @@
 User-agent: *
 Allow: /
-Disallow: /patient
-Disallow: /patient/
-Disallow: /hospital
-Disallow: /hospital/
-Disallow: /eminence/
-Disallow: /doctor
-Disallow: /doctor/
-Disallow: /dashboard
-Disallow: /login
-Disallow: /signup
-Disallow: /register
-Disallow: /records
-Disallow: /logs
 
 Sitemap: https://healthidentitydirectory.com/sitemap.xml

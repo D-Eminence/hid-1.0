@@ -40,12 +40,12 @@ function resolveRouteMeta(pathname: string): RouteMeta {
     }
   }
 
-  if (pathname.startsWith('/eminence')) {
+  if (pathname.startsWith('/eminence') || pathname.startsWith('/admin')) {
     return {
       canonical: `${SITE_ORIGIN}${pathname}`,
-      description: 'Platform admin sign in for the Health Identity Directory.',
+      description: 'Private platform access for the Health Identity Directory.',
       robots: 'noindex,nofollow',
-      title: 'Admin Sign In | HID',
+      title: 'Private Access | HID',
     }
   }
 

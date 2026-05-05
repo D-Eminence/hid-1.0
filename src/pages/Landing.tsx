@@ -351,7 +351,7 @@ export default function Landing() {
             <span style={{ color: '#1a6fd4' }}>Built With Purpose:</span> The Features Behind HID
           </h2>
           <p style={{ fontSize: 14, color: '#6b7280', marginTop: 10, lineHeight: 1.7, maxWidth: 520, margin: '10px auto 0' }}>
-            HID brings patients, hospitals, and administrators onto one secure platform. Centralizing records, simplifying care, and ensuring every decision is informed and connected.
+            HID brings patients and hospitals onto one secure platform. Centralizing records, simplifying care, and ensuring every decision is informed and connected.
           </p>
         </div>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>

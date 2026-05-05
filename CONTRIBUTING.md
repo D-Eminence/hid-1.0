@@ -5,7 +5,8 @@ This repository is set up so collaborator work should be reviewed in pull reques
 ## Branching Model
 
 - `main` is the production branch.
-- Do not push feature work directly to `main`.
+- Collaborators should not push feature work directly to `main`.
+- Admins may push directly to `main` when needed.
 - Create a branch from `main` for every change.
 - Use clear branch names such as `feat/patient-auth-copy`, `fix/admin-lock-message`, or `security/turnstile-hardening`.
 
@@ -33,7 +34,10 @@ These settings must be enabled in GitHub because they cannot be fully enforced f
 6. Add the required checks from these workflows:
    - the `CI` workflow
    - the `Deploy Preview` workflow
-7. Enable `Restrict who can push to matching branches` if you want to block direct pushes.
+7. Do not restrict admin pushes to `main`; admins should retain direct push access.
+8. If you restrict who can push to matching branches, include repository admins in the allowed pushers.
+
+Note: GitHub may require GitHub Pro, a paid organization plan, or public repository visibility before branch protection and repository rulesets are available on private repositories.
 
 ## What Reviewers Should Inspect
 
@@ -68,7 +72,8 @@ If you touched Supabase SQL or Edge Functions, also review:
 
 - Pull requests deploy previews only.
 - `main` deploys to production.
-- Production deploys should only happen from reviewed code merged into `main`.
+- Production deploys normally happen from reviewed code merged into `main`.
+- Admin pushes to `main` are allowed for urgent or owner-approved changes.
 
 ## Project Boundaries
 

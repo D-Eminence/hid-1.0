@@ -1,6 +1,175 @@
 {
   "headers": [
     {
+      "source": "/patient/:path*",
+      "headers": [
+        {
+          "key": "X-Robots-Tag",
+          "value": "noindex, nofollow"
+        },
+        {
+          "key": "Cache-Control",
+          "value": "no-store"
+        }
+      ]
+    },
+    {
+      "source": "/hospital/:path*",
+      "headers": [
+        {
+          "key": "X-Robots-Tag",
+          "value": "noindex, nofollow"
+        },
+        {
+          "key": "Cache-Control",
+          "value": "no-store"
+        }
+      ]
+    },
+    {
+      "source": "/doctor/:path*",
+      "headers": [
+        {
+          "key": "X-Robots-Tag",
+          "value": "noindex, nofollow"
+        },
+        {
+          "key": "Cache-Control",
+          "value": "no-store"
+        }
+      ]
+    },
+    {
+      "source": "/eminence",
+      "headers": [
+        {
+          "key": "X-Robots-Tag",
+          "value": "noindex, nofollow"
+        },
+        {
+          "key": "Cache-Control",
+          "value": "no-store"
+        }
+      ]
+    },
+    {
+      "source": "/eminence/:path*",
+      "headers": [
+        {
+          "key": "X-Robots-Tag",
+          "value": "noindex, nofollow"
+        },
+        {
+          "key": "Cache-Control",
+          "value": "no-store"
+        }
+      ]
+    },
+    {
+      "source": "/admin",
+      "headers": [
+        {
+          "key": "X-Robots-Tag",
+          "value": "noindex, nofollow"
+        },
+        {
+          "key": "Cache-Control",
+          "value": "no-store"
+        }
+      ]
+    },
+    {
+      "source": "/admin/:path*",
+      "headers": [
+        {
+          "key": "X-Robots-Tag",
+          "value": "noindex, nofollow"
+        },
+        {
+          "key": "Cache-Control",
+          "value": "no-store"
+        }
+      ]
+    },
+    {
+      "source": "/dashboard",
+      "headers": [
+        {
+          "key": "X-Robots-Tag",
+          "value": "noindex, nofollow"
+        },
+        {
+          "key": "Cache-Control",
+          "value": "no-store"
+        }
+      ]
+    },
+    {
+      "source": "/login",
+      "headers": [
+        {
+          "key": "X-Robots-Tag",
+          "value": "noindex, nofollow"
+        },
+        {
+          "key": "Cache-Control",
+          "value": "no-store"
+        }
+      ]
+    },
+    {
+      "source": "/signup",
+      "headers": [
+        {
+          "key": "X-Robots-Tag",
+          "value": "noindex, nofollow"
+        },
+        {
+          "key": "Cache-Control",
+          "value": "no-store"
+        }
+      ]
+    },
+    {
+      "source": "/register",
+      "headers": [
+        {
+          "key": "X-Robots-Tag",
+          "value": "noindex, nofollow"
+        },
+        {
+          "key": "Cache-Control",
+          "value": "no-store"
+        }
+      ]
+    },
+    {
+      "source": "/records",
+      "headers": [
+        {
+          "key": "X-Robots-Tag",
+          "value": "noindex, nofollow"
+        },
+        {
+          "key": "Cache-Control",
+          "value": "no-store"
+        }
+      ]
+    },
+    {
+      "source": "/logs",
+      "headers": [
+        {
+          "key": "X-Robots-Tag",
+          "value": "noindex, nofollow"
+        },
+        {
+          "key": "Cache-Control",
+          "value": "no-store"
+        }
+      ]
+    },
+    {
       "source": "/(.*)",
       "headers": [
         {
@@ -90,6 +259,63 @@
           "value": "no-store"
         }
       ]
+    }
+  ],
+  "redirects": [
+    {
+      "source": "/signup",
+      "destination": "/patient",
+      "permanent": true
+    },
+    {
+      "source": "/login",
+      "destination": "/patient",
+      "permanent": true
+    },
+    {
+      "source": "/register",
+      "destination": "/patient",
+      "permanent": true
+    },
+    {
+      "source": "/records",
+      "destination": "/patient/records",
+      "permanent": true
+    },
+    {
+      "source": "/logs",
+      "destination": "/patient/history",
+      "permanent": true
+    },
+    {
+      "source": "/doctor",
+      "destination": "/hospital/dashboard",
+      "permanent": true
+    },
+    {
+      "source": "/doctor/auth",
+      "destination": "/hospital/auth",
+      "permanent": true
+    },
+    {
+      "source": "/doctor/access",
+      "destination": "/hospital/access",
+      "permanent": true
+    },
+    {
+      "source": "/doctor/history",
+      "destination": "/hospital/history",
+      "permanent": true
+    },
+    {
+      "source": "/doctor/emergency",
+      "destination": "/hospital/emergency",
+      "permanent": true
+    },
+    {
+      "source": "/dashboard",
+      "destination": "/hospital/dashboard",
+      "permanent": true
     }
   ],
   "rewrites": [
