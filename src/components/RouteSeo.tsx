@@ -26,18 +26,18 @@ function resolveRouteMeta(pathname: string): RouteMeta {
   if (pathname === '/patient') {
     return {
       canonical: `${SITE_ORIGIN}/patient`,
-      description: 'Patient sign in for the Health Identity Directory.',
+      description: 'Secure patient access portal for HID - Africa’s digital health identity infrastructure enabling connected medical record access and continuity of care.',
       robots: INDEX_ROBOTS,
-      title: 'Patient Sign In | HID',
+      title: 'Patient Access | HID - Health Identity Directory',
     }
   }
 
   if (pathname === '/hospital' || pathname === '/hospital/auth') {
     return {
       canonical: `${SITE_ORIGIN}/hospital`,
-      description: 'Hospital sign in for the Health Identity Directory.',
+      description: 'Secure hospital access portal for HID - Africa’s digital health identity infrastructure enabling connected medical record access and continuity of care.',
       robots: INDEX_ROBOTS,
-      title: 'Hospital Sign In | HID',
+      title: 'Hospital Access | HID - Health Identity Directory',
     }
   }
 
@@ -46,7 +46,7 @@ function resolveRouteMeta(pathname: string): RouteMeta {
       canonical: `${SITE_ORIGIN}${pathname}`,
       description: 'The Health Identity Directory.',
       robots: 'noindex,nofollow',
-      title: 'Admin Sign In | HID',
+      title: 'Admin Access | HID - Health Identity Directory',
     }
   }
 
