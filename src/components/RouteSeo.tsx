@@ -11,13 +11,14 @@ type RouteMeta = {
 const SITE_ORIGIN = 'https://healthidentitydirectory.com'
 const SITE_IMAGE = `${SITE_ORIGIN}/hid-logo.png`
 const DEFAULT_DESCRIPTION = 'HID gives every patient a secure, unified health identity so complete medical history is available at any hospital, anywhere, anytime.'
+const INDEX_ROBOTS = 'index,follow,max-image-preview:large,max-snippet:-1,max-video-preview:-1'
 
 function resolveRouteMeta(pathname: string): RouteMeta {
   if (pathname === '/') {
     return {
       canonical: `${SITE_ORIGIN}/`,
       description: DEFAULT_DESCRIPTION,
-      robots: 'index,follow,max-image-preview:large,max-snippet:-1,max-video-preview:-1',
+      robots: INDEX_ROBOTS,
       title: 'HID | Health Identity Directory',
     }
   }
@@ -26,16 +27,16 @@ function resolveRouteMeta(pathname: string): RouteMeta {
     return {
       canonical: `${SITE_ORIGIN}/patient`,
       description: 'Patient sign in for the Health Identity Directory.',
-      robots: 'noindex,nofollow',
+      robots: INDEX_ROBOTS,
       title: 'Patient Sign In | HID',
     }
   }
 
   if (pathname === '/hospital' || pathname === '/hospital/auth') {
     return {
-      canonical: `${SITE_ORIGIN}/hospital/auth`,
+      canonical: `${SITE_ORIGIN}/hospital`,
       description: 'Hospital sign in for the Health Identity Directory.',
-      robots: 'noindex,nofollow',
+      robots: INDEX_ROBOTS,
       title: 'Hospital Sign In | HID',
     }
   }

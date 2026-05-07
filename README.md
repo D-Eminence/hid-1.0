@@ -19,7 +19,7 @@ It is a React + Vite app connected to Supabase. Patients use it to manage their 
 - `src/` is the active frontend app.
 - `supabase/` contains migrations, config, and Edge Functions.
 - `public/` contains static files like `robots.txt` and `sitemap.xml`.
-- `vercel.json` contains production headers, rewrites, redirects, and SEO noindex rules.
+- `vercel.json` contains production headers, rewrites, redirects, and SEO crawl rules.
 - `.github/workflows/` contains CI, preview deploy, and production deploy workflows.
 
 The old `client/`, `server/`, and `api/` folders are not the main product unless a task clearly says to work there.
@@ -28,15 +28,16 @@ The old `client/`, `server/`, and `api/` folders are not the main product unless
 
 - `/` public landing page
 - `/patient` patient sign in/sign up
-- `/patient/profile`
-- `/patient/records`
-- `/patient/history`
-- `/patient/notifications`
-- `/hospital/auth`
-- `/hospital/dashboard`
-- `/hospital/access`
-- `/hospital/history`
-- `/hospital/emergency`
+- `/patient/profile` private patient profile
+- `/patient/records` private patient records
+- `/patient/history` private patient access history
+- `/patient/notifications` private patient notifications
+- `/hospital` public hospital entry
+- `/hospital/auth` hospital sign in/sign up
+- `/hospital/dashboard` private hospital dashboard
+- `/hospital/access` private hospital patient access
+- `/hospital/history` private hospital access history
+- `/hospital/emergency` private hospital emergency access
 - `/eminence/login` private admin login
 - `/eminence/overview` private admin dashboard
 
@@ -118,20 +119,27 @@ Pull requests into `main` create Vercel preview deploys.
 
 ## Google SEO
 
-Only the public landing page should be indexed by Google:
+These public pages should be indexed by Google:
 
 ```text
 https://healthidentitydirectory.com/
+https://healthidentitydirectory.com/patient
+https://healthidentitydirectory.com/hospital
 ```
 
-The sitemap only lists the home page.
+The sitemap lists those three public URLs.
 
-Private/auth routes are marked with `X-Robots-Tag: noindex, nofollow` in `vercel.json`, including:
+Private app routes are marked with `X-Robots-Tag: noindex, nofollow` in `vercel.json`, including:
 
-- `/patient`
-- `/patient/*`
-- `/hospital`
-- `/hospital/*`
+- `/patient/profile`
+- `/patient/records`
+- `/patient/history`
+- `/patient/notifications`
+- `/hospital/dashboard`
+- `/hospital/access`
+- `/hospital/history`
+- `/hospital/emergency`
+- `/hospital/patient-records/*`
 - `/doctor/*`
 - `/eminence`
 - `/eminence/*`
@@ -143,6 +151,7 @@ After deploy, verify:
 ```bash
 curl -I https://healthidentitydirectory.com
 curl -I https://healthidentitydirectory.com/patient
+curl -I https://healthidentitydirectory.com/hospital
 curl -I https://healthidentitydirectory.com/eminence/login
 curl -sS https://healthidentitydirectory.com/robots.txt
 curl -sS https://healthidentitydirectory.com/sitemap.xml
@@ -152,8 +161,10 @@ In Google Search Console:
 
 1. Submit `https://healthidentitydirectory.com/sitemap.xml`.
 2. Inspect `https://healthidentitydirectory.com/`.
-3. Request indexing for the home page.
-4. Confirm private routes are excluded by `noindex`.
+3. Inspect `https://healthidentitydirectory.com/patient`.
+4. Inspect `https://healthidentitydirectory.com/hospital`.
+5. Request indexing for the three public pages.
+6. Confirm private dashboard routes are excluded by `noindex`.
 
 ## Collaboration
 
@@ -188,5 +199,5 @@ If Supabase migrations or Edge Functions changed, also check the related Supabas
 
 - The active branch is `main`.
 - The GitHub repo is `D-Eminence/hid-1.0`.
-- Admin and auth routes are intentionally removed from Google indexing.
+- Admin and private dashboard routes are intentionally removed from Google indexing.
 - Production deploy starts after pushing to `main`.
