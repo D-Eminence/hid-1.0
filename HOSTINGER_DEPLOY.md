@@ -48,11 +48,10 @@ Required routes:
 
 Before testing production:
 
-- set `Site URL` to `https://your-domain.com`
+- set `Site URL` to `https://healthidentitydirectory.com`
 - add redirect URLs for:
-  - `https://your-domain.com/patient`
-  - `https://your-domain.com/hospital/auth`
-  - `https://your-domain.com/eminence/login`
+  - `https://healthidentitydirectory.com/patient`
+  - `https://healthidentitydirectory.com/hospital/auth`
 - enable Email auth
 - disable Phone auth
 - configure custom SMTP with Brevo or your active mail provider

@@ -25,7 +25,7 @@ function resolveRouteMeta(pathname: string): RouteMeta {
   if (pathname === '/patient') {
     return {
       canonical: `${SITE_ORIGIN}/patient`,
-      description: 'Secure patient sign in for the Health Identity Directory.',
+      description: 'Patient sign in for the Health Identity Directory.',
       robots: 'noindex,nofollow',
       title: 'Patient Sign In | HID',
     }
@@ -34,7 +34,7 @@ function resolveRouteMeta(pathname: string): RouteMeta {
   if (pathname === '/hospital' || pathname === '/hospital/auth') {
     return {
       canonical: `${SITE_ORIGIN}/hospital/auth`,
-      description: 'Secure hospital sign in for the Health Identity Directory.',
+      description: 'Hospital sign in for the Health Identity Directory.',
       robots: 'noindex,nofollow',
       title: 'Hospital Sign In | HID',
     }
@@ -43,9 +43,9 @@ function resolveRouteMeta(pathname: string): RouteMeta {
   if (pathname.startsWith('/eminence') || pathname.startsWith('/admin')) {
     return {
       canonical: `${SITE_ORIGIN}${pathname}`,
-      description: 'Private platform access for the Health Identity Directory.',
+      description: 'The Health Identity Directory.',
       robots: 'noindex,nofollow',
-      title: 'Private Access | HID',
+      title: 'Admin Sign In | HID',
     }
   }
 

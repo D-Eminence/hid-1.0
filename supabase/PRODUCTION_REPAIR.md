@@ -5,7 +5,7 @@ Use this only if the hosted Supabase project drifts from the repo and signup or 
 ## 1. Link The Repo
 
 ```bash
-supabase link --project-ref tywuujyqpqrlnweezxul
+supabase link --project-ref 
 ```
 
 ## 2. Push Migrations
@@ -37,7 +37,7 @@ For the current fast-launch path, these must exist:
 ## 4. Deploy Functions
 
 ```bash
-supabase functions deploy --project-ref tywuujyqpqrlnweezxul
+supabase functions deploy --project-ref 
 ```
 
 ## 5. Check Dashboard Auth Settings
@@ -48,8 +48,8 @@ For the current launch path:
 2. Phone auth disabled
 3. Site URL set to the real frontend domain
 4. Redirect URLs include:
-   - `https://your-domain.com/patient`
-   - `https://your-domain.com/hospital`
+   - `https://healthidentitydirectory.com/patient`
+   - `https://healthidentitydirectory.com/hospital`
 5. Email confirmations off unless SMTP is already configured
 6. Turnstile left off unless intentionally enabled later
 
