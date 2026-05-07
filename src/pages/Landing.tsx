@@ -157,6 +157,7 @@ export default function Landing() {
   const navigate = useNavigate()
   const [openFaq, setOpenFaq] = useState<number | null>(null)
   const [legalOpen, setLegalOpen] = useState(false)
+  const [viewportWidth, setViewportWidth] = useState(() => (typeof window !== 'undefined' ? window.innerWidth : 1024))
 
   const faqs = [
     { q: 'What is HID?', a: 'HID (Health Identity Directory) is a unified digital health identity platform that gives every patient a single, secure ID linking their complete medical history and making it available at any hospital, anytime.' },
@@ -200,6 +201,18 @@ export default function Landing() {
     },
   ]
 
+  const isNarrow = viewportWidth < 640
+  const isCompact = viewportWidth < 820
+  const responsiveSectionPadding = isNarrow ? '56px 18px' : sectionPadding
+  const stackedGridColumns = isNarrow ? '1fr' : 'repeat(auto-fit, minmax(260px, 1fr))'
+
+  useEffect(() => {
+    const handleResize = () => setViewportWidth(window.innerWidth)
+    handleResize()
+    window.addEventListener('resize', handleResize)
+    return () => window.removeEventListener('resize', handleResize)
+  }, [])
+
   useEffect(() => preloadRoutesWhenIdle(['patientAuth', 'doctorAuth', 'adminLogin']), [])
 
   return (
@@ -214,15 +227,15 @@ export default function Landing() {
           borderBottom: '1px solid #e5e7eb',
           display: 'flex',
           alignItems: 'center',
-          justifyContent: 'space-between',
-          padding: '12px clamp(16px, 4vw, 48px)',
+          justifyContent: isCompact ? 'center' : 'space-between',
+          padding: isNarrow ? '12px 16px' : '12px clamp(16px, 4vw, 48px)',
           minHeight: 64,
-          gap: 16,
+          gap: isNarrow ? 12 : 16,
           flexWrap: 'wrap',
         }}
       >
         <HIDLogo size="sm" />
-        <div style={{ display: 'flex', alignItems: 'center', gap: 'clamp(16px, 4vw, 32px)', flexWrap: 'wrap', justifyContent: 'center' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: isNarrow ? 14 : 'clamp(16px, 4vw, 32px)', flexWrap: 'wrap', justifyContent: 'center', order: isNarrow ? 3 : 0, width: isNarrow ? '100%' : 'auto' }}>
           {['How it Works', 'Features', 'Security'].map(link => (
             <a
               key={link}
@@ -239,7 +252,7 @@ export default function Landing() {
             </a>
           ))}
         </div>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap', justifyContent: 'center' }}>
           <button
             onClick={() => navigate('/patient')}
             onMouseEnter={() => preloadRoute('patientAuth')}
@@ -277,25 +290,25 @@ export default function Landing() {
         </div>
       </nav>
 
-      <div style={{ maxWidth: 960, margin: '0 auto', padding: '72px clamp(20px, 5vw, 24px) 80px', display: 'flex', flexDirection: 'column', alignItems: 'center', textAlign: 'center' }}>
+      <div style={{ maxWidth: 960, margin: '0 auto', padding: isNarrow ? '42px 16px 56px' : '72px clamp(20px, 5vw, 24px) 80px', display: 'flex', flexDirection: 'column', alignItems: 'center', textAlign: 'center' }}>
         <div
           style={{
             background: '#fff',
             border: '1px solid #e5e7eb',
-            borderRadius: 24,
-            padding: '48px clamp(20px, 5vw, 40px) 36px',
+            borderRadius: isNarrow ? 18 : 24,
+            padding: isNarrow ? '34px 18px 26px' : '48px clamp(20px, 5vw, 40px) 36px',
             width: '100%',
             maxWidth: 580,
             boxShadow: '0 4px 32px rgba(0,0,0,0.06)',
           }}
         >
-          <h1 style={{ fontSize: 36, fontWeight: 800, lineHeight: 1.15, letterSpacing: '-0.8px', marginBottom: 14 }}>
+          <h1 style={{ fontSize: isNarrow ? 30 : 36, fontWeight: 800, lineHeight: 1.15, letterSpacing: isNarrow ? 0 : '-0.8px', marginBottom: 14 }}>
             One Patient. <span style={{ color: '#1a6fd4' }}>One ID</span>.<br />Your Health, Anywhere.
           </h1>
           <p style={{ fontSize: 14, color: '#6b7280', lineHeight: 1.7, marginBottom: 28, maxWidth: 360, margin: '0 auto 28px' }}>
             HID gives every patient a secure, unified health identity so complete medical history is available at any hospital, anywhere, anytime.
           </p>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 12, marginTop: 18 }}>
+          <div style={{ display: 'grid', gridTemplateColumns: isNarrow ? '1fr' : 'repeat(auto-fit, minmax(220px, 1fr))', gap: 12, marginTop: 18 }}>
             {[
               { title: 'Patient', path: '/patient' },
               { title: 'Hospital', path: HOSPITAL_AUTH_PATH },
@@ -315,6 +328,7 @@ export default function Landing() {
                   cursor: 'pointer',
                   fontWeight: 700,
                   fontSize: 15,
+                  width: '100%',
                 }}
               >
                 {portal.title}
@@ -345,9 +359,9 @@ export default function Landing() {
         </div>
       </div>
 
-      <section id="features" style={{ padding: sectionPadding, background: '#fff', maxWidth: 960, margin: '0 auto' }}>
-        <div style={{ textAlign: 'center', marginBottom: 48 }}>
-          <h2 style={{ fontSize: 28, fontWeight: 800, letterSpacing: '-0.5px' }}>
+      <section id="features" style={{ padding: responsiveSectionPadding, background: '#fff', maxWidth: 960, margin: '0 auto' }}>
+        <div style={{ textAlign: 'center', marginBottom: isNarrow ? 32 : 48 }}>
+          <h2 style={{ fontSize: isNarrow ? 24 : 28, fontWeight: 800, letterSpacing: isNarrow ? 0 : '-0.5px' }}>
             <span style={{ color: '#1a6fd4' }}>Built With Purpose:</span> The Features Behind HID
           </h2>
           <p style={{ fontSize: 14, color: '#6b7280', marginTop: 10, lineHeight: 1.7, maxWidth: 520, margin: '10px auto 0' }}>
@@ -366,12 +380,12 @@ export default function Landing() {
                 borderRadius: 20,
                 overflow: 'hidden',
                 display: 'grid',
-                gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))',
-                direction: flip ? 'rtl' : 'ltr',
+                gridTemplateColumns: stackedGridColumns,
+                direction: !isNarrow && flip ? 'rtl' : 'ltr',
               }}
             >
-              <div style={{ background: '#f3f4f6', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 40, minHeight: 220, direction: 'ltr' }}>
-                <svg width="160" height="140" viewBox="0 0 160 140" fill="none">
+              <div style={{ background: '#f3f4f6', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: isNarrow ? 26 : 40, minHeight: isNarrow ? 170 : 220, direction: 'ltr' }}>
+                <svg width={isNarrow ? 136 : 160} height={isNarrow ? 120 : 140} viewBox="0 0 160 140" fill="none">
                   {flip ? (
                     <>
                       <rect x="20" y="20" width="90" height="100" rx="4" fill="#dbeafe" stroke="#bfdbfe" strokeWidth="1.5" />
@@ -402,7 +416,7 @@ export default function Landing() {
                   )}
                 </svg>
               </div>
-              <div style={{ padding: '40px 36px', display: 'flex', flexDirection: 'column', justifyContent: 'center', direction: 'ltr' }}>
+              <div style={{ padding: isNarrow ? '26px 22px 30px' : '40px 36px', display: 'flex', flexDirection: 'column', justifyContent: 'center', direction: 'ltr' }}>
                 <span style={{ display: 'inline-flex', alignItems: 'center', background: '#e8f1fc', color: '#1a6fd4', fontSize: 12, fontWeight: 600, padding: '4px 12px', borderRadius: 999, marginBottom: 14, width: 'fit-content' }}>{tag}</span>
                 <h3 style={{ fontSize: 20, fontWeight: 700, letterSpacing: '-0.3px', marginBottom: 12 }}>{title}</h3>
                 <p style={{ fontSize: 14, color: '#6b7280', lineHeight: 1.7 }}>{desc}</p>
@@ -412,10 +426,10 @@ export default function Landing() {
         </div>
       </section>
 
-      <section id="how-it-works" style={{ padding: sectionPadding, background: '#f8f9fb' }}>
+      <section id="how-it-works" style={{ padding: responsiveSectionPadding, background: '#f8f9fb' }}>
         <div style={{ maxWidth: 900, margin: '0 auto' }}>
-          <div style={{ textAlign: 'center', marginBottom: 52 }}>
-            <h2 style={{ fontSize: 28, fontWeight: 800, letterSpacing: '-0.5px' }}>How HID Works</h2>
+          <div style={{ textAlign: 'center', marginBottom: isNarrow ? 34 : 52 }}>
+            <h2 style={{ fontSize: isNarrow ? 24 : 28, fontWeight: 800, letterSpacing: isNarrow ? 0 : '-0.5px' }}>How HID Works</h2>
             <p style={{ fontSize: 14, color: '#6b7280', marginTop: 10, lineHeight: 1.7 }}>Four steps that show exactly how HID connects you and your hospital without stress or paperwork.</p>
           </div>
           {[
@@ -431,14 +445,14 @@ export default function Landing() {
                 borderRadius: 20,
                 overflow: 'hidden',
                 display: 'grid',
-                gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))',
+                gridTemplateColumns: stackedGridColumns,
                 marginBottom: 20,
                 background: '#fff',
-                direction: index % 2 === 1 ? 'rtl' : 'ltr',
+                direction: !isNarrow && index % 2 === 1 ? 'rtl' : 'ltr',
               }}
             >
-              <div style={{ background: '#e8f1fc', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 32, minHeight: 160, position: 'relative', direction: 'ltr' }}>
-                <span style={{ position: 'absolute', top: 16, left: 20, fontSize: 48, fontWeight: 800, color: 'rgba(26,111,212,0.12)', lineHeight: 1 }}>{n}</span>
+              <div style={{ background: '#e8f1fc', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: isNarrow ? 24 : 32, minHeight: isNarrow ? 132 : 160, position: 'relative', direction: 'ltr' }}>
+                <span style={{ position: 'absolute', top: 16, left: 20, fontSize: isNarrow ? 38 : 48, fontWeight: 800, color: 'rgba(26,111,212,0.12)', lineHeight: 1 }}>{n}</span>
                 <div style={{ width: 80, height: 56, background: 'white', borderRadius: 10, border: '1px solid #bfdbfe', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                   <svg width="48" height="36" viewBox="0 0 48 36" fill="none">
                     <rect x="2" y="2" width="44" height="32" rx="4" fill="#f3f4f6" stroke="#e5e7eb" strokeWidth="1" />
@@ -450,7 +464,7 @@ export default function Landing() {
                   </svg>
                 </div>
               </div>
-              <div style={{ padding: '36px 40px', display: 'flex', flexDirection: 'column', justifyContent: 'center', direction: 'ltr' }}>
+              <div style={{ padding: isNarrow ? '26px 22px 30px' : '36px 40px', display: 'flex', flexDirection: 'column', justifyContent: 'center', direction: 'ltr' }}>
                 <h3 style={{ fontSize: 18, fontWeight: 700, marginBottom: 10 }}>{title}</h3>
                 <p style={{ fontSize: 14, color: '#6b7280', lineHeight: 1.7 }}>{desc}</p>
               </div>
@@ -459,16 +473,16 @@ export default function Landing() {
         </div>
       </section>
 
-      <section id="security" style={{ padding: sectionPadding, background: '#fff' }}>
+      <section id="security" style={{ padding: responsiveSectionPadding, background: '#fff' }}>
         <div style={{ maxWidth: 900, margin: '0 auto' }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', marginBottom: 36, flexWrap: 'wrap', gap: 16 }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', marginBottom: isNarrow ? 26 : 36, flexWrap: 'wrap', gap: 16 }}>
             <div>
-              <h2 style={{ fontSize: 28, fontWeight: 800, letterSpacing: '-0.5px', maxWidth: 420 }}>Security & Compliance</h2>
+              <h2 style={{ fontSize: isNarrow ? 24 : 28, fontWeight: 800, letterSpacing: isNarrow ? 0 : '-0.5px', maxWidth: 420 }}>Security & Compliance</h2>
               <p style={{ fontSize: 14, color: '#6b7280', marginTop: 10, maxWidth: 380, lineHeight: 1.7 }}>
                 HID is built with enterprise-level protection, strict privacy controls, and global healthcare compliance ensuring every patient record stays secure, encrypted, and fully under patient&apos;s control.
               </p>
             </div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', width: isNarrow ? '100%' : 'auto' }}>
               <button onClick={() => navigate('/patient')} style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 13, fontWeight: 600, color: '#1a6fd4', background: 'none', border: 'none', cursor: 'pointer' }}>
                 Patient Portal <svg width="14" height="14" viewBox="0 0 14 14" fill="none"><path d="M3 7h8M7 3l4 4-4 4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" /></svg>
               </button>
@@ -491,14 +505,14 @@ export default function Landing() {
         </div>
       </section>
 
-      <div style={{ background: 'linear-gradient(135deg, #1a6fd4 0%, #1254a8 100%)', padding: '80px clamp(20px, 5vw, 48px)', textAlign: 'center' }}>
-        <h2 style={{ fontSize: 32, fontWeight: 800, color: 'white', letterSpacing: '-0.6px', lineHeight: 1.2, marginBottom: 16, maxWidth: 560, margin: '0 auto 16px' }}>
+      <div style={{ background: 'linear-gradient(135deg, #1a6fd4 0%, #1254a8 100%)', padding: isNarrow ? '58px 18px' : '80px clamp(20px, 5vw, 48px)', textAlign: 'center' }}>
+        <h2 style={{ fontSize: isNarrow ? 26 : 32, fontWeight: 800, color: 'white', letterSpacing: isNarrow ? 0 : '-0.6px', lineHeight: 1.2, marginBottom: 16, maxWidth: 560, margin: '0 auto 16px' }}>
           Get Your HID Today and Take Control of Your Health Records
         </h2>
         <p style={{ fontSize: 14, color: 'rgba(255,255,255,0.75)', marginBottom: 28, maxWidth: 440, margin: '0 auto 28px', lineHeight: 1.7 }}>
           Patients can manage profile and health records, while hospitals can request access and add medical records.
         </p>
-        <div style={{ display: 'inline-flex', gap: 12, flexWrap: 'wrap', justifyContent: 'center' }}>
+        <div style={{ display: 'inline-flex', gap: 12, flexWrap: 'wrap', justifyContent: 'center', width: isNarrow ? '100%' : 'auto' }}>
           <button
             onClick={() => navigate('/patient')}
             onMouseEnter={() => preloadRoute('patientAuth')}
@@ -514,6 +528,8 @@ export default function Landing() {
               cursor: 'pointer',
               display: 'inline-flex',
               alignItems: 'center',
+              justifyContent: 'center',
+              width: isNarrow ? '100%' : 'auto',
             }}
           >
             Patient
@@ -533,6 +549,8 @@ export default function Landing() {
               cursor: 'pointer',
               display: 'inline-flex',
               alignItems: 'center',
+              justifyContent: 'center',
+              width: isNarrow ? '100%' : 'auto',
             }}
           >
             Hospital
@@ -540,10 +558,10 @@ export default function Landing() {
         </div>
       </div>
 
-      <section id="faq" style={{ padding: sectionPadding, background: '#fff' }}>
-        <div style={{ maxWidth: 900, margin: '0 auto', display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: 32 }}>
+      <section id="faq" style={{ padding: responsiveSectionPadding, background: '#fff' }}>
+        <div style={{ maxWidth: 900, margin: '0 auto', display: 'grid', gridTemplateColumns: isNarrow ? '1fr' : 'repeat(auto-fit, minmax(240px, 1fr))', gap: isNarrow ? 20 : 32 }}>
           <div>
-            <h2 style={{ fontSize: 32, fontWeight: 800, letterSpacing: '-0.5px', marginBottom: 12 }}>FAQ</h2>
+            <h2 style={{ fontSize: isNarrow ? 26 : 32, fontWeight: 800, letterSpacing: isNarrow ? 0 : '-0.5px', marginBottom: 12 }}>FAQ</h2>
             <p style={{ fontSize: 14, color: '#6b7280', lineHeight: 1.7 }}>Everything you need to know about HID from setup to security and accessing your health records anywhere.</p>
           </div>
           <div style={{ display: 'flex', flexDirection: 'column' }}>
@@ -582,9 +600,9 @@ export default function Landing() {
         </div>
       </section>
 
-      <footer style={{ background: '#f8f9fb', padding: '56px clamp(20px, 5vw, 48px) 0' }}>
+      <footer style={{ background: '#f8f9fb', padding: isNarrow ? '44px 18px 0' : '56px clamp(20px, 5vw, 48px) 0' }}>
         <div style={{ maxWidth: 960, margin: '0 auto' }}>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 32, paddingBottom: 40, borderBottom: '1px solid #e5e7eb' }}>
+          <div style={{ display: 'grid', gridTemplateColumns: isNarrow ? '1fr' : 'repeat(auto-fit, minmax(180px, 1fr))', gap: isNarrow ? 24 : 32, paddingBottom: 40, borderBottom: '1px solid #e5e7eb' }}>
             <div>
               <HIDLogo size="sm" />
               <p style={{ fontSize: 13, color: '#6b7280', lineHeight: 1.7, marginTop: 14, maxWidth: 260 }}>
@@ -604,8 +622,8 @@ export default function Landing() {
               </div>
             ))}
           </div>
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '20px 0', gap: 16, flexWrap: 'wrap' }}>
-            <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: isNarrow ? 'center' : 'space-between', padding: '20px 0', gap: 16, flexWrap: 'wrap', textAlign: isNarrow ? 'center' : 'left' }}>
+            <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', justifyContent: 'center' }}>
               <SocialIconLink href="https://www.instagram.com/hidirectoryhq" label="Instagram">
                 <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true">
                   <rect x="3.5" y="3.5" width="17" height="17" rx="5" stroke="currentColor" strokeWidth="1.8" />
