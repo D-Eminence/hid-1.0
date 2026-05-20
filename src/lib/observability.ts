@@ -85,6 +85,8 @@ function shouldIgnoreSentryEvent(event: Record<string, any>) {
     (text.includes('typeerror: failed to fetch') && text.includes('supabase.co')) ||
     text.includes('authretryablefetcherror') ||
     (text.includes('request took too long') && text.includes('check your internet connection')) ||
+    (text.includes('unhandledrejection') && text.includes('non-error promise rejection captured with value')) ||
+    (text.includes('object not found matching id') && text.includes('methodname:update')) ||
     text.includes('canceling statement due to statement timeout') ||
     text.includes('error loading dynamically imported module') ||
     text.includes('failed to fetch dynamically imported module') ||

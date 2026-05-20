@@ -30,6 +30,15 @@ function isSafariBrowser() {
   return /Safari/i.test(ua) && !/CriOS|FxiOS|EdgiOS|OPiOS|DuckDuckGo/i.test(ua)
 }
 
+function isStaleInstallPromptError(error: unknown) {
+  if (!error || typeof error !== 'object') return false
+  const text = JSON.stringify(error).toLowerCase()
+  return (
+    text.includes('object not found matching id') &&
+    text.includes('methodname:update')
+  )
+}
+
 export function AppInstallPrompt() {
   const [deferredPrompt, setDeferredPrompt] = useState<DeferredInstallPromptEvent | null>(null)
   const [visible, setVisible] = useState(false)
@@ -75,15 +84,23 @@ export function AppInstallPrompt() {
 
   async function install() {
     if (!deferredPrompt) return
-    await deferredPrompt.prompt()
-    const choice = await deferredPrompt.userChoice
-    if (choice.outcome === 'accepted') {
-      setVisible(false)
+    try {
+      await deferredPrompt.prompt()
+      const choice = await deferredPrompt.userChoice
+      if (choice.outcome === 'accepted') {
+        setVisible(false)
+        setDeferredPrompt(null)
+        localStorage.removeItem(DISMISS_KEY)
+        return
+      }
+      dismiss()
+    } catch (error) {
       setDeferredPrompt(null)
-      localStorage.removeItem(DISMISS_KEY)
-      return
+      setVisible(false)
+      if (!isStaleInstallPromptError(error)) {
+        dismiss()
+      }
     }
-    dismiss()
   }
 
   function dismiss() {
