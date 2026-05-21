@@ -656,7 +656,7 @@ export default function Landing() {
                 </svg>
               </SocialIconLink>
             </div>
-            <p style={{ fontSize: 12, color: '#9ca3af' }}>Copyright 2025 HID Technologies. All rights reserved.</p>
+            <p style={{ fontSize: 12, color: '#9ca3af' }}>Copyright 2026 HID Technologies. All rights reserved.</p>
           </div>
         </div>
         <div style={{ textAlign: 'center', padding: '24px 0 32px', fontSize: 'clamp(28px, 6vw, 64px)', fontWeight: 800, color: 'rgba(26,111,212,0.08)', letterSpacing: '-1px', userSelect: 'none', overflow: 'hidden', whiteSpace: 'nowrap' }}>

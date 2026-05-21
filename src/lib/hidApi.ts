@@ -187,6 +187,7 @@ const HID_STAFF_ACCOUNT_COLUMNS = [
   'updated_at',
 ].join(', ')
 const inflightRecordSaves = new Map<string, Promise<RecordCreationResponse>>()
+const inflightEdgeGetRequests = new Map<string, Promise<unknown>>()
 const recentRecordSaves = new Map<string, RecentRecordSaveEntry>()
 
 type ViewCacheEntry<T> = {
@@ -213,6 +214,7 @@ const signedDownloadCache = new Map<string, SignedDownloadCacheEntry>()
 function clearHidApiCaches() {
   viewCache.clear()
   signedDownloadCache.clear()
+  inflightEdgeGetRequests.clear()
   inflightRecordSaves.clear()
   recentRecordSaves.clear()
 }
@@ -489,79 +491,106 @@ async function edgeRequest<T>(functionName: string, options: EdgeRequestOptions 
     headers['Content-Type'] = 'application/json'
   }
 
-  let response: Response
-  try {
-    response = await fetchWithTimeout(url.toString(), {
-      method,
-      headers,
-      body: options.body !== undefined ? JSON.stringify(options.body) : undefined,
-      cache: 'no-store',
-    })
-  } catch (error) {
-    if (isAbortError(error) || (error instanceof Error && error.message.toLowerCase().includes('took too long'))) {
-      throw new HidApiError(408, NETWORK_TIMEOUT_MESSAGE, error)
-    }
-    throw error
+  const requestInit: RequestInit = {
+    method,
+    headers,
+    body: options.body !== undefined ? JSON.stringify(options.body) : undefined,
+    cache: 'no-store',
   }
+  const inflightKey =
+    method === 'GET'
+      ? JSON.stringify({
+          url: url.toString(),
+          auth: headers.Authorization ?? null,
+          requireAuth: options.requireAuth !== false,
+        })
+      : null
 
-  const rawBody = await response.text()
-  let parsedPayload = null as
-    | (EdgeEnvelope<T> & { error?: string; details?: unknown })
-    | { error?: string; details?: unknown }
-    | null
-
-  if (rawBody) {
+  const runRequest = async () => {
+    let response: Response
     try {
-      parsedPayload = JSON.parse(rawBody) as
-        | (EdgeEnvelope<T> & { error?: string; details?: unknown })
-        | { error?: string; details?: unknown }
-    } catch {
-      parsedPayload = null
-    }
-  }
-
-  const fallbackMessage = rawBody
-    .replace(/<[^>]+>/g, ' ')
-    .replace(/\s+/g, ' ')
-    .trim()
-
-  if (!response.ok) {
-    const rawResponseMessage =
-      parsedPayload && typeof parsedPayload === 'object' && 'error' in parsedPayload && typeof parsedPayload.error === 'string'
-        ? parsedPayload.error
-        : fallbackMessage || response.statusText || ''
-    const normalizedAccountStateMessage = formatDeletedAccountMessage(rawResponseMessage) ?? formatLockedAccountMessage(rawResponseMessage)
-    const responseMessage = isBannedAuthMessage(rawResponseMessage)
-      ? BANNED_ACCOUNT_MESSAGE
-      : normalizedAccountStateMessage
-        ? normalizedAccountStateMessage
-        : rawResponseMessage && !isLowSignalErrorMessage(rawResponseMessage)
-          ? rawResponseMessage
-          : fallbackErrorMessageForStatus(response.status)
-
-    const lowered = responseMessage.toLowerCase()
-    if (
-      response.status === 401 ||
-      lowered.includes('jwt') ||
-      lowered.includes('refresh token') ||
-      lowered.includes('authentication required') ||
-      lowered.includes('please sign in again')
-    ) {
-      await resetAuthState()
+      response = await fetchWithTimeout(url.toString(), requestInit)
+    } catch (error) {
+      if (isAbortError(error) || (error instanceof Error && error.message.toLowerCase().includes('took too long'))) {
+        throw new HidApiError(408, NETWORK_TIMEOUT_MESSAGE, error)
+      }
+      throw error
     }
 
-    throw new HidApiError(
-      response.status,
-      responseMessage,
-      parsedPayload && typeof parsedPayload === 'object' && 'details' in parsedPayload ? parsedPayload.details : rawBody || parsedPayload
-    )
+    const rawBody = await response.text()
+    let parsedPayload = null as
+      | (EdgeEnvelope<T> & { error?: string; details?: unknown })
+      | { error?: string; details?: unknown }
+      | null
+
+    if (rawBody) {
+      try {
+        parsedPayload = JSON.parse(rawBody) as
+          | (EdgeEnvelope<T> & { error?: string; details?: unknown })
+          | { error?: string; details?: unknown }
+      } catch {
+        parsedPayload = null
+      }
+    }
+
+    const fallbackMessage = rawBody
+      .replace(/<[^>]+>/g, ' ')
+      .replace(/\s+/g, ' ')
+      .trim()
+
+    if (!response.ok) {
+      const rawResponseMessage =
+        parsedPayload && typeof parsedPayload === 'object' && 'error' in parsedPayload && typeof parsedPayload.error === 'string'
+          ? parsedPayload.error
+          : fallbackMessage || response.statusText || ''
+      const normalizedAccountStateMessage = formatDeletedAccountMessage(rawResponseMessage) ?? formatLockedAccountMessage(rawResponseMessage)
+      const responseMessage = isBannedAuthMessage(rawResponseMessage)
+        ? BANNED_ACCOUNT_MESSAGE
+        : normalizedAccountStateMessage
+          ? normalizedAccountStateMessage
+          : rawResponseMessage && !isLowSignalErrorMessage(rawResponseMessage)
+            ? rawResponseMessage
+            : fallbackErrorMessageForStatus(response.status)
+
+      const lowered = responseMessage.toLowerCase()
+      if (
+        response.status === 401 ||
+        lowered.includes('jwt') ||
+        lowered.includes('refresh token') ||
+        lowered.includes('authentication required') ||
+        lowered.includes('please sign in again')
+      ) {
+        await resetAuthState()
+      }
+
+      throw new HidApiError(
+        response.status,
+        responseMessage,
+        parsedPayload && typeof parsedPayload === 'object' && 'details' in parsedPayload ? parsedPayload.details : rawBody || parsedPayload
+      )
+    }
+
+    if (parsedPayload && typeof parsedPayload === 'object' && 'data' in parsedPayload) {
+      return parsedPayload.data
+    }
+
+    return (parsedPayload ?? rawBody) as T
   }
 
-  if (parsedPayload && typeof parsedPayload === 'object' && 'data' in parsedPayload) {
-    return parsedPayload.data
+  if (!inflightKey) {
+    return runRequest()
   }
 
-  return (parsedPayload ?? rawBody) as T
+  const existing = inflightEdgeGetRequests.get(inflightKey)
+  if (existing) {
+    return existing as Promise<T>
+  }
+
+  const promise = runRequest().finally(() => {
+    inflightEdgeGetRequests.delete(inflightKey)
+  })
+  inflightEdgeGetRequests.set(inflightKey, promise)
+  return promise
 }
 
 async function clearPendingMetadata(key: 'pending_patient_signup' | 'pending_staff_onboarding') {
