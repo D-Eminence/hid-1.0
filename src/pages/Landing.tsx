@@ -21,6 +21,7 @@ type SecurityCardKind =
   | 'compliance'
 
 const sectionPadding = '80px clamp(20px, 5vw, 48px)'
+const landingTrustBadges = ['HIPAA + NDPC aligned', 'Secure Cloud Infrastructure'] as const
 
 const footerLinkStyle: React.CSSProperties = {
   display: 'block',
@@ -345,7 +346,7 @@ export default function Landing() {
           </div>
 
           <div style={{ display: 'flex', gap: 20, justifyContent: 'center', marginTop: 16, flexWrap: 'wrap' }}>
-            {['HIPAA + NDPR aligned', 'Secure Cloud Infrastructure'].map(text => (
+            {landingTrustBadges.map(text => (
               <div key={text} style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, color: '#6b7280' }}>
                 <div style={{ width: 16, height: 16, background: '#1a6fd4', borderRadius: 3, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
                   <svg width="9" height="9" viewBox="0 0 9 9" fill="none">

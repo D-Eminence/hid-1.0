@@ -3,10 +3,12 @@ import { useNavigate } from 'react-router-dom'
 import { HIDLogo } from './HIDLogo'
 import { HOSPITAL_AUTH_PATH } from '../lib/hospitalRoutes'
 
+const complianceFootnotes = ['HIPAA + NDPC aligned', 'Secure OTP verification'] as const
+
 function ComplianceFootnote() {
   return (
     <div style={{ display: 'flex', gap: 18, flexWrap: 'wrap', color: '#7d8797', fontSize: 11, marginTop: 22 }}>
-      {['HIPAA + NDPR compliant', 'Secure OTP verification'].map(item => (
+      {complianceFootnotes.map(item => (
         <div key={item} style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
           <span style={{ width: 13, height: 13, borderRadius: '50%', border: '1px solid #2092ff', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', color: '#2092ff', fontSize: 9 }}>
             +
