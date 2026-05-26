@@ -1,7 +1,10 @@
 import { registerCacheResetter } from './cacheReset'
+import { pruneExpiredMapEntries, setBoundedMapEntry } from './cacheBudget'
 
 const CACHE_PREFIX = 'hid_page_cache:'
 const memoryCache = new Map<string, { expiresAt: number; value: unknown }>()
+const MAX_MEMORY_CACHE_ENTRIES = 48
+const MAX_SESSION_STORAGE_ENTRY_BYTES = 220_000
 
 function buildStorageKey(key: string) {
   return `${CACHE_PREFIX}${key}`
@@ -13,6 +16,7 @@ function canUseSessionStorage() {
 
 export function readPageCache<T>(key: string): T | null {
   const now = Date.now()
+  pruneExpiredMapEntries(memoryCache, now)
   const memoryHit = memoryCache.get(key)
   if (memoryHit) {
     if (memoryHit.expiresAt > now) return memoryHit.value as T
@@ -42,11 +46,17 @@ export function writePageCache<T>(key: string, value: T, ttlMs = 45_000) {
     expiresAt: Date.now() + ttlMs,
   }
 
-  memoryCache.set(key, entry)
+  setBoundedMapEntry(memoryCache, key, entry, MAX_MEMORY_CACHE_ENTRIES)
   if (!canUseSessionStorage()) return
 
   try {
-    window.sessionStorage.setItem(buildStorageKey(key), JSON.stringify(entry))
+    const serialized = JSON.stringify(entry)
+    if (serialized.length <= MAX_SESSION_STORAGE_ENTRY_BYTES) {
+      window.sessionStorage.setItem(buildStorageKey(key), serialized)
+      return
+    }
+
+    window.sessionStorage.removeItem(buildStorageKey(key))
   } catch {
     // Ignore storage quota and serialization errors.
   }

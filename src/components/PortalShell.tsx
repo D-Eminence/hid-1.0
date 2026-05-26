@@ -13,6 +13,23 @@ interface NavItem {
   label: string
 }
 
+function scheduleWarmup(task: () => void, timeoutMs = 600) {
+  if (typeof window === 'undefined') return () => undefined
+
+  const idleWindow = window as Window & {
+    cancelIdleCallback?: (id: number) => void
+    requestIdleCallback?: (callback: () => void, options?: { timeout: number }) => number
+  }
+
+  if (typeof idleWindow.requestIdleCallback === 'function') {
+    const idleId = idleWindow.requestIdleCallback(task, { timeout: timeoutMs })
+    return () => idleWindow.cancelIdleCallback?.(idleId)
+  }
+
+  const timer = window.setTimeout(task, Math.min(timeoutMs, 250))
+  return () => window.clearTimeout(timer)
+}
+
 function BellBadge({ hasUnread, onClick }: { hasUnread: boolean; onClick?: () => void }) {
   return (
     <button onClick={onClick} style={{ position: 'relative', width: 42, height: 42, borderRadius: 999, border: '1px solid #eef1f5', display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#fff', cursor: onClick ? 'pointer' : 'default' }}>
@@ -87,6 +104,25 @@ export function PortalShell({
   }, [avatarInitials, title, userName])
   const [profileMenuOpen, setProfileMenuOpen] = useState(false)
   const [hasUnreadNotifications, setHasUnreadNotifications] = useState(false)
+  const likelyWarmPaths = useMemo(() => {
+    const currentIndex = items.findIndex(item => item.path === location.pathname)
+    const paths: string[] = []
+
+    if (currentIndex >= 0) {
+      const nextItem = items[currentIndex + 1]
+      const previousItem = items[currentIndex - 1]
+      if (nextItem?.path && nextItem.path !== location.pathname) paths.push(nextItem.path)
+      if (previousItem?.path && previousItem.path !== location.pathname) paths.push(previousItem.path)
+    } else if (items[0]?.path) {
+      paths.push(items[0].path)
+    }
+
+    if (notificationPath && notificationPath !== location.pathname) {
+      paths.push(notificationPath)
+    }
+
+    return Array.from(new Set(paths)).slice(0, 2)
+  }, [items, location.pathname, notificationPath])
 
   function warmPath(path: string) {
     preloadPath(path)
@@ -134,12 +170,11 @@ export function PortalShell({
   }, [notificationPath])
 
   useEffect(() => {
-    const paths = Array.from(new Set([...items.map(item => item.path), ...(notificationPath ? [notificationPath] : [])]))
-    const timer = window.setTimeout(() => {
-      paths.forEach(path => warmPath(path))
-    }, 20)
-    return () => window.clearTimeout(timer)
-  }, [items, notificationHidCode, notificationPath])
+    if (likelyWarmPaths.length === 0) return () => undefined
+    return scheduleWarmup(() => {
+      likelyWarmPaths.forEach(path => warmPath(path))
+    })
+  }, [likelyWarmPaths, notificationHidCode])
 
   useEffect(() => {
     function handleClickOutside(event: MouseEvent) {

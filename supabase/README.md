@@ -33,8 +33,6 @@ Active auth model:
 - `records-create`
 - `records-version-create`
 - `access-request-create`
-- `access-request-approve`
-- `access-request-deny`
 - `access-grant-revoke`
 - `access-grant-close`
 - `break-glass`
@@ -50,7 +48,6 @@ Active auth model:
 Compatibility-only, not used by the active frontend launch path:
 
 - `patient-login`
-- `staff-invite`
 
 ## Required Secrets
 

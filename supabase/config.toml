@@ -54,6 +54,9 @@ verify_jwt = true
 [functions.patient-login]
 verify_jwt = false
 
+[functions.staff-login]
+verify_jwt = false
+
 [functions.patient-reset-start]
 verify_jwt = false
 
@@ -62,9 +65,6 @@ verify_jwt = false
 
 [functions.patient-reset-complete]
 verify_jwt = false
-
-[functions.staff-invite]
-verify_jwt = true
 
 [functions.staff-complete-onboarding]
 verify_jwt = true
@@ -82,9 +82,6 @@ verify_jwt = true
 verify_jwt = true
 
 [functions.access-request-create]
-verify_jwt = true
-
-[functions.access-request-approve]
 verify_jwt = true
 
 [functions.access-grant-revoke]
@@ -114,9 +111,6 @@ verify_jwt = true
 [functions.staff-dashboard]
 verify_jwt = true
 
-[functions.access-request-deny]
-verify_jwt = true
-
 [functions.access-grant-close]
 verify_jwt = true
 
@@ -130,6 +124,12 @@ verify_jwt = true
 verify_jwt = true
 
 [functions.admin-user-management]
+verify_jwt = true
+
+[functions.admin-role-management]
+verify_jwt = true
+
+[functions.admin-platform-controls]
 verify_jwt = true
 
 [functions.send-email]

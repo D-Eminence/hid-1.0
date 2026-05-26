@@ -2,6 +2,7 @@ import { createAdminClient, requireUser } from '../_shared/auth.ts'
 import { HttpError, json, withErrorHandling } from '../_shared/http.ts'
 import { sendPatientRecordAccessAlert } from '../_shared/notifications.ts'
 import { resolvePatientAccessState } from '../_shared/patient-identifiers.ts'
+import { assertStaffRoleCapability } from '../_shared/platform.ts'
 
 type RecordFileEntry = {
   id: string
@@ -36,6 +37,12 @@ type RecordFileStorageRow = {
   id: string
   storage_bucket: string
   storage_path: string
+}
+
+type SignedFileUrlRow = {
+  error: string | null
+  path: string | null
+  signedUrl: string | null
 }
 
 type StaffAccountRow = {
@@ -168,6 +175,10 @@ Deno.serve(req => withErrorHandling(req, async () => {
   const patientIdentifier = url.searchParams.get('patientIdentifier')
   const adminClient = createAdminClient()
 
+  if (staffAccount?.role) {
+    await assertStaffRoleCapability(adminClient, staffAccount.role, 'can_view_patient_records')
+  }
+
   if (patientIdentifier?.trim()) {
     const patientState = await resolvePatientAccessState(adminClient, patientIdentifier)
 
@@ -188,48 +199,89 @@ Deno.serve(req => withErrorHandling(req, async () => {
   const payload = (data ?? null) as PatientRecordsResponse | null
   const fileIds = (payload?.records ?? []).flatMap(record => (record.files ?? []).map(file => file.id))
   const shouldNotifyPatient = Boolean(patientIdentifier?.trim() && staffAccount?.id && payload?.patient?.id)
-
-  if (shouldNotifyPatient && payload?.patient && staffAccount?.id) {
-    await notifyPatientRecordAccess({
+  const notifyTask = shouldNotifyPatient && payload?.patient && staffAccount?.id
+    ? notifyPatientRecordAccess({
       adminClient,
       client,
       patient: payload.patient,
       profileDisplayName: profile?.display_name ?? null,
       staffAccountId: staffAccount.id,
+    }).then(() => null as HttpError | Error | null).catch(error => {
+      if (error instanceof HttpError || error instanceof Error) return error
+      return new Error('Patient record access notification failed.')
     })
-  }
+    : Promise.resolve(null as HttpError | Error | null)
 
   if (!payload || fileIds.length === 0) {
+    const notifyError = await notifyTask
+    if (notifyError) throw notifyError
     return json({ data }, 200, NO_STORE_HEADERS)
   }
 
-  const { data: fileRows, error: fileRowsError } = await client
-    .from('hid_medical_record_files')
-    .select('id, storage_bucket, storage_path')
-    .in('id', fileIds)
+  const [notifyError, fileRowsResult] = await Promise.all([
+    notifyTask,
+    client
+      .from('hid_medical_record_files')
+      .select('id, storage_bucket, storage_path')
+      .in('id', fileIds),
+  ])
+
+  if (notifyError) throw notifyError
+
+  const { data: fileRows, error: fileRowsError } = fileRowsResult
 
   if (fileRowsError) throw new HttpError(400, 'Unable to prepare record files right now.', fileRowsError)
 
-  const signedUrlEntries = await Promise.all(((fileRows ?? []) as RecordFileStorageRow[]).map(async fileRow => {
-    const { data: signedData, error: signedError } = await adminClient
-      .storage
-      .from(fileRow.storage_bucket)
-      .createSignedUrl(fileRow.storage_path, 180)
+  const signedUrlMap = new Map<string, string | null>()
+  const fileRowsByBucket = new Map<string, RecordFileStorageRow[]>()
 
-    if (signedError) {
-      console.warn(JSON.stringify({
-        level: 'warn',
-        message: signedError.message,
-        fileId: fileRow.id,
-        path: '/functions/v1/patients-records',
-      }))
-      return [fileRow.id, null] as const
+  for (const fileRow of (fileRows ?? []) as RecordFileStorageRow[]) {
+    const bucketRows = fileRowsByBucket.get(fileRow.storage_bucket)
+    if (bucketRows) {
+      bucketRows.push(fileRow)
+      continue
     }
 
-    return [fileRow.id, signedData.signedUrl] as const
+    fileRowsByBucket.set(fileRow.storage_bucket, [fileRow])
+  }
+
+  await Promise.all(Array.from(fileRowsByBucket.entries()).map(async ([bucket, rows]) => {
+    const { data: signedData, error: signedError } = await adminClient
+      .storage
+      .from(bucket)
+      .createSignedUrls(rows.map(row => row.storage_path), 180)
+
+    if (signedError || !signedData) {
+      console.warn(JSON.stringify({
+        level: 'warn',
+        message: signedError?.message ?? 'Unable to sign record files.',
+        bucket,
+        path: '/functions/v1/patients-records',
+      }))
+
+      rows.forEach(row => signedUrlMap.set(row.id, null))
+      return
+    }
+
+    signedData.forEach((entry, index) => {
+      const row = rows[index]
+      if (!row) return
+
+      const result = entry as SignedFileUrlRow
+      if (result.error) {
+        console.warn(JSON.stringify({
+          level: 'warn',
+          message: result.error,
+          bucket,
+          fileId: row.id,
+          path: '/functions/v1/patients-records',
+        }))
+      }
+
+      signedUrlMap.set(row.id, result.signedUrl ?? null)
+    })
   }))
 
-  const signedUrlMap = new Map(signedUrlEntries)
   const enrichedPayload = {
     ...payload,
     records: payload.records.map(record => ({

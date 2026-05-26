@@ -10,7 +10,7 @@ import { formatDateTime } from '../../lib/utils'
 import type { Notification, Patient } from '../../types/database'
 
 const patientNav = [
-  { path: '/patient/profile', label: 'Profile' },
+  { path: '/patient/profile', label: 'Home' },
   { path: '/patient/records', label: 'Records' },
   { path: '/patient/history', label: 'Access History' },
   { path: '/patient/notifications', label: 'Notifications' },

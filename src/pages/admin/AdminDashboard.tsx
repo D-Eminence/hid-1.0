@@ -3,13 +3,30 @@ import { AdminLayout, type AdminSidebarSection } from '../../components/AdminLay
 import { AdminFunnelChart } from '../../components/admin/AdminFunnelChart'
 import { AdminMetricCard } from '../../components/admin/AdminMetricCard'
 import { AdminSeriesChart } from '../../components/admin/AdminSeriesChart'
-import { Badge, Button, EmptyState, PageLoader, showToast } from '../../components/ui'
+import { Badge, Button, EmptyState, Input, PageLoader, showToast } from '../../components/ui'
 import { useAdminDashboard } from '../../hooks/useAdminDashboard'
-import { ADMIN_LOGIN_PATH, ADMIN_OVERVIEW_PATH } from '../../lib/adminRoutes'
+import { ADMIN_LOGIN_PATH } from '../../lib/adminRoutes'
 import { signOutAndClearSessions } from '../../lib/auth'
 import { getSafeUser } from '../../lib/supabase'
-import { applyAdminUserAction, fetchDeletedAdminUsers, searchAdminUsers } from '../../services/adminDashboard'
-import type { AdminAlert, AdminManagedUser, AdminOverviewWindow, AdminUserManagementAction } from '../../types/admin'
+import {
+  applyAdminUserAction,
+  createPlatformAdmin,
+  fetchAdminPlatformControls,
+  fetchAdminRoleManagement,
+  fetchDeletedAdminUsers,
+  searchAdminUsers,
+  updateAdminPlatformControls,
+  updateAdminStaffRolePolicy,
+} from '../../services/adminDashboard'
+import type {
+  AdminAlert,
+  AdminManagedUser,
+  AdminOverviewWindow,
+  AdminPlatformAdmin,
+  AdminPlatformControls,
+  AdminStaffRolePolicy,
+  AdminUserManagementAction,
+} from '../../types/admin'
 
 const windowOptions: Array<{ key: AdminOverviewWindow; label: string }> = [
   { key: '24h', label: 'Today' },
@@ -234,6 +251,33 @@ function readinessTone(ready: boolean) {
   return ready ? 'green' : 'amber'
 }
 
+const staffRoleCapabilityFields: Array<{
+  key: keyof Pick<AdminStaffRolePolicy, 'canOpenDashboard' | 'canUseStandardAccess' | 'canViewPatientRecords' | 'canCreateRecords' | 'canUseBreakGlass' | 'canViewHistory'>
+  label: string
+  helper: string
+}> = [
+  { key: 'canOpenDashboard', label: 'Dashboard', helper: 'Open the hospital dashboard' },
+  { key: 'canUseStandardAccess', label: 'Standard Access', helper: 'Request or open patient access' },
+  { key: 'canViewPatientRecords', label: 'View Records', helper: 'Open patient record screens' },
+  { key: 'canCreateRecords', label: 'Write Records', helper: 'Create and update records or uploads' },
+  { key: 'canUseBreakGlass', label: 'Emergency', helper: 'Use break-glass access' },
+  { key: 'canViewHistory', label: 'History', helper: 'View hospital audit and history' },
+]
+
+const platformControlFields: Array<{
+  key: keyof Pick<AdminPlatformControls, 'maintenanceMode' | 'patientSignupEnabled' | 'hospitalSignupEnabled' | 'patientPortalEnabled' | 'hospitalPortalEnabled' | 'breakGlassEnabled' | 'uploadsEnabled'>
+  label: string
+  helper: string
+}> = [
+  { key: 'maintenanceMode', label: 'Maintenance Mode', helper: 'Blocks non-admin patient and hospital portal access' },
+  { key: 'patientSignupEnabled', label: 'Patient Signup', helper: 'Allow new patient accounts to be created' },
+  { key: 'hospitalSignupEnabled', label: 'Hospital Signup', helper: 'Allow new hospital or staff onboarding' },
+  { key: 'patientPortalEnabled', label: 'Patient Portal', helper: 'Allow patient portal sign-in and API access' },
+  { key: 'hospitalPortalEnabled', label: 'Hospital Portal', helper: 'Allow hospital portal sign-in and API access' },
+  { key: 'breakGlassEnabled', label: 'Break Glass', helper: 'Allow emergency access requests' },
+  { key: 'uploadsEnabled', label: 'File Uploads', helper: 'Allow medical record file uploads' },
+]
+
 export default function AdminDashboard() {
   const [viewerEmail, setViewerEmail] = useState<string | null>(null)
   const [windowKey, setWindowKey] = useState<AdminOverviewWindow>('7d')
@@ -248,6 +292,18 @@ export default function AdminDashboard() {
   const [directoryError, setDirectoryError] = useState<string | null>(null)
   const [deletedDirectoryError, setDeletedDirectoryError] = useState<string | null>(null)
   const [actioning, setActioning] = useState<AdminUserManagementAction | null>(null)
+  const [platformAdmins, setPlatformAdmins] = useState<AdminPlatformAdmin[]>([])
+  const [staffRolePolicies, setStaffRolePolicies] = useState<AdminStaffRolePolicy[]>([])
+  const [platformControls, setPlatformControls] = useState<AdminPlatformControls | null>(null)
+  const [roleManagementLoading, setRoleManagementLoading] = useState(false)
+  const [platformControlsLoading, setPlatformControlsLoading] = useState(false)
+  const [roleManagementError, setRoleManagementError] = useState<string | null>(null)
+  const [platformControlsError, setPlatformControlsError] = useState<string | null>(null)
+  const [creatingAdmin, setCreatingAdmin] = useState(false)
+  const [savingPlatformControls, setSavingPlatformControls] = useState(false)
+  const [savingStaffRole, setSavingStaffRole] = useState<string | null>(null)
+  const [newAdminForm, setNewAdminForm] = useState({ fullName: '', email: '' })
+  const [newAdminArtifact, setNewAdminArtifact] = useState<{ email: string; passwordSetupLink: string } | null>(null)
   const [activeSection, setActiveSection] = useState('dashboard')
   const [viewportWidth, setViewportWidth] = useState(() => (typeof window !== 'undefined' ? window.innerWidth : 1440))
   const { data, error, loading, refreshing, refresh } = useAdminDashboard(windowKey, selectedDate)
@@ -255,6 +311,8 @@ export default function AdminDashboard() {
   useEffect(() => {
     void loadViewer()
     void loadDeletedDirectory()
+    void loadRoleManagement()
+    void loadPlatformControlsState()
   }, [])
 
   useEffect(() => {
@@ -286,7 +344,7 @@ export default function AdminDashboard() {
 
   async function logout() {
     await signOutAndClearSessions()
-    window.location.assign(ADMIN_OVERVIEW_PATH)
+    window.location.assign(ADMIN_LOGIN_PATH)
   }
 
   const selectedDirectoryUser = useMemo(() => (
@@ -318,6 +376,35 @@ export default function AdminDashboard() {
     }
   }
 
+  async function loadRoleManagement(force = false) {
+    setRoleManagementLoading(true)
+    setRoleManagementError(null)
+    try {
+      const response = await fetchAdminRoleManagement({ force })
+      setPlatformAdmins(response.admins)
+      setStaffRolePolicies(response.staffRolePolicies)
+    } catch (reason) {
+      const message = reason instanceof Error ? reason.message : 'Admin role settings could not be loaded right now.'
+      setRoleManagementError(message)
+    } finally {
+      setRoleManagementLoading(false)
+    }
+  }
+
+  async function loadPlatformControlsState(force = false) {
+    setPlatformControlsLoading(true)
+    setPlatformControlsError(null)
+    try {
+      const controls = await fetchAdminPlatformControls({ force })
+      setPlatformControls(controls)
+    } catch (reason) {
+      const message = reason instanceof Error ? reason.message : 'Platform controls could not be loaded right now.'
+      setPlatformControlsError(message)
+    } finally {
+      setPlatformControlsLoading(false)
+    }
+  }
+
   async function runDirectorySearch(force = false) {
     const trimmed = directoryQuery.trim()
     if (!trimmed) {
@@ -346,6 +433,93 @@ export default function AdminDashboard() {
       showToast(message, 'error')
     } finally {
       setDirectoryLoading(false)
+    }
+  }
+
+  async function handleCreatePlatformAdmin() {
+    const email = newAdminForm.email.trim().toLowerCase()
+    const fullName = newAdminForm.fullName.trim()
+
+    if (!email || !/\S+@\S+\.\S+/.test(email)) {
+      showToast('Enter a valid admin email address first.', 'error')
+      return
+    }
+
+    setCreatingAdmin(true)
+    try {
+      const created = await createPlatformAdmin(email, fullName || email.split('@')[0] || 'Platform Admin')
+      setPlatformAdmins(current => {
+        const next = [...current.filter(item => item.authUserId !== created.admin.authUserId), created.admin]
+        return next.sort((left, right) => new Date(left.createdAt).getTime() - new Date(right.createdAt).getTime())
+      })
+      setNewAdminArtifact({
+        email: created.admin.email ?? email,
+        passwordSetupLink: created.passwordSetupLink,
+      })
+      setNewAdminForm({ fullName: '', email: '' })
+      showToast('Platform admin created. Share the password setup link shown below.', 'success')
+      void loadRoleManagement(true)
+    } catch (reason) {
+      const message = reason instanceof Error ? reason.message : 'The platform admin could not be created right now.'
+      showToast(message, 'error')
+    } finally {
+      setCreatingAdmin(false)
+    }
+  }
+
+  function updateStaffRolePolicyDraft(role: string, field: keyof Pick<AdminStaffRolePolicy, 'canOpenDashboard' | 'canUseStandardAccess' | 'canViewPatientRecords' | 'canCreateRecords' | 'canUseBreakGlass' | 'canViewHistory'>, value: boolean) {
+    setStaffRolePolicies(current => current.map(policy => (
+      policy.role === role ? { ...policy, [field]: value } : policy
+    )))
+  }
+
+  async function saveStaffRolePolicy(role: string) {
+    const policy = staffRolePolicies.find(item => item.role === role)
+    if (!policy) return
+
+    setSavingStaffRole(role)
+    try {
+      const updated = await updateAdminStaffRolePolicy(role, {
+        canOpenDashboard: policy.canOpenDashboard,
+        canUseStandardAccess: policy.canUseStandardAccess,
+        canViewPatientRecords: policy.canViewPatientRecords,
+        canCreateRecords: policy.canCreateRecords,
+        canUseBreakGlass: policy.canUseBreakGlass,
+        canViewHistory: policy.canViewHistory,
+      })
+      setStaffRolePolicies(current => current.map(item => item.role === role ? updated : item))
+      showToast(`${role} RBAC updated successfully.`, 'success')
+    } catch (reason) {
+      const message = reason instanceof Error ? reason.message : 'The RBAC definition could not be updated right now.'
+      showToast(message, 'error')
+      void loadRoleManagement(true)
+    } finally {
+      setSavingStaffRole(null)
+    }
+  }
+
+  async function savePlatformControls() {
+    if (!platformControls) return
+
+    setSavingPlatformControls(true)
+    try {
+      const updated = await updateAdminPlatformControls({
+        maintenanceMode: platformControls.maintenanceMode,
+        patientSignupEnabled: platformControls.patientSignupEnabled,
+        hospitalSignupEnabled: platformControls.hospitalSignupEnabled,
+        patientPortalEnabled: platformControls.patientPortalEnabled,
+        hospitalPortalEnabled: platformControls.hospitalPortalEnabled,
+        breakGlassEnabled: platformControls.breakGlassEnabled,
+        uploadsEnabled: platformControls.uploadsEnabled,
+      })
+      setPlatformControls(updated)
+      showToast('Platform controls updated successfully.', 'success')
+    } catch (reason) {
+      const message = reason instanceof Error ? reason.message : 'Platform controls could not be updated right now.'
+      showToast(message, 'error')
+      void loadPlatformControlsState(true)
+    } finally {
+      setSavingPlatformControls(false)
     }
   }
 
@@ -851,10 +1025,6 @@ export default function AdminDashboard() {
                         <div style={{ fontSize: 20, fontWeight: 800, marginTop: 4 }}>{formatCompact(selectedDirectoryUser.stats.activeGrantCount)}</div>
                       </div>
                       <div style={{ border: '1px solid var(--admin-border)', borderRadius: 10, padding: '10px 12px' }}>
-                        <div style={{ fontSize: 10.5, color: 'var(--admin-muted)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Pending Requests</div>
-                        <div style={{ fontSize: 20, fontWeight: 800, marginTop: 4 }}>{formatCompact(selectedDirectoryUser.stats.pendingRequestCount)}</div>
-                      </div>
-                      <div style={{ border: '1px solid var(--admin-border)', borderRadius: 10, padding: '10px 12px' }}>
                         <div style={{ fontSize: 10.5, color: 'var(--admin-muted)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Records</div>
                         <div style={{ fontSize: 20, fontWeight: 800, marginTop: 4 }}>{formatCompact(selectedDirectoryUser.stats.recordCount)}</div>
                       </div>
@@ -973,6 +1143,95 @@ export default function AdminDashboard() {
                         Locking blocks the profile immediately. Restricting staff access disables hospital access and revokes active grants. Closing patient access revokes current provider access for that patient. Deleting keeps the account for admin recovery while removing user access.
                       </div>
                     </div>
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+
+          <div style={panelStyle()}>
+            {sectionTitle('Platform Admins')}
+            <div style={{ fontSize: 11.5, color: 'var(--admin-muted)', marginBottom: 12, lineHeight: 1.6 }}>
+              Create dedicated admin accounts without touching patient or hospital users. New admins receive a one-time password setup link and must complete MFA after signing in.
+            </div>
+            {roleManagementError && (
+              <div style={{ ...alertToneStyle('warning'), borderRadius: 10, padding: '10px 12px', marginBottom: 12, fontSize: 11.5 }}>
+                {roleManagementError}
+              </div>
+            )}
+            <div style={{ display: 'grid', gridTemplateColumns: viewportWidth < 1180 ? '1fr' : 'minmax(320px, 420px) minmax(0, 1fr)', gap: 12 }}>
+              <div style={{ border: '1px solid var(--admin-border)', borderRadius: 12, background: '#fbfdff', padding: 14 }}>
+                <div style={{ fontSize: 12, fontWeight: 700, marginBottom: 10 }}>Create Admin</div>
+                <div style={{ display: 'grid', gap: 10 }}>
+                  <Input
+                    label="Full Name"
+                    value={newAdminForm.fullName}
+                    onChange={event => setNewAdminForm(current => ({ ...current, fullName: event.target.value }))}
+                    placeholder="Platform administrator"
+                  />
+                  <Input
+                    label="Email Address"
+                    value={newAdminForm.email}
+                    onChange={event => setNewAdminForm(current => ({ ...current, email: event.target.value }))}
+                    placeholder="admin@example.com"
+                    type="email"
+                  />
+                  <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
+                    <Button onClick={() => void handleCreatePlatformAdmin()} loading={creatingAdmin}>
+                      Create Admin
+                    </Button>
+                    <Button variant="outline" onClick={() => void loadRoleManagement(true)} loading={roleManagementLoading}>
+                      Refresh
+                    </Button>
+                  </div>
+                </div>
+                {newAdminArtifact && (
+                  <div style={{ marginTop: 12, border: '1px solid rgba(26, 111, 212, 0.16)', borderRadius: 10, padding: '12px 14px', background: 'rgba(26, 111, 212, 0.04)' }}>
+                    <div style={{ fontSize: 11, fontWeight: 800, letterSpacing: '0.05em', textTransform: 'uppercase', color: 'var(--admin-accent)', marginBottom: 8 }}>
+                      Password Setup Link
+                    </div>
+                    <div style={{ fontSize: 11.5, color: 'var(--admin-text)', marginBottom: 8 }}>
+                      Share this one-time link with <strong>{newAdminArtifact.email}</strong>. It is only shown here after creation.
+                    </div>
+                    <div style={{ fontSize: 11.5, lineHeight: 1.6, color: '#1f2937', wordBreak: 'break-all', fontFamily: 'monospace', background: '#fff', border: '1px solid var(--admin-border)', borderRadius: 8, padding: '10px 12px' }}>
+                      {newAdminArtifact.passwordSetupLink}
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              <div style={{ border: '1px solid var(--admin-border)', borderRadius: 12, background: '#fff', padding: 14 }}>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, marginBottom: 10 }}>
+                  <div style={{ fontSize: 12, fontWeight: 700 }}>Current Admins</div>
+                  <Badge color="blue">{platformAdmins.length}</Badge>
+                </div>
+                {roleManagementLoading && platformAdmins.length === 0 ? (
+                  <div style={{ fontSize: 11.5, color: 'var(--admin-muted)' }}>Loading platform admins...</div>
+                ) : platformAdmins.length === 0 ? (
+                  <EmptyState
+                    icon={<svg width="32" height="32" viewBox="0 0 32 32" fill="none"><rect x="7" y="7" width="18" height="18" rx="4" stroke="currentColor" strokeWidth="1.5" /><path d="M16 12v8m-4-4h8" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" /></svg>}
+                    title="No extra admins yet"
+                    description="Create a new platform admin account to expand operational coverage."
+                  />
+                ) : (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                    {platformAdmins.map(admin => (
+                      <div key={admin.authUserId} style={{ border: '1px solid #eef2f7', borderRadius: 10, padding: '10px 12px', display: 'grid', gap: 6 }}>
+                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10 }}>
+                          <div>
+                            <div style={{ fontSize: 12.5, fontWeight: 700 }}>{admin.displayName ?? admin.email ?? 'Platform Admin'}</div>
+                            <div style={{ fontSize: 11, color: 'var(--admin-muted)', wordBreak: 'break-word' }}>{admin.email ?? 'No email'}</div>
+                          </div>
+                          <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', justifyContent: 'flex-end' }}>
+                            <Badge color={admin.active ? 'green' : 'amber'}>{admin.active ? 'active' : 'inactive'}</Badge>
+                            <Badge color={admin.mfaRequired ? 'blue' : 'amber'}>{admin.mfaRequired ? 'mfa required' : 'mfa optional'}</Badge>
+                          </div>
+                        </div>
+                        <div style={{ fontSize: 10.5, color: 'var(--admin-muted)' }}>
+                          Created {formatRelativeTime(admin.createdAt)} • Last sign-in {formatRelativeTime(admin.lastSignInAt)}
+                        </div>
+                      </div>
+                    ))}
                   </div>
                 )}
               </div>
@@ -1266,32 +1525,133 @@ export default function AdminDashboard() {
 
         <section id="settings" style={panelStyle()}>
           {sectionLabel('Settings')}
-          {sectionTitle('Deploy Readiness')}
-          <div style={{ display: 'grid', gridTemplateColumns: viewportWidth < 1180 ? '1fr' : 'minmax(0, 1fr) minmax(0, 1fr)', gap: 12 }}>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-              {deploymentReadinessCards.map(card => (
-                <div key={card.label} style={{ border: '1px solid var(--admin-border)', borderRadius: 10, padding: '10px 12px', background: '#fbfdff' }}>
-                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10 }}>
-                    <div style={{ fontSize: 10.5, color: 'var(--admin-muted)', textTransform: 'uppercase', letterSpacing: '0.04em' }}>{card.label}</div>
-                    <Badge color={readinessTone(card.ready)}>{card.ready ? 'ready' : 'attention'}</Badge>
-                  </div>
-                  <div style={{ fontSize: 12.5, fontWeight: 700, marginTop: 4 }}>{card.value}</div>
-                </div>
-              ))}
-            </div>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-              {observabilityCards.map(card => (
-                <div key={card.label} style={{ border: '1px solid var(--admin-border)', borderRadius: 10, padding: '10px 12px', background: '#fbfdff' }}>
-                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10 }}>
-                    <div style={{ fontSize: 10.5, color: 'var(--admin-muted)', textTransform: 'uppercase', letterSpacing: '0.04em' }}>{card.label}</div>
-                    <Badge color={readinessTone(card.ready)}>{card.ready ? 'connected' : 'needs setup'}</Badge>
-                  </div>
-                  <div style={{ fontSize: 12.5, fontWeight: 700, marginTop: 4 }}>{card.value}</div>
-                </div>
-              ))}
-              <div style={{ fontSize: 11, color: 'var(--admin-muted)', lineHeight: 1.7 }}>
-                The admin dashboard uses live Supabase data, and the observability panels reflect the current Sentry and PostHog connection state.
+          {sectionTitle('Platform Controls')}
+          <div style={{ display: 'grid', gridTemplateColumns: viewportWidth < 1180 ? '1fr' : 'minmax(0, 1.1fr) minmax(0, 0.9fr)', gap: 12 }}>
+            <div style={{ border: '1px solid var(--admin-border)', borderRadius: 12, background: '#fbfdff', padding: 14 }}>
+              <div style={{ fontSize: 11.5, color: 'var(--admin-muted)', marginBottom: 12, lineHeight: 1.6 }}>
+                These controls take effect on live sign-up and API access. Platform admins remain able to reach this dashboard during maintenance so recovery actions stay available.
               </div>
+              {platformControlsError && (
+                <div style={{ ...alertToneStyle('warning'), borderRadius: 10, padding: '10px 12px', marginBottom: 12, fontSize: 11.5 }}>
+                  {platformControlsError}
+                </div>
+              )}
+              <div style={{ display: 'grid', gap: 8 }}>
+                {platformControlFields.map(field => {
+                  const checked = platformControls ? Boolean(platformControls[field.key]) : false
+                  return (
+                    <label key={field.key} style={{ display: 'flex', alignItems: 'flex-start', gap: 10, border: '1px solid #eef2f7', borderRadius: 10, padding: '10px 12px', background: '#fff' }}>
+                      <input
+                        type="checkbox"
+                        checked={checked}
+                        disabled={!platformControls || platformControlsLoading || savingPlatformControls}
+                        onChange={event => setPlatformControls(current => current ? { ...current, [field.key]: event.target.checked } : current)}
+                        style={{ marginTop: 2 }}
+                      />
+                      <div>
+                        <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--admin-text)' }}>{field.label}</div>
+                        <div style={{ fontSize: 10.5, color: 'var(--admin-muted)', lineHeight: 1.5 }}>{field.helper}</div>
+                      </div>
+                    </label>
+                  )
+                })}
+              </div>
+              <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', marginTop: 12 }}>
+                <Button onClick={() => void savePlatformControls()} loading={savingPlatformControls} disabled={!platformControls}>
+                  Save Controls
+                </Button>
+                <Button variant="outline" onClick={() => void loadPlatformControlsState(true)} loading={platformControlsLoading}>
+                  Reload Controls
+                </Button>
+              </div>
+              <div style={{ fontSize: 11, color: 'var(--admin-muted)', marginTop: 10, lineHeight: 1.6 }}>
+                Last updated {formatRelativeTime(platformControls?.updatedAt ?? null)}
+                {platformControls?.updatedByName || platformControls?.updatedByEmail
+                  ? ` by ${platformControls.updatedByName ?? platformControls.updatedByEmail}`
+                  : ''}
+              </div>
+            </div>
+
+            <div style={{ border: '1px solid var(--admin-border)', borderRadius: 12, background: '#fff', padding: 14 }}>
+              <div style={{ fontSize: 12, fontWeight: 700, marginBottom: 10 }}>Deploy Readiness</div>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                {deploymentReadinessCards.map(card => (
+                  <div key={card.label} style={{ border: '1px solid var(--admin-border)', borderRadius: 10, padding: '10px 12px', background: '#fbfdff' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10 }}>
+                      <div style={{ fontSize: 10.5, color: 'var(--admin-muted)', textTransform: 'uppercase', letterSpacing: '0.04em' }}>{card.label}</div>
+                      <Badge color={readinessTone(card.ready)}>{card.ready ? 'ready' : 'attention'}</Badge>
+                    </div>
+                    <div style={{ fontSize: 12.5, fontWeight: 700, marginTop: 4 }}>{card.value}</div>
+                  </div>
+                ))}
+                {observabilityCards.map(card => (
+                  <div key={card.label} style={{ border: '1px solid var(--admin-border)', borderRadius: 10, padding: '10px 12px', background: '#fbfdff' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10 }}>
+                      <div style={{ fontSize: 10.5, color: 'var(--admin-muted)', textTransform: 'uppercase', letterSpacing: '0.04em' }}>{card.label}</div>
+                      <Badge color={readinessTone(card.ready)}>{card.ready ? 'connected' : 'needs setup'}</Badge>
+                    </div>
+                    <div style={{ fontSize: 12.5, fontWeight: 700, marginTop: 4 }}>{card.value}</div>
+                  </div>
+                ))}
+                <div style={{ fontSize: 11, color: 'var(--admin-muted)', lineHeight: 1.7 }}>
+                  The admin dashboard uses live Supabase data, and the observability panels reflect the current Sentry and PostHog connection state.
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div style={{ marginTop: 14 }}>
+            {sectionTitle('Hospital RBAC')}
+            <div style={{ fontSize: 11.5, color: 'var(--admin-muted)', marginBottom: 12, lineHeight: 1.6 }}>
+              Edit what each hospital role can do in the active product. These permissions are enforced in the existing hospital access, records, history, and emergency endpoints.
+            </div>
+            {roleManagementError && (
+              <div style={{ ...alertToneStyle('warning'), borderRadius: 10, padding: '10px 12px', marginBottom: 12, fontSize: 11.5 }}>
+                {roleManagementError}
+              </div>
+            )}
+            <div style={{ display: 'grid', gap: 10 }}>
+              {staffRolePolicies.map(policy => (
+                <div key={policy.role} style={{ border: '1px solid var(--admin-border)', borderRadius: 12, padding: '12px 14px', background: '#fff' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, marginBottom: 10, flexWrap: 'wrap' }}>
+                    <div>
+                      <div style={{ fontSize: 12.5, fontWeight: 800, textTransform: 'capitalize' }}>{policy.role}</div>
+                      <div style={{ fontSize: 10.5, color: 'var(--admin-muted)' }}>
+                        Updated {formatRelativeTime(policy.updatedAt)}
+                      </div>
+                    </div>
+                    <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                      <Button
+                        size="sm"
+                        onClick={() => void saveStaffRolePolicy(policy.role)}
+                        loading={savingStaffRole === policy.role}
+                      >
+                        Save Role
+                      </Button>
+                    </div>
+                  </div>
+                  <div style={{ display: 'grid', gridTemplateColumns: viewportWidth < 1320 ? '1fr' : 'repeat(3, minmax(0, 1fr))', gap: 8 }}>
+                    {staffRoleCapabilityFields.map(field => (
+                      <label key={`${policy.role}-${field.key}`} style={{ display: 'flex', alignItems: 'flex-start', gap: 10, border: '1px solid #eef2f7', borderRadius: 10, padding: '10px 12px', background: '#fbfdff' }}>
+                        <input
+                          type="checkbox"
+                          checked={Boolean(policy[field.key])}
+                          disabled={savingStaffRole === policy.role}
+                          onChange={event => updateStaffRolePolicyDraft(policy.role, field.key, event.target.checked)}
+                          style={{ marginTop: 2 }}
+                        />
+                        <div>
+                          <div style={{ fontSize: 12, fontWeight: 700 }}>{field.label}</div>
+                          <div style={{ fontSize: 10.5, color: 'var(--admin-muted)', lineHeight: 1.5 }}>{field.helper}</div>
+                        </div>
+                      </label>
+                    ))}
+                  </div>
+                </div>
+              ))}
+              {roleManagementLoading && staffRolePolicies.length === 0 && (
+                <div style={{ fontSize: 11.5, color: 'var(--admin-muted)' }}>Loading RBAC definitions...</div>
+              )}
             </div>
           </div>
         </section>

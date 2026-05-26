@@ -266,3 +266,57 @@ export interface AdminUserActionResponse {
   targetAuthUserId: string
   user: AdminManagedUser | null
 }
+
+export interface AdminPlatformAdmin {
+  profileId: string
+  authUserId: string
+  displayName: string | null
+  email: string | null
+  emailConfirmedAt: string | null
+  lastSignInAt: string | null
+  active: boolean
+  mfaRequired: boolean
+  createdAt: string
+  updatedAt: string
+}
+
+export interface AdminStaffRolePolicy {
+  role: string
+  canOpenDashboard: boolean
+  canUseStandardAccess: boolean
+  canViewPatientRecords: boolean
+  canCreateRecords: boolean
+  canUseBreakGlass: boolean
+  canViewHistory: boolean
+  updatedAt: string
+  updatedByUserProfileId: string | null
+}
+
+export interface AdminRoleManagementResponse {
+  admins: AdminPlatformAdmin[]
+  staffRolePolicies: AdminStaffRolePolicy[]
+}
+
+export interface AdminCreatePlatformAdminResponse {
+  admin: AdminPlatformAdmin
+  passwordSetupLink: string
+  verificationType: string | null
+}
+
+export interface AdminPlatformControls {
+  maintenanceMode: boolean
+  patientSignupEnabled: boolean
+  hospitalSignupEnabled: boolean
+  patientPortalEnabled: boolean
+  hospitalPortalEnabled: boolean
+  breakGlassEnabled: boolean
+  uploadsEnabled: boolean
+  updatedAt: string
+  updatedByUserProfileId: string | null
+  updatedByName: string | null
+  updatedByEmail: string | null
+}
+
+export interface AdminPlatformControlsResponse {
+  controls: AdminPlatformControls
+}

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react'
+import React, { useEffect, useState } from 'react'
 
 // ── Button ──────────────────────────────────────────────────────────────────
 type BtnVariant = 'primary' | 'secondary' | 'danger' | 'ghost' | 'outline'
@@ -12,17 +12,17 @@ interface ButtonProps extends React.ButtonHTMLAttributes<HTMLButtonElement> {
   fullWidth?: boolean
 }
 
-const btnStyles: Record<BtnVariant, string> = {
-  primary: 'background:#1a6fd4;color:#fff;border:none',
-  secondary: 'background:#e8f1fc;color:#1a6fd4;border:none',
-  danger: 'background:#dc2626;color:#fff;border:none',
-  ghost: 'background:transparent;color:#6b7280;border:none',
-  outline: 'background:transparent;color:#111827;border:1.5px solid #e5e7eb',
+const btnStyles: Record<BtnVariant, React.CSSProperties> = {
+  primary: { background: '#1a6fd4', color: '#fff', border: 'none' },
+  secondary: { background: '#e8f1fc', color: '#1a6fd4', border: 'none' },
+  danger: { background: '#dc2626', color: '#fff', border: 'none' },
+  ghost: { background: 'transparent', color: '#6b7280', border: 'none' },
+  outline: { background: 'transparent', color: '#111827', border: '1.5px solid #e5e7eb' },
 }
-const sizeStyles: Record<BtnSize, string> = {
-  sm: 'padding:6px 14px;font-size:12px;border-radius:6px',
-  md: 'padding:10px 20px;font-size:14px;border-radius:8px',
-  lg: 'padding:13px 28px;font-size:15px;border-radius:10px',
+const sizeStyles: Record<BtnSize, React.CSSProperties> = {
+  sm: { padding: '6px 14px', fontSize: 12, borderRadius: 6 },
+  md: { padding: '10px 20px', fontSize: 14, borderRadius: 8 },
+  lg: { padding: '13px 28px', fontSize: 15, borderRadius: 10 },
 }
 
 export function Button({
@@ -40,7 +40,6 @@ export function Button({
   onBlur,
   ...rest
 }: ButtonProps) {
-  const [pressed, setPressed] = useState(false)
   const base: React.CSSProperties = {
     display: 'inline-flex', alignItems: 'center', gap: 8,
     fontWeight: 600, cursor: disabled || loading ? 'not-allowed' : 'pointer',
@@ -49,40 +48,33 @@ export function Button({
     width: fullWidth ? '100%' : undefined, justifyContent: 'center',
     whiteSpace: 'nowrap',
     touchAction: 'manipulation',
-    transform: pressed && !disabled && !loading ? 'scale(0.985)' : 'scale(1)',
-    filter: pressed && !disabled && !loading ? 'brightness(0.97)' : 'none',
+    transform: 'scale(1)',
+    filter: 'none',
   }
-  // parse inline style strings into proper style objects
-  const variantObj = Object.fromEntries(
-    btnStyles[variant].split(';').filter(Boolean).map(s => {
-      const [k, v] = s.split(':')
-      return [k.trim().replace(/-([a-z])/g, (_: string, c: string) => c.toUpperCase()), v.trim()]
-    })
-  )
-  const sizeObj = Object.fromEntries(
-    sizeStyles[size].split(';').filter(Boolean).map(s => {
-      const [k, v] = s.split(':')
-      return [k.trim().replace(/-([a-z])/g, (_: string, c: string) => c.toUpperCase()), v.trim()]
-    })
-  )
   return (
     <button
       disabled={disabled || loading}
-      style={{ ...base, ...variantObj, ...sizeObj, ...style }}
+      style={{ ...base, ...btnStyles[variant], ...sizeStyles[size], ...style }}
       onPointerDown={event => {
-        setPressed(true)
+        if (!disabled && !loading) {
+          event.currentTarget.style.transform = 'scale(0.985)'
+          event.currentTarget.style.filter = 'brightness(0.97)'
+        }
         onPointerDown?.(event)
       }}
       onPointerUp={event => {
-        setPressed(false)
+        event.currentTarget.style.transform = 'scale(1)'
+        event.currentTarget.style.filter = 'none'
         onPointerUp?.(event)
       }}
       onPointerLeave={event => {
-        setPressed(false)
+        event.currentTarget.style.transform = 'scale(1)'
+        event.currentTarget.style.filter = 'none'
         onPointerLeave?.(event)
       }}
       onBlur={event => {
-        setPressed(false)
+        event.currentTarget.style.transform = 'scale(1)'
+        event.currentTarget.style.filter = 'none'
         onBlur?.(event)
       }}
       {...rest}
@@ -165,7 +157,7 @@ export function Input({
             type="button"
             disabled={disabled}
             aria-label={revealed ? 'Hide password' : 'Show password'}
-            onClick={() => setRevealed(value => !value)}
+            onClick={() => setRevealed((value: boolean) => !value)}
             style={{
               position: 'absolute',
               right: 10,

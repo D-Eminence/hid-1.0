@@ -109,20 +109,27 @@ export function seedDoctorPatientRecordsCache(sessionId: string, hidCode: string
   writePageCache(doctorPatientRecordsKey(sessionId, hidCode), snapshot, PAGE_TTL_MS)
 }
 
-export async function prefetchPatientPortalCaches(hidCode: string, knownPatient?: Patient | null) {
+async function prefetchPatientRecordsCache(hidCode: string) {
   const normalizedHidCode = hidCode.trim().toUpperCase()
-  return runPrefetchTask(`patient-portal:${normalizedHidCode}`, async () => {
-    const patient = knownPatient ?? await fetchMyPatient()
-    seedPatientProfileCache(patient)
-
-    const [recordsView, history, notifications] = await Promise.all([
-      fetchPatientRecordsView(normalizedHidCode),
-      fetchPatientHistory(normalizedHidCode),
-      listNotifications(normalizedHidCode),
-    ])
-
+  return runPrefetchTask(`patient-records-only:${normalizedHidCode}`, async () => {
+    const recordsView = await fetchPatientRecordsView(normalizedHidCode)
     seedPatientRecordsCache(normalizedHidCode, recordsView)
+  })
+}
+
+async function prefetchPatientHistoryOnly(hidCode: string) {
+  const normalizedHidCode = hidCode.trim().toUpperCase()
+  return runPrefetchTask(`patient-history-only:${normalizedHidCode}`, async () => {
+    const history = await fetchPatientHistory(normalizedHidCode)
     seedPatientHistoryCache(normalizedHidCode, history)
+  })
+}
+
+async function prefetchPatientNotificationsOnly(hidCode: string, knownPatient?: Patient | null) {
+  const normalizedHidCode = hidCode.trim().toUpperCase()
+  return runPrefetchTask(`patient-notifications-only:${normalizedHidCode}`, async () => {
+    const patient = knownPatient ?? readPatientProfileSnapshot(normalizedHidCode) ?? await fetchMyPatient()
+    const notifications = await listNotifications(normalizedHidCode)
     seedPatientNotificationsCache(normalizedHidCode, {
       patient,
       notifications,
@@ -153,7 +160,10 @@ export async function prefetchDoctorPatientRecordsCache({
 
 export function warmPatientExperience(session: PatientSession, patient: Patient) {
   seedPatientProfileCache(patient)
-  void prefetchPatientPortalCaches(session.hidCode, patient)
+  void Promise.allSettled([
+    prefetchPatientRecordsCache(session.hidCode),
+    prefetchPatientHistoryOnly(session.hidCode),
+  ])
 }
 
 export function prefetchPatientRouteData(path: string, hidCode: string) {
@@ -162,13 +172,23 @@ export function prefetchPatientRouteData(path: string, hidCode: string) {
 
   if (!normalizedPath || !normalizedHidCode) return
 
-  if (
-    normalizedPath.startsWith('/patient/profile') ||
-    normalizedPath.startsWith('/patient/records') ||
-    normalizedPath.startsWith('/patient/history') ||
-    normalizedPath.startsWith('/patient/notifications')
-  ) {
-    void prefetchPatientPortalCaches(normalizedHidCode)
+  if (normalizedPath.startsWith('/patient/records')) {
+    void prefetchPatientRecordsCache(normalizedHidCode)
+    return
+  }
+
+  if (normalizedPath.startsWith('/patient/history')) {
+    void prefetchPatientHistoryOnly(normalizedHidCode)
+    return
+  }
+
+  if (normalizedPath.startsWith('/patient/notifications')) {
+    void prefetchPatientNotificationsOnly(normalizedHidCode)
+    return
+  }
+
+  if (normalizedPath.startsWith('/patient/profile')) {
+    void prefetchPatientRecordsCache(normalizedHidCode)
   }
 }
 

@@ -1,5 +1,6 @@
 import { createAdminClient, requireUser } from '../_shared/auth.ts'
 import { HttpError, json, readJson, withErrorHandling } from '../_shared/http.ts'
+import { assertPlatformFeatureEnabled, assertStaffRoleCapability } from '../_shared/platform.ts'
 import { createRecordUploadToken } from '../_shared/upload-token.ts'
 import { asTrimmedString, sanitizeFileName } from '../_shared/validation.ts'
 
@@ -11,7 +12,7 @@ type Payload = {
 Deno.serve(req => withErrorHandling(req, async () => {
   if (req.method !== 'POST') throw new HttpError(405, 'Method not allowed.')
 
-  const { client, profile, user } = await requireUser(req)
+  const { client, profile, staffAccount, user } = await requireUser(req)
   const body = await readJson<Payload>(req)
   const recordId = asTrimmedString(body.recordId, 'recordId')
   const fileName = sanitizeFileName(asTrimmedString(body.fileName, 'fileName'))
@@ -28,6 +29,10 @@ Deno.serve(req => withErrorHandling(req, async () => {
 
   const path = `patients/${authorization.patient_id}/records/${recordId}/${crypto.randomUUID()}-${fileName}`
   const adminClient = createAdminClient()
+  await assertPlatformFeatureEnabled(adminClient, 'uploads')
+  if (staffAccount?.role) {
+    await assertStaffRoleCapability(adminClient, staffAccount.role, 'can_create_records')
+  }
   const { data, error } = await adminClient.storage.from('medical-record-files').createSignedUploadUrl(path)
   const uploadToken = await createRecordUploadToken({
     authUserId: user.id,

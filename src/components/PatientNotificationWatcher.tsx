@@ -1,10 +1,13 @@
 import React, { useEffect } from 'react'
 import { showToast } from './toast'
-import { listUnreadNotifications, markAllNotificationsRead } from '../lib/hidApi'
+import { rememberRecentValue } from '../lib/cacheBudget'
+import { listUnreadNotifications } from '../lib/hidApi'
 import { subscribeToNotifications } from '../lib/notificationsRealtime'
 import { requestBrowserNotificationPermission, showBrowserNotification } from '../lib/pwa'
 
 const TOAST_PREVIEW_LIMIT = 3
+const MAX_TRACKED_NOTIFICATION_IDS = 200
+const surfacedPatientNotificationIds = new Set<string>()
 
 export function PatientNotificationWatcher({ hidCode }: { hidCode: string }) {
   useEffect(() => {
@@ -12,10 +15,11 @@ export function PatientNotificationWatcher({ hidCode }: { hidCode: string }) {
 
     async function flushUnreadSummary() {
       const unread = await listUnreadNotifications(hidCode, TOAST_PREVIEW_LIMIT + 1, { forceRefresh: true })
-      if (cancelled || unread.length === 0) return
+      const unseen = unread.filter(item => !surfacedPatientNotificationIds.has(item.id))
+      if (cancelled || unseen.length === 0) return
 
-      if (unread.length <= TOAST_PREVIEW_LIMIT) {
-        unread.slice().reverse().forEach(item => {
+      if (unseen.length <= TOAST_PREVIEW_LIMIT) {
+        unseen.slice().reverse().forEach(item => {
           showToast(`${item.title}: ${item.message}`, item.message.toLowerCase().includes('emergency') ? 'error' : 'info')
           void showBrowserNotification(item.title, {
             body: item.message,
@@ -23,7 +27,7 @@ export function PatientNotificationWatcher({ hidCode }: { hidCode: string }) {
           })
         })
       } else {
-        const emergencyItem = unread.find(item => `${item.title} ${item.message}`.toLowerCase().includes('emergency'))
+        const emergencyItem = unseen.find(item => `${item.title} ${item.message}`.toLowerCase().includes('emergency'))
         if (emergencyItem) {
           showToast(`${emergencyItem.title}: ${emergencyItem.message}`, 'error')
           void showBrowserNotification(emergencyItem.title, {
@@ -31,14 +35,16 @@ export function PatientNotificationWatcher({ hidCode }: { hidCode: string }) {
             tag: `hid-notification-${emergencyItem.id}`,
           })
         }
-        showToast(`You have ${unread.length} new notifications. Open Notifications to review them.`, 'info')
+        showToast(`You have ${unseen.length} new notifications. Open Notifications to review them.`, 'info')
         void showBrowserNotification('New HID notifications', {
-          body: `You have ${unread.length} new notifications.`,
+          body: `You have ${unseen.length} new notifications.`,
           tag: 'hid-notifications-summary',
         })
       }
 
-      await markAllNotificationsRead()
+      unseen.forEach(item => {
+        rememberRecentValue(surfacedPatientNotificationIds, item.id, MAX_TRACKED_NOTIFICATION_IDS)
+      })
     }
 
     void requestBrowserNotificationPermission()

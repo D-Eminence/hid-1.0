@@ -2,6 +2,7 @@ import { createAdminClient } from '../_shared/auth.ts'
 import { requireEnv } from '../_shared/env.ts'
 import { HttpError, json, readJson, withErrorHandling } from '../_shared/http.ts'
 import { resolvePatientAuthIdentity } from '../_shared/patient-identifiers.ts'
+import { loadPlatformControls } from '../_shared/platform.ts'
 import { verifyTurnstileToken } from '../_shared/turnstile.ts'
 import { asTrimmedString } from '../_shared/validation.ts'
 
@@ -48,18 +49,16 @@ async function authenticateWithCredential(credentialBody: { email: string; passw
 }
 
 async function authenticateWithPassword(
-  adminClient: ReturnType<typeof createAdminClient>,
-  authUserId: string,
-  identity: { email?: string | null; phone?: string | null },
+  identity: {
+    authEmail?: string | null
+    authPhone?: string | null
+    email?: string | null
+    phone?: string | null
+  },
   password: string
 ) {
-  const { data: authUserData, error: authUserError } = await adminClient.auth.admin.getUserById(authUserId)
-  if (authUserError) {
-    throw new HttpError(401, 'The sign-in details are not correct.')
-  }
-
-  const authEmail = authUserData.user?.email?.trim().toLowerCase() ?? null
-  const authPhone = authUserData.user?.phone?.trim() ?? null
+  const authEmail = identity.authEmail?.trim().toLowerCase() ?? null
+  const authPhone = identity.authPhone?.trim() ?? null
   const credentialBody = authEmail
     ? { email: authEmail, password }
     : authPhone
@@ -86,6 +85,13 @@ Deno.serve(req => withErrorHandling(req, async () => {
   await verifyTurnstileToken(req, body.turnstileToken ?? null, 'patient-login')
 
   const adminClient = createAdminClient()
+  const controls = await loadPlatformControls(adminClient)
+  if (controls.maintenance_mode) {
+    throw new HttpError(503, 'HID is under scheduled maintenance right now. Please try again shortly.')
+  }
+  if (!controls.patient_portal_enabled) {
+    throw new HttpError(503, 'The patient portal is temporarily unavailable right now.')
+  }
   const resolvedIdentity = await resolvePatientAuthIdentity(adminClient, identifier)
   if (!resolvedIdentity) {
     if (!looksLikeEmailIdentifier(identifier)) {
@@ -111,7 +117,9 @@ Deno.serve(req => withErrorHandling(req, async () => {
     })
   }
 
-  const data = await authenticateWithPassword(adminClient, resolvedIdentity.authUserId, {
+  const data = await authenticateWithPassword({
+    authEmail: resolvedIdentity.authEmail,
+    authPhone: resolvedIdentity.authPhone,
     phone: resolvedIdentity.phone,
     email: resolvedIdentity.email,
   }, password)

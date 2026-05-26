@@ -35,7 +35,6 @@ const patientNav = [
 const PROFILE_IMAGE_MAX_BYTES = 500 * 1024
 const PROFILE_IMAGE_REQUIREMENTS = '600 to 800px, JPG, PNG, or IMG, up to 500 KB.'
 const PATIENT_EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
-const BASIC_INFO_LOCK_STORAGE_PREFIX = 'hid-basic-info-locked:'
 
 export default function PatientProfile() {
   const navigate = useNavigate()
@@ -46,11 +45,9 @@ export default function PatientProfile() {
   const [patient, setPatient] = useState<Patient | null>(cachedPatient)
   const [loading, setLoading] = useState(!cachedPatient)
   const [saving, setSaving] = useState(false)
-  const [savedOnce, setSavedOnce] = useState(() => cachedPatient ? isBasicInfoLocked(cachedPatient) : false)
   const [savedProfileSnapshot, setSavedProfileSnapshot] = useState(() => (
     cachedPatient ? buildProfileSnapshot(cachedPatient, formatDate(cachedPatient.dob), '') : ''
   ))
-  const [basicInfoLocked, setBasicInfoLocked] = useState(() => cachedPatient ? isBasicInfoLocked(cachedPatient) : false)
   const [uploadingPhoto, setUploadingPhoto] = useState(false)
   const [profileConfirmed, setProfileConfirmed] = useState(false)
   const [accessPinDraft, setAccessPinDraft] = useState('')
@@ -86,12 +83,9 @@ export default function PatientProfile() {
         if (session) {
           warmPatientExperience(session, nextPatient)
         }
-        const nextBasicInfoLocked = isBasicInfoLocked(nextPatient)
         setPatient(nextPatient)
         setDobInput(formatDate(nextPatient.dob))
         setSavedProfileSnapshot(buildProfileSnapshot(nextPatient, formatDate(nextPatient.dob), ''))
-        setBasicInfoLocked(nextBasicInfoLocked)
-        setSavedOnce(nextBasicInfoLocked)
       } catch (error) {
         const message = error instanceof Error ? error.message : 'Unable to load your profile.'
         showToast(message, 'error')
@@ -145,8 +139,7 @@ export default function PatientProfile() {
 
   async function saveProfile() {
     if (!patient || saving) return
-    if (savedOnce && !hasPendingProfileChanges) {
-      window.scrollTo({ top: 0, behavior: 'smooth' })
+    if (!hasPendingProfileChanges) {
       return
     }
     if (!profileConfirmed) {
@@ -195,14 +188,11 @@ export default function PatientProfile() {
       setPatient(nextPatient)
       setAccessPinDraft('')
       setSavedProfileSnapshot(buildProfileSnapshot(nextPatient, formatDate(nextPatient.dob), ''))
-      setBasicInfoLocked(true)
-      persistBasicInfoLock(nextPatient.hid_code)
       setPatientSession({
         hidCode: nextPatient.hid_code,
         phone: nextPatient.phone ?? '',
         fullName: nextPatient.full_name,
       })
-      setSavedOnce(true)
       showToast('Profile saved.', 'success')
       window.scrollTo({ top: 0, behavior: 'smooth' })
     } catch (error) {
@@ -416,10 +406,10 @@ export default function PatientProfile() {
             {openSections.about && (
               <>
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 14, marginTop: 16 }}>
-                  <Input label="First Name" disabled={basicInfoLocked} value={patient.first_name ?? ''} onChange={e => updatePatientDraft(current => ({ ...current, first_name: e.target.value }))} />
-                  <Input label="Last Name" disabled={basicInfoLocked} value={patient.last_name ?? ''} onChange={e => updatePatientDraft(current => ({ ...current, last_name: e.target.value }))} />
-                  <Input label="Phone Number" disabled={basicInfoLocked} value={patient.phone ?? ''} onChange={e => updatePatientDraft(current => ({ ...current, phone: e.target.value }))} />
-                  <Input label="Email Address" disabled={basicInfoLocked} type="email" placeholder="yourname@gmail.com" value={patient.email ?? ''} onChange={e => updatePatientDraft(current => ({ ...current, email: e.target.value }))} />
+                  <Input label="First Name" value={patient.first_name ?? ''} onChange={e => updatePatientDraft(current => ({ ...current, first_name: e.target.value }))} />
+                  <Input label="Last Name" value={patient.last_name ?? ''} onChange={e => updatePatientDraft(current => ({ ...current, last_name: e.target.value }))} />
+                  <Input label="Phone Number" value={patient.phone ?? ''} onChange={e => updatePatientDraft(current => ({ ...current, phone: e.target.value }))} />
+                  <Input label="Email Address" type="email" placeholder="yourname@gmail.com" value={patient.email ?? ''} onChange={e => updatePatientDraft(current => ({ ...current, email: e.target.value }))} />
                   <Input
                     label="Access PIN"
                     type="password"
@@ -429,16 +419,14 @@ export default function PatientProfile() {
                   />
                   <Select
                     placeholder="Gender"
-                    disabled={basicInfoLocked}
                     value={patient.gender ?? ''}
                     onChange={e => updatePatientDraft(current => ({ ...current, gender: e.target.value }))}
                     options={[{ value: 'Female', label: 'Female' }, { value: 'Male', label: 'Male' }, { value: 'Other', label: 'Other' }]}
                   />
-                  <Input label="Date of Birth" disabled={basicInfoLocked} value={dobInput} onChange={e => onDobTextChange(e.target.value)} placeholder="31-12-2000" />
+                  <Input label="Date of Birth" value={dobInput} onChange={e => onDobTextChange(e.target.value)} placeholder="31-12-2000" />
                   <Input label="Age" disabled value={calculateAge(parseDisplayDate(dobInput) ?? patient.dob)} />
                   <Select
                     label="Country"
-                    disabled={basicInfoLocked}
                     value={patient.country ?? ''}
                     onChange={e => updatePatientDraft(current => ({ ...current, country: e.target.value, state: '' }))}
                     options={COUNTRIES.map(value => ({ value, label: value }))}
@@ -446,23 +434,17 @@ export default function PatientProfile() {
                   {showStateSelect ? (
                     <Select
                       label="State"
-                      disabled={basicInfoLocked}
                       value={patient.state ?? ''}
                       onChange={e => updatePatientDraft(current => ({ ...current, state: e.target.value }))}
                       options={stateOptions}
                     />
                   ) : (
-                    <Input label="State / Region" disabled={basicInfoLocked} value={patient.state ?? ''} onChange={e => updatePatientDraft(current => ({ ...current, state: e.target.value }))} />
+                    <Input label="State / Region" value={patient.state ?? ''} onChange={e => updatePatientDraft(current => ({ ...current, state: e.target.value }))} />
                   )}
                 </div>
                 <div style={{ marginTop: 10, color: '#8a95a6', fontSize: 11 }}>
                   Standard hospital access uses this PIN together with your HID code. {patient.access_pin_configured ? 'A PIN is already set for this account.' : 'No Access PIN has been set yet.'}
                 </div>
-                {basicInfoLocked && (
-                  <div style={{ marginTop: 8, color: '#8a95a6', fontSize: 11 }}>
-                    Basic information is locked after it has been saved.
-                  </div>
-                )}
               </>
             )}
 
@@ -518,7 +500,7 @@ export default function PatientProfile() {
                 Profile completion: {liveProfilePercent}%
               </div>
               <Button loading={saving} onClick={saveProfile}>
-                {savedOnce && !hasPendingProfileChanges ? 'Edit' : 'Save'}
+                Save
               </Button>
             </div>
 
@@ -697,20 +679,6 @@ function buildProfileSnapshot(patient: Patient, dobValue: string, accessPinDraft
 function normalizePatientEmail(value: string | null | undefined) {
   const normalized = (value ?? '').trim().toLowerCase()
   return normalized || null
-}
-
-function getBasicInfoLockKey(hidCode: string) {
-  return `${BASIC_INFO_LOCK_STORAGE_PREFIX}${hidCode}`
-}
-
-function persistBasicInfoLock(hidCode: string) {
-  if (typeof window === 'undefined') return
-  window.localStorage.setItem(getBasicInfoLockKey(hidCode), 'true')
-}
-
-function isBasicInfoLocked(patient: Patient) {
-  if (typeof window === 'undefined') return false
-  return window.localStorage.getItem(getBasicInfoLockKey(patient.hid_code)) === 'true'
 }
 
 async function validateProfileImage(file: File): Promise<

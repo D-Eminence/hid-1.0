@@ -4,12 +4,10 @@ function normalizeIdentifier(value: string) {
   return value.trim()
 }
 
-function normalizePhone(value: string) {
-  return value.replace(/[^0-9+]/g, '')
-}
-
 export type ResolvedPatientAuthIdentity = {
   authUserId: string
+  authEmail: string | null
+  authPhone: string | null
   fullName: string
   patientId: string
   hidCode: string
@@ -24,87 +22,57 @@ export type ResolvedPatientAccessState = ResolvedPatientAuthIdentity & {
   patientDeleted: boolean
 }
 
+type ResolvedPatientIdentityStateRow = {
+  auth_user_id: string
+  auth_email: string | null
+  auth_phone: string | null
+  patient_id: string
+  user_profile_id: string
+  hid_code: string
+  full_name: string
+  phone: string | null
+  email: string | null
+  profile_active: boolean
+  profile_deleted: boolean
+  patient_deleted: boolean
+}
+
+async function loadResolvedPatientIdentityState(
+  adminClient: SupabaseClient,
+  rawIdentifier: string
+): Promise<ResolvedPatientIdentityStateRow | null> {
+  const identifier = normalizeIdentifier(rawIdentifier)
+  if (!identifier) return null
+
+  const { data, error } = await adminClient.rpc('hid_resolve_patient_identity_state', {
+    p_identifier: identifier,
+  })
+
+  if (error) {
+    throw error
+  }
+
+  const row = (Array.isArray(data) ? data[0] : data) as ResolvedPatientIdentityStateRow | null
+  return row ?? null
+}
+
 export async function resolvePatientAuthIdentity(
   adminClient: SupabaseClient,
   rawIdentifier: string
 ): Promise<ResolvedPatientAuthIdentity | null> {
-  const identifier = normalizeIdentifier(rawIdentifier)
-  if (!identifier) return null
-
-  if (identifier.toUpperCase().startsWith('HID-')) {
-    const { data, error } = await adminClient
-      .from('hid_patients')
-      .select('id, auth_user_id, user_profile_id, hid_code, full_name, phone_e164, email')
-      .eq('hid_code', identifier.toUpperCase())
-      .maybeSingle()
-
-    if (error || !data) return null
-    return {
-      authUserId: data.auth_user_id,
-      fullName: data.full_name,
-      patientId: data.id,
-      hidCode: data.hid_code,
-      phone: data.phone_e164,
-      email: data.email,
-      userProfileId: data.user_profile_id,
-    }
-  }
-
-  const normalizedPhone = normalizePhone(identifier)
-  if (normalizedPhone) {
-    const { data, error } = await adminClient
-      .from('hid_patient_identifiers')
-      .select('patient_id')
-      .eq('identifier_type', 'phone')
-      .eq('normalized_value', normalizedPhone)
-      .maybeSingle()
-
-    if (!error && data?.patient_id) {
-      const { data: patientRow, error: patientError } = await adminClient
-        .from('hid_patients')
-        .select('id, auth_user_id, user_profile_id, hid_code, full_name, phone_e164, email')
-        .eq('id', data.patient_id)
-        .maybeSingle()
-
-      if (!patientError && patientRow) {
-        return {
-          authUserId: patientRow.auth_user_id,
-          fullName: patientRow.full_name,
-          patientId: patientRow.id,
-          hidCode: patientRow.hid_code,
-          phone: patientRow.phone_e164,
-          email: patientRow.email,
-          userProfileId: patientRow.user_profile_id,
-        }
-      }
-    }
-  }
-
-  const { data, error } = await adminClient
-    .from('hid_patient_identifiers')
-    .select('patient_id')
-    .eq('identifier_type', 'email')
-    .eq('normalized_value', identifier.toLowerCase())
-    .maybeSingle()
-
-  if (error || !data?.patient_id) return null
-
-  const { data: patientRow, error: patientError } = await adminClient
-    .from('hid_patients')
-    .select('id, auth_user_id, user_profile_id, hid_code, full_name, phone_e164, email')
-    .eq('id', data.patient_id)
-    .maybeSingle()
-
-  if (patientError || !patientRow) return null
+  const row = await loadResolvedPatientIdentityState(adminClient, rawIdentifier)
+  if (!row) return null
 
   return {
-    authUserId: patientRow.auth_user_id,
-    fullName: patientRow.full_name,
-    patientId: patientRow.id,
-    hidCode: patientRow.hid_code,
-    phone: patientRow.phone_e164,
-    email: patientRow.email,
-    userProfileId: patientRow.user_profile_id,
+    authUserId: row.auth_user_id,
+    authEmail: row.auth_email,
+    authPhone: row.auth_phone,
+    fullName: row.full_name,
+    patientId: row.patient_id,
+    hidCode: row.hid_code,
+    phone: row.phone,
+    email: row.email,
+    userProfileId: row.user_profile_id,
   }
 }
 
@@ -112,34 +80,22 @@ export async function resolvePatientAccessState(
   adminClient: SupabaseClient,
   rawIdentifier: string,
 ): Promise<ResolvedPatientAccessState | null> {
-  const identity = await resolvePatientAuthIdentity(adminClient, rawIdentifier)
-  if (!identity) return null
-
-  const { data, error } = await adminClient
-    .from('hid_user_profiles')
-    .select('active, deleted_at')
-    .eq('id', identity.userProfileId)
-    .maybeSingle()
-
-  if (error) {
-    throw error
-  }
-
-  const patientStateResult = await adminClient
-    .from('hid_patients')
-    .select('deleted_at')
-    .eq('id', identity.patientId)
-    .maybeSingle()
-
-  if (patientStateResult.error) {
-    throw patientStateResult.error
-  }
+  const row = await loadResolvedPatientIdentityState(adminClient, rawIdentifier)
+  if (!row) return null
 
   return {
-    ...identity,
-    profileActive: data?.active !== false,
-    profileDeleted: Boolean(data?.deleted_at),
-    patientDeleted: Boolean(patientStateResult.data?.deleted_at),
+    authUserId: row.auth_user_id,
+    authEmail: row.auth_email,
+    authPhone: row.auth_phone,
+    fullName: row.full_name,
+    patientId: row.patient_id,
+    hidCode: row.hid_code,
+    phone: row.phone,
+    email: row.email,
+    userProfileId: row.user_profile_id,
+    profileActive: row.profile_active !== false,
+    profileDeleted: Boolean(row.profile_deleted),
+    patientDeleted: Boolean(row.patient_deleted),
   }
 }
 

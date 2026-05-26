@@ -2,10 +2,12 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.49.8'
 import type { User } from 'https://esm.sh/@supabase/supabase-js@2.49.8'
 import { requireEnv } from './env.ts'
 import { HttpError } from './http.ts'
+import { assertPlatformPortalAccess } from './platform.ts'
 
 const supabaseUrl = requireEnv('SUPABASE_URL')
 const supabaseAnonKey = requireEnv('SUPABASE_ANON_KEY')
 const serviceRoleKey = requireEnv('SUPABASE_SERVICE_ROLE_KEY')
+let adminClientSingleton: ReturnType<typeof createClient> | null = null
 
 export function createUserClient(req: Request) {
   const authHeader = req.headers.get('Authorization')
@@ -25,12 +27,18 @@ export function createUserClient(req: Request) {
 }
 
 export function createAdminClient() {
-  return createClient(supabaseUrl, serviceRoleKey, {
+  if (adminClientSingleton) {
+    return adminClientSingleton
+  }
+
+  adminClientSingleton = createClient(supabaseUrl, serviceRoleKey, {
     auth: {
       autoRefreshToken: false,
       persistSession: false,
     },
   })
+
+  return adminClientSingleton
 }
 
 type HidUserProfileRecord = {
@@ -46,6 +54,7 @@ type HidStaffAccountState = {
   active: boolean
   deleted_at: string | null
   id: string
+  role: string
 }
 
 export async function requireUser(req: Request): Promise<{
@@ -82,12 +91,13 @@ export async function requireUser(req: Request): Promise<{
 
   const metadataRole = typeof data.user.app_metadata?.app_role === 'string' ? data.user.app_metadata.app_role as string : ''
   const effectiveRole = typeof profile?.app_role === 'string' ? profile.app_role : metadataRole
+  const adminClient = createAdminClient()
 
   let staffAccount: HidStaffAccountState | null = null
   if (effectiveRole === 'clinician' || effectiveRole === 'org_admin') {
     const staffResult = await client
       .from('hid_staff_accounts')
-      .select('id, active, deleted_at')
+      .select('id, active, deleted_at, role')
       .eq('auth_user_id', data.user.id)
       .maybeSingle()
 
@@ -102,6 +112,10 @@ export async function requireUser(req: Request): Promise<{
     if (staffAccount?.active === false) {
       throw new HttpError(403, 'This account is locked right now. Contact support if you need help.')
     }
+  }
+
+  if (effectiveRole) {
+    await assertPlatformPortalAccess(adminClient, effectiveRole)
   }
 
   const shouldRequireMfa =

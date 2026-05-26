@@ -63,6 +63,23 @@ const hospitalNav = [
   },
 ]
 
+function scheduleWarmup(task: () => void, timeoutMs = 600) {
+  if (typeof window === 'undefined') return () => undefined
+
+  const idleWindow = window as Window & {
+    cancelIdleCallback?: (id: number) => void
+    requestIdleCallback?: (callback: () => void, options?: { timeout: number }) => number
+  }
+
+  if (typeof idleWindow.requestIdleCallback === 'function') {
+    const idleId = idleWindow.requestIdleCallback(task, { timeout: timeoutMs })
+    return () => idleWindow.cancelIdleCallback?.(idleId)
+  }
+
+  const timer = window.setTimeout(task, Math.min(timeoutMs, 250))
+  return () => window.clearTimeout(timer)
+}
+
 export function HospitalLayout({
   activeSection,
   children,
@@ -86,6 +103,21 @@ export function HospitalLayout({
   const { pathname } = useLocation()
   const [isCompact, setIsCompact] = useState(() => (typeof window !== 'undefined' ? window.innerWidth < 820 : false))
   const session = React.useMemo(() => getStaffSession(), [])
+  const likelyWarmPaths = React.useMemo(() => {
+    const currentIndex = hospitalNav.findIndex(item => item.path === pathname || (item.section === 'access' && pathname.startsWith('/hospital/patient-records/')))
+    const paths: string[] = []
+
+    if (currentIndex >= 0) {
+      const nextItem = hospitalNav[currentIndex + 1]
+      const previousItem = hospitalNav[currentIndex - 1]
+      if (nextItem?.path && nextItem.path !== pathname) paths.push(nextItem.path)
+      if (previousItem?.path && previousItem.path !== pathname) paths.push(previousItem.path)
+    } else if (hospitalNav[0]?.path) {
+      paths.push(hospitalNav[0].path)
+    }
+
+    return Array.from(new Set(paths)).slice(0, 2)
+  }, [pathname])
 
   function warmPath(path: string) {
     preloadPath(path)
@@ -102,13 +134,12 @@ export function HospitalLayout({
   }, [])
 
   useEffect(() => {
-    const paths = hospitalNav.map(item => item.path)
-    const timer = window.setTimeout(() => {
-      paths.forEach(path => warmPath(path))
-    }, 20)
+    if (likelyWarmPaths.length === 0) return () => undefined
 
-    return () => window.clearTimeout(timer)
-  }, [session])
+    return scheduleWarmup(() => {
+      likelyWarmPaths.forEach(path => warmPath(path))
+    })
+  }, [likelyWarmPaths, session])
 
   return (
     <div style={{ display: 'flex', flexDirection: isCompact ? 'column' : 'row', minHeight: '100vh' }}>

@@ -22,8 +22,6 @@ It is a React + Vite app connected to Supabase. Patients use it to manage their 
 - `vercel.json` contains production headers, rewrites, redirects, and SEO crawl rules.
 - `.github/workflows/` contains CI, preview deploy, and production deploy workflows.
 
-The old `client/`, `server/`, and `api/` folders are not the main product unless a task clearly says to work there.
-
 ## Live Routes
 
 - `/` public landing page

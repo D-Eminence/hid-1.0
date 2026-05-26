@@ -1,5 +1,6 @@
 import React, { useEffect } from 'react'
 import { showToast } from './toast'
+import { rememberRecentValue } from '../lib/cacheBudget'
 import { supabase } from '../lib/supabase'
 import { subscribeToNotifications } from '../lib/notificationsRealtime'
 
@@ -9,6 +10,9 @@ type RawNotification = {
   message: string
   read_at: string | null
 }
+
+const surfacedStaffNotificationIds = new Set<string>()
+const MAX_TRACKED_NOTIFICATION_IDS = 200
 
 export function StaffNotificationWatcher({ onAccessRevoked }: { onAccessRevoked?: () => void }) {
   useEffect(() => {
@@ -24,10 +28,11 @@ export function StaffNotificationWatcher({ onAccessRevoked }: { onAccessRevoked?
       if (cancelled || error) return
 
       const unread = ((data as RawNotification[] | null) ?? [])
-      if (unread.length === 0) return
+      const unseen = unread.filter(item => !surfacedStaffNotificationIds.has(item.id))
+      if (unseen.length === 0) return
 
       let revokedHandled = false
-      unread
+      unseen
         .slice()
         .reverse()
         .forEach(item => {
@@ -39,10 +44,9 @@ export function StaffNotificationWatcher({ onAccessRevoked }: { onAccessRevoked?
             onAccessRevoked?.()
           }
         })
-
-      await (supabase as unknown as { from: (name: string) => any }).from('hid_notifications')
-        .update({ read_at: new Date().toISOString() })
-        .is('read_at', null)
+      unseen.forEach(item => {
+        rememberRecentValue(surfacedStaffNotificationIds, item.id, MAX_TRACKED_NOTIFICATION_IDS)
+      })
     }
 
     void flushUnreadSummary()

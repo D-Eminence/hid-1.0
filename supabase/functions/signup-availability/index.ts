@@ -1,5 +1,6 @@
 import { createAdminClient } from '../_shared/auth.ts'
 import { HttpError, json, readJson, withErrorHandling } from '../_shared/http.ts'
+import { loadPlatformControls } from '../_shared/platform.ts'
 import { optionalTrimmedString } from '../_shared/validation.ts'
 
 type Payload = {
@@ -32,9 +33,22 @@ Deno.serve(req => withErrorHandling(req, async () => {
   const email = optionalTrimmedString(body.email)?.toLowerCase() ?? null
   const phone = normalizePhone(body.phone)
   const adminClient = createAdminClient()
+  const controls = await loadPlatformControls(adminClient)
 
   if (!email && !phone) {
     throw new HttpError(400, 'Provide an email address or phone number to check.')
+  }
+
+  if (controls.maintenance_mode) {
+    throw new HttpError(503, 'HID is under scheduled maintenance right now. Please try again shortly.')
+  }
+
+  if (accountType === 'patient' && !controls.patient_signup_enabled) {
+    throw new HttpError(403, 'Patient sign-up is disabled right now.')
+  }
+
+  if (accountType === 'hospital' && !controls.hospital_signup_enabled) {
+    throw new HttpError(403, 'Hospital sign-up is disabled right now.')
   }
 
   if (email && !looksLikeEmail(email)) {

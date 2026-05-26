@@ -1,7 +1,12 @@
 import type {
+  AdminCreatePlatformAdminResponse,
   AdminDashboardOverview,
   AdminManagedUser,
   AdminOverviewWindow,
+  AdminPlatformControls,
+  AdminPlatformControlsResponse,
+  AdminRoleManagementResponse,
+  AdminStaffRolePolicy,
   AdminUserActionResponse,
   AdminUserDirectoryResponse,
   AdminUserManagementAction,
@@ -19,10 +24,15 @@ const inflightOverviewRequests = new Map<string, Promise<AdminDashboardOverview>
 const overviewCache = new Map<string, { expiresAt: number; value: AdminDashboardOverview }>()
 const inflightUserSearchRequests = new Map<string, Promise<AdminManagedUser[]>>()
 const inflightDeletedUserRequests = new Map<string, Promise<AdminManagedUser[]>>()
+const inflightRoleManagementRequest = new Map<string, Promise<AdminRoleManagementResponse>>()
+const inflightPlatformControlsRequest = new Map<string, Promise<AdminPlatformControls>>()
 const userSearchCache = new Map<string, { expiresAt: number; value: AdminManagedUser[] }>()
 const deletedUserCache = new Map<string, { expiresAt: number; value: AdminManagedUser[] }>()
+const roleManagementCache = new Map<string, { expiresAt: number; value: AdminRoleManagementResponse }>()
+const platformControlsCache = new Map<string, { expiresAt: number; value: AdminPlatformControls }>()
 const OVERVIEW_CACHE_TTL_MS = 30000
 const USER_SEARCH_CACHE_TTL_MS = 15000
+const ADMIN_CONTROLS_CACHE_TTL_MS = 15000
 
 function overviewCacheKey(window: AdminOverviewWindow, date: string | null | undefined) {
   return `${window}:${date?.trim() ?? ''}`
@@ -150,6 +160,10 @@ export function invalidateAdminDashboardCaches() {
   inflightUserSearchRequests.clear()
   deletedUserCache.clear()
   inflightDeletedUserRequests.clear()
+  roleManagementCache.clear()
+  inflightRoleManagementRequest.clear()
+  platformControlsCache.clear()
+  inflightPlatformControlsRequest.clear()
 }
 
 async function callAdminUserManagement<T>(path: string, init: RequestInit, statusFallback: number) {
@@ -428,4 +442,145 @@ export async function applyAdminUserAction(targetAuthUserId: string, action: Adm
 
   invalidateAdminDashboardCaches()
   return data
+}
+
+export async function fetchAdminRoleManagement(options: { force?: boolean } = {}) {
+  const cacheKey = 'role-management'
+  if (!options.force) {
+    const cached = roleManagementCache.get(cacheKey)
+    if (cached && cached.expiresAt > Date.now()) {
+      return cached.value
+    }
+    if (cached) {
+      roleManagementCache.delete(cacheKey)
+    }
+  }
+
+  const existingRequest = inflightRoleManagementRequest.get(cacheKey)
+  if (existingRequest) {
+    return existingRequest
+  }
+
+  const request = (async () => {
+    const data = await callAdminUserManagement<AdminRoleManagementResponse>(requireSupabaseFunctionUrl('admin-role-management'), {
+      method: 'GET',
+    }, 500)
+
+    roleManagementCache.set(cacheKey, {
+      expiresAt: Date.now() + ADMIN_CONTROLS_CACHE_TTL_MS,
+      value: data,
+    })
+    return data
+  })()
+
+  inflightRoleManagementRequest.set(cacheKey, request)
+
+  try {
+    return await request
+  } finally {
+    if (inflightRoleManagementRequest.get(cacheKey) === request) {
+      inflightRoleManagementRequest.delete(cacheKey)
+    }
+  }
+}
+
+export async function createPlatformAdmin(email: string, fullName: string) {
+  const data = await callAdminUserManagement<AdminCreatePlatformAdminResponse>(requireSupabaseFunctionUrl('admin-role-management'), {
+    method: 'POST',
+    body: JSON.stringify({
+      action: 'create_admin',
+      email,
+      fullName,
+    }),
+  }, 500)
+
+  invalidateAdminDashboardCaches()
+  return data
+}
+
+export async function updateAdminStaffRolePolicy(
+  role: string,
+  changes: Partial<Pick<AdminStaffRolePolicy, 'canOpenDashboard' | 'canUseStandardAccess' | 'canViewPatientRecords' | 'canCreateRecords' | 'canUseBreakGlass' | 'canViewHistory'>>,
+) {
+  const data = await callAdminUserManagement<{ policy: AdminStaffRolePolicy }>(requireSupabaseFunctionUrl('admin-role-management'), {
+    method: 'POST',
+    body: JSON.stringify({
+      action: 'update_staff_role_policy',
+      role,
+      changes: {
+        can_open_dashboard: changes.canOpenDashboard,
+        can_use_standard_access: changes.canUseStandardAccess,
+        can_view_patient_records: changes.canViewPatientRecords,
+        can_create_records: changes.canCreateRecords,
+        can_use_break_glass: changes.canUseBreakGlass,
+        can_view_history: changes.canViewHistory,
+      },
+    }),
+  }, 500)
+
+  invalidateAdminDashboardCaches()
+  return data.policy
+}
+
+export async function fetchAdminPlatformControls(options: { force?: boolean } = {}) {
+  const cacheKey = 'platform-controls'
+  if (!options.force) {
+    const cached = platformControlsCache.get(cacheKey)
+    if (cached && cached.expiresAt > Date.now()) {
+      return cached.value
+    }
+    if (cached) {
+      platformControlsCache.delete(cacheKey)
+    }
+  }
+
+  const existingRequest = inflightPlatformControlsRequest.get(cacheKey)
+  if (existingRequest) {
+    return existingRequest
+  }
+
+  const request = (async () => {
+    const data = await callAdminUserManagement<AdminPlatformControlsResponse>(requireSupabaseFunctionUrl('admin-platform-controls'), {
+      method: 'GET',
+    }, 500)
+
+    platformControlsCache.set(cacheKey, {
+      expiresAt: Date.now() + ADMIN_CONTROLS_CACHE_TTL_MS,
+      value: data.controls,
+    })
+    return data.controls
+  })()
+
+  inflightPlatformControlsRequest.set(cacheKey, request)
+
+  try {
+    return await request
+  } finally {
+    if (inflightPlatformControlsRequest.get(cacheKey) === request) {
+      inflightPlatformControlsRequest.delete(cacheKey)
+    }
+  }
+}
+
+export async function updateAdminPlatformControls(
+  controls: Partial<Pick<AdminPlatformControls, 'maintenanceMode' | 'patientSignupEnabled' | 'hospitalSignupEnabled' | 'patientPortalEnabled' | 'hospitalPortalEnabled' | 'breakGlassEnabled' | 'uploadsEnabled'>>,
+) {
+  const data = await callAdminUserManagement<AdminPlatformControlsResponse>(requireSupabaseFunctionUrl('admin-platform-controls'), {
+    method: 'POST',
+    body: JSON.stringify({
+      action: 'update_controls',
+      controls: {
+        maintenance_mode: controls.maintenanceMode,
+        patient_signup_enabled: controls.patientSignupEnabled,
+        hospital_signup_enabled: controls.hospitalSignupEnabled,
+        patient_portal_enabled: controls.patientPortalEnabled,
+        hospital_portal_enabled: controls.hospitalPortalEnabled,
+        break_glass_enabled: controls.breakGlassEnabled,
+        uploads_enabled: controls.uploadsEnabled,
+      },
+    }),
+  }, 500)
+
+  invalidateAdminDashboardCaches()
+  return data.controls
 }

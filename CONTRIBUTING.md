@@ -84,12 +84,6 @@ Collaborators should treat these as the active product:
 - `vercel.json`
 - `.github/workflows/`
 
-These are legacy or compatibility paths and should not be treated as the main product unless explicitly needed:
-
-- `client/`
-- `server/`
-- `api/send-email.js`
-
 ## Secrets
 
 - Never commit secrets.

@@ -15,6 +15,7 @@ import type {
 } from '../types/hid'
 import type { UploadDraft } from './medicalRecordUtils'
 import { clearAllPortalSessions } from './auth'
+import { pruneExpiredMapEntries, setBoundedMapEntry } from './cacheBudget'
 import { registerCacheResetter } from './cacheReset'
 import { BANNED_ACCOUNT_MESSAGE, isBannedAuthMessage } from './securityMessages'
 import { fetchWithTimeout, getSafeSession, getSafeUser, NETWORK_TIMEOUT_MESSAGE, safeSignOut, supabase } from './supabase'
@@ -125,7 +126,6 @@ type TotpEnrollment = {
 }
 
 type HistoryView = {
-  pendingRequests: AccessRequest[]
   activeGrants: AccessRequest[]
   logs: AccessLog[]
 }
@@ -136,6 +136,9 @@ const RECENT_RECORD_SAVE_TTL_MS = 5 * 60 * 1000
 const RECORD_UPLOAD_TIMEOUT_MS = 90000
 const RECORD_UPLOAD_RETRY_COUNT = 3
 const NOTIFICATIONS_CACHE_TTL_MS = 10_000
+const MAX_VIEW_CACHE_ENTRIES = 80
+const MAX_SIGNED_DOWNLOAD_CACHE_ENTRIES = 120
+const MAX_RECENT_RECORD_SAVE_ENTRIES = 40
 const PRIVILEGED_MFA_ROLES = new Set(['platform_admin', 'org_admin', 'clinician'])
 const HID_PATIENT_COLUMNS = [
   'id',
@@ -261,6 +264,7 @@ function isLowSignalErrorMessage(message: string) {
 }
 
 function readCachedView<T>(key: string): { hit: boolean; value?: T } {
+  pruneExpiredMapEntries(viewCache)
   const cached = viewCache.get(key) as ViewCacheEntry<T> | undefined
   if (!cached) return { hit: false }
   if (cached.value !== undefined && cached.expiresAt > Date.now()) {
@@ -273,10 +277,10 @@ function readCachedView<T>(key: string): { hit: boolean; value?: T } {
 }
 
 function writeCachedView<T>(key: string, value: T, ttlMs = VIEW_CACHE_TTL_MS) {
-  viewCache.set(key, {
+  setBoundedMapEntry(viewCache, key, {
     expiresAt: Date.now() + ttlMs,
     value,
-  })
+  }, MAX_VIEW_CACHE_ENTRIES)
   return value
 }
 
@@ -306,10 +310,10 @@ async function loadCachedView<T>(key: string, loader: () => Promise<T>, ttlMs = 
       throw error
     })
 
-  viewCache.set(key, {
+  setBoundedMapEntry(viewCache, key, {
     expiresAt: Date.now() + ttlMs,
     promise,
-  })
+  }, MAX_VIEW_CACHE_ENTRIES)
 
   return promise
 }
@@ -978,18 +982,6 @@ function toLegacyAccessLog(hidCode: string, event: HidHistoryEvent): AccessLog {
   }
 }
 
-type RawPatientHistoryRequest = {
-  id: string
-  requester_staff_account_id: string
-  staff_display_name?: string | null
-  scope: HidHistoryPendingRequest['scope']
-  status: HidHistoryPendingRequest['status']
-  reason: string | null
-  break_glass: boolean | null
-  created_at: string
-  approved_at: string | null
-}
-
 type RawPatientHistoryGrant = {
   id: string
   request_id: string | null
@@ -1057,13 +1049,7 @@ async function selectPatientHistoryRows<T>(
 }
 
 async function fetchPatientHistoryFromTables(hidCode: string): Promise<HistoryView> {
-  const [pendingRows, grantRows, eventResult] = await Promise.all([
-    selectPatientHistoryRows<RawPatientHistoryRequest>(
-      'hid_access_requests',
-      'id, requester_staff_account_id, staff_display_name, scope, status, reason, break_glass, created_at, approved_at',
-      'id, requester_staff_account_id, scope, status, reason, break_glass, created_at, approved_at',
-      query => query.eq('status', 'pending').order('created_at', { ascending: false })
-    ),
+  const [grantRows, eventResult] = await Promise.all([
     selectPatientHistoryRows<RawPatientHistoryGrant>(
       'hid_access_grants',
       'id, request_id, staff_account_id, staff_display_name, scope, status, reason, starts_at, expires_at',
@@ -1079,20 +1065,6 @@ async function fetchPatientHistoryFromTables(hidCode: string): Promise<HistoryVi
   if (eventResult.error) {
     throw new HidApiError(400, eventResult.error.message, eventResult.error)
   }
-
-  const pendingRequests = pendingRows.map(row => toLegacyAccessRequest(hidCode, {
-    request_id: row.id,
-    staff_account_id: row.requester_staff_account_id,
-    staff_name: row.staff_display_name?.trim() || 'Provider',
-    staff_role: 'doctor',
-    hospital_name: null,
-    scope: row.scope,
-    status: row.status,
-    reason: row.reason ?? 'Access request',
-    break_glass: Boolean(row.break_glass),
-    created_at: row.created_at,
-    approved_at: row.approved_at,
-  }))
 
   const activeGrants = grantRows.map(row => toLegacyAccessRequest(hidCode, {
     grant_id: row.id,
@@ -1129,7 +1101,6 @@ async function fetchPatientHistoryFromTables(hidCode: string): Promise<HistoryVi
   })
 
   return {
-    pendingRequests,
     activeGrants,
     logs,
   }
@@ -1150,6 +1121,7 @@ function toLegacyNotification(notification: HidNotification, hidCode: string): N
 async function signRecordDownload(fileId: string) {
   const cacheKey = `${fileId}:180`
   const now = Date.now()
+  pruneExpiredMapEntries(signedDownloadCache, now)
   const cached = signedDownloadCache.get(cacheKey)
 
   if (cached?.value && cached.expiresAt > now) {
@@ -1166,10 +1138,10 @@ async function signRecordDownload(fileId: string) {
     body: { fileId, expiresIn: 180 },
   })
     .then(response => {
-      signedDownloadCache.set(cacheKey, {
+      setBoundedMapEntry(signedDownloadCache, cacheKey, {
         expiresAt: Date.now() + 120_000,
         value: response.signedUrl,
-      })
+      }, MAX_SIGNED_DOWNLOAD_CACHE_ENTRIES)
       return response.signedUrl
     })
     .catch(error => {
@@ -1177,10 +1149,10 @@ async function signRecordDownload(fileId: string) {
       throw error
     })
 
-  signedDownloadCache.set(cacheKey, {
+  setBoundedMapEntry(signedDownloadCache, cacheKey, {
     expiresAt: now + 120_000,
     promise: request,
-  })
+  }, MAX_SIGNED_DOWNLOAD_CACHE_ENTRIES)
 
   const signedUrl = await request
   return { signedUrl }
@@ -1269,12 +1241,7 @@ function buildUploadDraftKey(upload: UploadDraft) {
 }
 
 function pruneRecentRecordSaves() {
-  const now = Date.now()
-  for (const [key, value] of recentRecordSaves.entries()) {
-    if (value.expiresAt <= now) {
-      recentRecordSaves.delete(key)
-    }
-  }
+  pruneExpiredMapEntries(recentRecordSaves)
 }
 
 async function fetchWithManualTimeout(input: RequestInfo | URL, init: RequestInit, timeoutMs: number) {
@@ -1516,18 +1483,6 @@ export async function markNotificationRead(id: string) {
   invalidateViewCache('notifications:')
 }
 
-export async function markAllNotificationsRead() {
-  const { error } = await dataTable('hid_notifications')
-    .update({ read_at: new Date().toISOString() })
-    .is('read_at', null)
-
-  if (error) {
-    throw new HidApiError(400, error.message, error)
-  }
-
-  invalidateViewCache('notifications:')
-}
-
 export async function fetchPatientRecordsView(patientIdentifier?: string, options: { forceRefresh?: boolean } = {}) {
   const cacheKey = `records:${patientIdentifier ?? 'self'}`
   if (options.forceRefresh) {
@@ -1612,7 +1567,7 @@ export async function createMedicalRecordWithUploads({
         result: created,
         uploadedFileKeys: new Set<string>(),
       }
-      recentRecordSaves.set(requestKey, saveEntry)
+      setBoundedMapEntry(recentRecordSaves, requestKey, saveEntry, MAX_RECENT_RECORD_SAVE_ENTRIES)
     }
 
     if (uploads && uploads.length > 0) {
@@ -1623,7 +1578,7 @@ export async function createMedicalRecordWithUploads({
     invalidateViewCache('history:')
     invalidateViewCache('staff-dashboard:')
     saveEntry.expiresAt = Date.now() + RECENT_RECORD_SAVE_TTL_MS
-    recentRecordSaves.set(requestKey, saveEntry)
+    setBoundedMapEntry(recentRecordSaves, requestKey, saveEntry, MAX_RECENT_RECORD_SAVE_ENTRIES)
     return saveEntry.result
   })()
 
@@ -1697,36 +1652,10 @@ export async function fetchPatientHistory(hidCode: string, options: { forceRefre
     }
 
     return {
-      pendingRequests: history.pending_requests.map(item => toLegacyAccessRequest(hidCode, item)),
       activeGrants: history.active_grants.map(item => toLegacyAccessRequest(hidCode, item)),
       logs: history.events.map(item => toLegacyAccessLog(hidCode, item)),
     }
   })
-}
-
-export async function approveAccessRequest(requestId: string) {
-  const response = await edgeRequest<{ grant_id: string; request_id: string }>('access-request-approve', {
-    method: 'POST',
-    body: {
-      requestId,
-    },
-  })
-  invalidateViewCache('history:')
-  invalidateViewCache('staff-dashboard:')
-  return response
-}
-
-export async function denyAccessRequest(requestId: string, reason?: string) {
-  const response = await edgeRequest<{ request_id: string; status: string }>('access-request-deny', {
-    method: 'POST',
-    body: {
-      requestId,
-      reason: normalizeOptionalText(reason),
-    },
-  })
-  invalidateViewCache('history:')
-  invalidateViewCache('staff-dashboard:')
-  return response
 }
 
 export async function revokeAccessGrant(grantId: string, reason?: string) {
@@ -2146,12 +2075,19 @@ export async function sendStaffVerificationEmail(email: string, captchaToken?: s
 export async function providerSignIn(hospitalName: string, email: string, password: string, captchaToken?: string | null) {
   await clearConflictingAuthSession(email)
 
-  const { error } = await supabase.auth.signInWithPassword({
-    email: email.trim().toLowerCase(),
-    password,
-    options: {
-      captchaToken: captchaToken ?? undefined,
+  const response = await edgeRequest<{ session: HidSessionPayload }>('staff-login', {
+    method: 'POST',
+    requireAuth: false,
+    body: {
+      email: email.trim().toLowerCase(),
+      password,
+      turnstileToken: captchaToken ?? null,
     },
+  })
+
+  const { error } = await supabase.auth.setSession({
+    access_token: response.session.access_token,
+    refresh_token: response.session.refresh_token,
   })
 
   if (error) {
@@ -2221,22 +2157,6 @@ export async function fetchStaffDashboard(options: { forceRefresh?: boolean } = 
   }
 
   return loadCachedView(`staff-dashboard:${authUserId}`, async () => edgeRequest<HidStaffDashboardResponse>('staff-dashboard'))
-}
-
-export async function createAccessRequest(patientIdentifier: string, reason: string, durationMinutes = 60, staffDisplayName?: string | null) {
-  const response = await edgeRequest<{ request_id: string; patient_id: string }>('access-request-create', {
-    method: 'POST',
-    body: {
-      patientIdentifier,
-      scope: 'write_records',
-      reason,
-      durationMinutes,
-      staffDisplayName: normalizeOptionalText(staffDisplayName),
-    },
-  })
-  invalidateViewCache('history:')
-  invalidateViewCache('staff-dashboard:')
-  return response
 }
 
 export async function accessPatientWithPin(patientIdentifier: string, accessPin: string, durationMinutes = 60, staffDisplayName?: string | null) {
