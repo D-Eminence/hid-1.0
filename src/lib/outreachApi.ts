@@ -12,29 +12,44 @@ import type {
 } from '../types/outreach'
 
 async function callEdgeFunction<T>(name: string, body: unknown): Promise<T> {
-  let data: unknown
-  let error: unknown
+  let result: { data: unknown; error: unknown }
 
   try {
-    const result = await supabase.functions.invoke(name, { body: body as Record<string, unknown> })
-    data = result.data
-    error = result.error
+    result = await supabase.functions.invoke(name, { body: body as Record<string, unknown> })
   } catch {
     throw new Error("We're having trouble connecting right now. Please check your internet connection and try again.")
   }
 
-  if (error) {
-    const message = typeof error === 'object' && error !== null && 'message' in error
-      ? String((error as { message: unknown }).message)
-      : String(error)
+  if (result.error) {
+    // FunctionsHttpError.message is the raw response body — parse the friendly error out of it
+    let message = ''
+    const rawErr = result.error
+    if (rawErr && typeof rawErr === 'object' && 'message' in rawErr) {
+      const raw = String((rawErr as { message: unknown }).message ?? '')
+      try {
+        const parsed = JSON.parse(raw)
+        message = String(parsed?.error ?? parsed?.message ?? raw)
+      } catch {
+        message = raw
+      }
+    } else {
+      message = String(rawErr)
+    }
+
     const lower = message.toLowerCase()
-    if (!message || lower.includes('fetch') || lower.includes('supabase') || lower.includes('edge function')) {
+    if (!message || lower.includes('fetch') || lower.includes('supabase') || lower.includes('function') || lower.includes('{')) {
       throw new Error('Something went wrong on our end. Please try again in a moment.')
     }
     throw new Error(message)
   }
 
-  return data as T
+  // supabase.functions.invoke returns the full response body as data.
+  // Our functions wrap payload in { data: {...} } — unwrap it.
+  const raw = result.data
+  const unwrapped = raw && typeof raw === 'object' && 'data' in (raw as object)
+    ? (raw as { data: unknown }).data
+    : raw
+  return unwrapped as T
 }
 
 export type OutreachSignupPayload = {
