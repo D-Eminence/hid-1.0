@@ -94,6 +94,20 @@ export async function resendOutreachOtp(otpId: string): Promise<OutreachResendRe
   return callEdgeFunction<OutreachResendResult>('outreach-resend-otp', { otpId })
 }
 
+export type OutreachJoinResult = {
+  session: { access_token: string; refresh_token: string; expires_in: number; token_type: string }
+  worker: OutreachWorker
+}
+
+export async function joinWithInviteCode(
+  code: string,
+  email: string,
+  password: string,
+  displayName: string
+): Promise<OutreachJoinResult> {
+  return callEdgeFunction<OutreachJoinResult>('outreach-join', { code, email, password, displayName })
+}
+
 export async function loginOutreachWorker(email: string, password: string): Promise<OutreachWorker> {
   const { data, error } = await supabase.auth.signInWithPassword({ email, password })
   if (error) {
