@@ -1,14 +1,23 @@
 import { useEffect, useMemo, useState } from 'react'
 import { getSafeSession, safeSignOut } from '../lib/supabase'
 import {
+  createInviteCode,
   createOutreachEncounter,
+  fetchCampaignInvite,
   fetchOutreachCampaigns,
   fetchOutreachEncounters,
   fetchOutreachSyncQueue,
   fetchOutreachWorker,
   markSyncQueueAsSynced,
 } from '../lib/outreachApi'
-import type { NewEncounterInput, OutreachCampaign, OutreachEncounter, OutreachSyncQueueItem, OutreachWorker } from '../types/outreach'
+import type {
+  NewEncounterInput,
+  OutreachCampaign,
+  OutreachEncounter,
+  OutreachInvite,
+  OutreachSyncQueueItem,
+  OutreachWorker,
+} from '../types/outreach'
 
 export function useOutreach() {
   const [loading, setLoading] = useState(true)
@@ -20,8 +29,7 @@ export function useOutreach() {
   const [encounters, setEncounters] = useState<OutreachEncounter[]>([])
   const [syncQueue, setSyncQueue] = useState<OutreachSyncQueueItem[]>([])
   const [connection, setConnection] = useState<'online' | 'offline'>('online')
-
-  const activeCampaignId = activeCampaign?.id ?? null
+  const [invite, setInvite] = useState<OutreachInvite | null>(null)
 
   useEffect(() => {
     let mounted = true
@@ -56,13 +64,18 @@ export function useOutreach() {
         setActiveCampaign(campaign)
 
         if (campaign) {
-          const [encounterRows, syncRows] = await Promise.all([
+          const requests: Promise<any>[] = [
             fetchOutreachEncounters(campaign.id),
             fetchOutreachSyncQueue(campaign.id),
-          ])
+          ]
+          if (workerRecord.role === 'admin') {
+            requests.push(fetchCampaignInvite(campaign.id, workerRecord.id))
+          }
+          const [encounterRows, syncRows, existingInvite] = await Promise.all(requests)
           if (!mounted) return
           setEncounters(encounterRows)
           setSyncQueue(syncRows)
+          if (workerRecord.role === 'admin') setInvite(existingInvite ?? null)
         }
       } catch (error_) {
         setError(error_ instanceof Error ? error_.message : 'Unable to load outreach workspace.')
@@ -84,18 +97,11 @@ export function useOutreach() {
     const queued = syncQueue.filter((item) => item.status !== 'synced').length
     const served = encounters.filter((encounter) => encounter.status === 'synced' || encounter.status === 'referred').length
     const referred = encounters.filter((encounter) => encounter.status === 'referred' || encounter.service_type === 'referral').length
-    return {
-      registered: encounters.length,
-      queued,
-      served,
-      referred,
-    }
+    return { registered: encounters.length, queued, served, referred }
   }, [encounters, syncQueue, activeCampaign])
 
   async function addEncounter(input: NewEncounterInput) {
-    if (!worker || !activeCampaign) {
-      throw new Error('Outreach campaign is not ready.')
-    }
+    if (!worker || !activeCampaign) throw new Error('Outreach campaign is not ready.')
     const encounter = await createOutreachEncounter(worker, activeCampaign.id, input)
     setEncounters((current) => [encounter, ...current])
     await markSyncQueueAsSynced(activeCampaign.id)
@@ -107,9 +113,14 @@ export function useOutreach() {
     setConnection('offline')
     await new Promise((resolve) => setTimeout(resolve, 1200))
     await markSyncQueueAsSynced(activeCampaign.id)
-    const updatedQueue = await fetchOutreachSyncQueue(activeCampaign.id)
-    setSyncQueue(updatedQueue)
+    setSyncQueue(await fetchOutreachSyncQueue(activeCampaign.id))
     setConnection('online')
+  }
+
+  async function generateInvite() {
+    if (!worker || !activeCampaign) return
+    const newInvite = await createInviteCode(worker.id, activeCampaign.id, 'enumerator')
+    setInvite(newInvite)
   }
 
   async function signOut() {
@@ -128,8 +139,10 @@ export function useOutreach() {
     connection,
     role,
     metrics,
+    invite,
     addEncounter,
     simulateSync,
+    generateInvite,
     signOut,
   }
 }

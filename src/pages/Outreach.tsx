@@ -2,7 +2,7 @@ import React, { useMemo, useState } from 'react'
 import { Layout } from '../components/Layout'
 import { Badge, Button, Card, Input, Select, Spinner, Textarea } from '../components/ui'
 import { useOutreach } from '../hooks/useOutreach'
-import { OUTREACH_LOGIN_PATH } from '../lib/outreachRoutes'
+import { OUTREACH_LOGIN_PATH, OUTREACH_SIGNUP_PATH } from '../lib/outreachRoutes'
 import { useNavigate } from 'react-router-dom'
 
 const sexOptions = [
@@ -143,6 +143,34 @@ export default function OutreachPage() {
               <Card style={{ padding: 16, background: '#eef2ff' }}><strong>Status</strong><div>{outreach.connection}</div></Card>
               <Card style={{ padding: 16, background: '#f8fafc' }}><strong>Campaign</strong><div>{outreach.activeCampaign?.name ?? 'None'}</div></Card>
             </div>
+            {outreach.role === 'admin' && (
+              <div style={{ marginTop: 20, paddingTop: 20, borderTop: '1px solid #e5e7eb' }}>
+                <p style={{ margin: '0 0 10px', fontWeight: 700, fontSize: 13 }}>Worker invites</p>
+                {outreach.invite ? (
+                  <div style={{ display: 'grid', gap: 8 }}>
+                    <div style={{ padding: '10px 14px', borderRadius: 10, background: '#f0f9ff', border: '1px solid #bae6fd', fontFamily: 'monospace', fontSize: 15, fontWeight: 700, letterSpacing: '0.12em', textAlign: 'center' }}>
+                      {outreach.invite.code.slice(0, 4)}-{outreach.invite.code.slice(4)}
+                    </div>
+                    <p style={{ margin: '0', fontSize: 12, color: '#6b7280', textAlign: 'center' }}>
+                      {outreach.invite.use_count}/{outreach.invite.max_uses} uses
+                    </p>
+                    <Button
+                      variant="secondary"
+                      onClick={() => {
+                        const url = `${window.location.origin}${OUTREACH_SIGNUP_PATH.replace('signup', 'join')}?code=${outreach.invite!.code}`
+                        void navigator.clipboard.writeText(url)
+                      }}
+                    >
+                      Copy invite link
+                    </Button>
+                  </div>
+                ) : (
+                  <Button variant="secondary" onClick={outreach.generateInvite}>
+                    Generate invite link
+                  </Button>
+                )}
+              </div>
+            )}
           </Card>
         </div>
 

@@ -392,6 +392,31 @@ export type Database = {
         }
         Update: Partial<Database['public']['Tables']['hid_mobile_lab_samples']['Insert']>
       }
+      hid_outreach_invites: {
+        Row: {
+          id: string
+          campaign_id: string
+          created_by: string
+          code: string
+          role: 'enumerator' | 'health_worker' | 'admin'
+          max_uses: number
+          use_count: number
+          expires_at: string | null
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          campaign_id: string
+          created_by: string
+          code: string
+          role?: 'enumerator' | 'health_worker' | 'admin'
+          max_uses?: number
+          use_count?: number
+          expires_at?: string | null
+          created_at?: string
+        }
+        Update: Partial<Database['public']['Tables']['hid_outreach_invites']['Insert']>
+      }
       hid_sync_queue: {
         Row: {
           id: string

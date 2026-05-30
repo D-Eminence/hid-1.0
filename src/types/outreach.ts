@@ -92,6 +92,18 @@ export interface OutreachSyncQueueItem {
   synced_at: string | null
 }
 
+export interface OutreachInvite {
+  id: string
+  campaign_id: string
+  created_by: string
+  code: string
+  role: OutreachRole
+  max_uses: number
+  use_count: number
+  expires_at: string | null
+  created_at: string
+}
+
 export type NewEncounterInput = {
   full_name: string
   sex: OutreachSex
