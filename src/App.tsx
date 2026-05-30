@@ -22,6 +22,7 @@ import {
   PatientNotificationsPage,
   PatientProfilePage,
   PatientRecordsPage,
+  OutreachPage,
   preloadRoutesWhenIdle,
 } from './lib/routePreload'
 import {
@@ -29,7 +30,11 @@ import {
   ADMIN_OVERVIEW_PATH,
   ADMIN_ROOT_PATH,
 } from './lib/adminRoutes'
-import { hasStoredSupabaseAuthSession, isConfigured } from './lib/supabaseConfig'
+import {
+  hasStoredSupabaseAuthSession,
+  isConfigured,
+} from './lib/supabaseConfig'
+import { OUTREACH_PATH } from './lib/outreachRoutes'
 import {
   HOSPITAL_ACCESS_PATH,
   HOSPITAL_AUTH_PATH,
@@ -155,7 +160,8 @@ function requiresImmediateSessionBootstrap(pathname: string) {
     pathname.startsWith('/hospital/history') ||
     pathname.startsWith('/hospital/emergency') ||
     pathname.startsWith('/hospital/patient-records/') ||
-    pathname.startsWith('/eminence/')
+    pathname.startsWith('/eminence/') ||
+    pathname.startsWith('/outreach')
   )
 }
 
@@ -250,6 +256,7 @@ export default function App() {
             <Route path={HOSPITAL_HISTORY_PATH} element={<DoctorHistoryPage />} />
             <Route path={HOSPITAL_EMERGENCY_PATH} element={<DoctorEmergencyPage />} />
             <Route path="/hospital/patient-records/:hidCode" element={<DoctorPatientRecordsPage />} />
+            <Route path={OUTREACH_PATH} element={<OutreachPage />} />
             <Route path="/patient/auth" element={<Navigate to="/patient" replace />} />
             <Route path="/doctor/auth" element={<Navigate to={HOSPITAL_AUTH_PATH} replace />} />
             <Route path="/doctor/access" element={<Navigate to={HOSPITAL_ACCESS_PATH} replace />} />

@@ -68,6 +68,7 @@ export const DoctorAccessPage = lazyWithPreload(() => import('../pages/doctor/Do
 export const DoctorHistoryPage = lazyWithPreload(() => import('../pages/doctor/DoctorHistory'))
 export const DoctorEmergencyPage = lazyWithPreload(() => import('../pages/doctor/DoctorEmergency'))
 export const DoctorPatientRecordsPage = lazyWithPreload(() => import('../pages/doctor/DoctorPatientRecords'))
+export const OutreachPage = lazyWithPreload(() => import('../pages/Outreach'))
 
 const routeLoaders = {
   landing: LandingPage.preload,
@@ -84,6 +85,7 @@ const routeLoaders = {
   doctorHistory: DoctorHistoryPage.preload,
   doctorEmergency: DoctorEmergencyPage.preload,
   doctorPatientRecords: DoctorPatientRecordsPage.preload,
+  outreach: OutreachPage.preload,
 }
 
 export type RoutePreloadKey = keyof typeof routeLoaders
@@ -142,11 +144,12 @@ export function getRoutePreloadKeys(path: string): RoutePreloadKey[] {
   if (path.startsWith('/patient/notifications')) return ['patientProfile', 'patientRecords', 'patientHistory']
   if (path === '/eminence' || path.startsWith('/eminence/login')) return ['adminDashboard']
   if (path.startsWith('/eminence/')) return ['adminLogin']
+  if (path === '/outreach' || path.startsWith('/outreach')) return ['outreach']
   if (path === '/hospital' || path.startsWith('/hospital/auth') || path.startsWith('/doctor/auth')) {
-    return ['doctorDashboard', 'doctorAccess', 'doctorHistory', 'doctorEmergency']
+    return ['doctorDashboard', 'doctorAccess', 'doctorHistory', 'doctorEmergency', 'outreach']
   }
   if (path === '/dashboard' || path === '/doctor' || path.startsWith('/hospital/dashboard')) {
-    return ['doctorAccess', 'doctorHistory', 'doctorEmergency', 'doctorPatientRecords']
+    return ['doctorAccess', 'doctorHistory', 'doctorEmergency', 'doctorPatientRecords', 'outreach']
   }
   if (path.startsWith('/doctor/access') || path.startsWith('/hospital/access')) return ['doctorAccess', 'doctorHistory', 'doctorEmergency', 'doctorPatientRecords']
   if (path.startsWith('/hospital/history') || path.startsWith('/doctor/history')) return ['doctorHistory', 'doctorAccess', 'doctorEmergency', 'doctorPatientRecords']

@@ -242,6 +242,183 @@ export type Database = {
         }
         Update: Partial<Database['public']['Tables']['notifications']['Insert']>
       }
+      hid_outreach_campaigns: {
+        Row: {
+          id: string
+          name: string
+          org: string
+          location: string
+          status: 'planned' | 'active' | 'closed'
+          starts_at: string
+          ends_at: string | null
+          services: Array<'registration' | 'vitals' | 'vaccination' | 'lab_sample' | 'referral'>
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          name: string
+          org: string
+          location: string
+          status?: 'planned' | 'active' | 'closed'
+          starts_at: string
+          ends_at?: string | null
+          services?: Array<'registration' | 'vitals' | 'vaccination' | 'lab_sample' | 'referral'>
+          created_at?: string
+        }
+        Update: Partial<Database['public']['Tables']['hid_outreach_campaigns']['Insert']>
+      }
+      hid_outreach_workers: {
+        Row: {
+          id: string
+          auth_user_id: string
+          campaign_id: string
+          display_name: string
+          role: 'enumerator' | 'health_worker' | 'admin'
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          auth_user_id: string
+          campaign_id: string
+          display_name: string
+          role: 'enumerator' | 'health_worker' | 'admin'
+          created_at?: string
+        }
+        Update: Partial<Database['public']['Tables']['hid_outreach_workers']['Insert']>
+      }
+      hid_outreach_encounters: {
+        Row: {
+          id: string
+          campaign_id: string
+          worker_id: string
+          patient_hid: string | null
+          provisional_patient_id: string | null
+          full_name: string
+          sex: 'female' | 'male' | 'other'
+          age_years: number
+          phone: string | null
+          service_type: 'registration' | 'vitals' | 'vaccination' | 'lab_sample' | 'referral'
+          status: 'draft' | 'queued' | 'synced' | 'referred'
+          notes: string | null
+          consent_captured_at: string | null
+          consent_method: 'pin' | 'signature' | 'verbal_witness' | null
+          created_at: string
+          synced_at: string | null
+        }
+        Insert: {
+          id?: string
+          campaign_id: string
+          worker_id: string
+          patient_hid?: string | null
+          provisional_patient_id?: string | null
+          full_name: string
+          sex: 'female' | 'male' | 'other'
+          age_years: number
+          phone?: string | null
+          service_type: 'registration' | 'vitals' | 'vaccination' | 'lab_sample' | 'referral'
+          status?: 'draft' | 'queued' | 'synced' | 'referred'
+          notes?: string | null
+          consent_captured_at?: string | null
+          consent_method?: 'pin' | 'signature' | 'verbal_witness' | null
+          created_at?: string
+          synced_at?: string | null
+        }
+        Update: Partial<Database['public']['Tables']['hid_outreach_encounters']['Insert']>
+      }
+      hid_vaccinations: {
+        Row: {
+          id: string
+          encounter_id: string
+          campaign_id: string
+          vaccine_name: string
+          dose_label: string
+          vial_lot: string
+          administered_at: string
+          aefi_observed: boolean
+          notes: string | null
+        }
+        Insert: {
+          id?: string
+          encounter_id: string
+          campaign_id: string
+          vaccine_name: string
+          dose_label: string
+          vial_lot: string
+          administered_at?: string
+          aefi_observed?: boolean
+          notes?: string | null
+        }
+        Update: Partial<Database['public']['Tables']['hid_vaccinations']['Insert']>
+      }
+      hid_outreach_referrals: {
+        Row: {
+          id: string
+          encounter_id: string
+          campaign_id: string
+          facility_name: string
+          reason: string
+          urgency: 'routine' | 'soon' | 'urgent'
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          encounter_id: string
+          campaign_id: string
+          facility_name: string
+          reason: string
+          urgency: 'routine' | 'soon' | 'urgent'
+          created_at?: string
+        }
+        Update: Partial<Database['public']['Tables']['hid_outreach_referrals']['Insert']>
+      }
+      hid_mobile_lab_samples: {
+        Row: {
+          id: string
+          encounter_id: string
+          campaign_id: string
+          sample_type: string
+          barcode: string
+          collected_at: string
+          cold_chain_required: boolean
+        }
+        Insert: {
+          id?: string
+          encounter_id: string
+          campaign_id: string
+          sample_type: string
+          barcode: string
+          collected_at?: string
+          cold_chain_required?: boolean
+        }
+        Update: Partial<Database['public']['Tables']['hid_mobile_lab_samples']['Insert']>
+      }
+      hid_sync_queue: {
+        Row: {
+          id: string
+          campaign_id: string
+          worker_id: string
+          entity: 'encounter' | 'vaccination' | 'referral' | 'mobile_lab_sample'
+          action: 'insert' | 'update'
+          payload: unknown
+          status: 'queued' | 'syncing' | 'failed' | 'synced'
+          error: string | null
+          created_at: string
+          synced_at: string | null
+        }
+        Insert: {
+          id?: string
+          campaign_id: string
+          worker_id: string
+          entity: 'encounter' | 'vaccination' | 'referral' | 'mobile_lab_sample'
+          action: 'insert' | 'update'
+          payload: unknown
+          status?: 'queued' | 'syncing' | 'failed' | 'synced'
+          error?: string | null
+          created_at?: string
+          synced_at?: string | null
+        }
+        Update: Partial<Database['public']['Tables']['hid_sync_queue']['Insert']>
+      }
     }
     Views: Record<string, never>
     Functions: Record<string, never>
