@@ -122,7 +122,11 @@ export default function OutreachVerify() {
 
       setTimeout(() => navigate(OUTREACH_PATH, { replace: true }), 800)
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Verification failed. Please try again.')
+      const raw = err instanceof Error ? err.message : ''
+      const safe = raw && !raw.toLowerCase().includes('supabase') && !raw.toLowerCase().includes('fetch')
+        ? raw
+        : 'Verification failed. Please try again or request a new code.'
+      setError(safe)
       setDigits(['', '', '', '', '', ''])
       inputRefs.current[0]?.focus()
     } finally {
@@ -146,7 +150,11 @@ export default function OutreachVerify() {
       setResendCooldown(60)
       inputRefs.current[0]?.focus()
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Could not resend the code. Please try again.')
+      const raw = err instanceof Error ? err.message : ''
+      const safe = raw && !raw.toLowerCase().includes('supabase') && !raw.toLowerCase().includes('fetch')
+        ? raw
+        : 'Could not resend the code right now. Please check your connection and try again.'
+      setError(safe)
     } finally {
       setResending(false)
     }

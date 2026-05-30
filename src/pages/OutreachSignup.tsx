@@ -5,6 +5,15 @@ import { Button, Card, Input } from '../components/ui'
 import { signupOutreachAdmin } from '../lib/outreachApi'
 import { OUTREACH_LOGIN_PATH, OUTREACH_JOIN_PATH, OUTREACH_VERIFY_PATH } from '../lib/outreachRoutes'
 
+function ErrorBox({ message }: { message: string }) {
+  return (
+    <div role="alert" style={{ display: 'flex', gap: 10, alignItems: 'flex-start', background: '#fef2f2', border: '1px solid #fecaca', borderRadius: 10, padding: '12px 14px' }}>
+      <span style={{ fontSize: 15, lineHeight: 1, marginTop: 1, flexShrink: 0 }}>⚠</span>
+      <p style={{ margin: 0, color: '#b91c1c', fontSize: 13, lineHeight: 1.55 }}>{message}</p>
+    </div>
+  )
+}
+
 type Step = 'campaign' | 'account'
 
 export default function OutreachSignup() {
@@ -87,7 +96,7 @@ export default function OutreachSignup() {
               <Input label="Campaign name" placeholder="e.g. Ward 3 Immunization Drive" value={campaign.name} onChange={setC('name')} />
               <Input label="Location" placeholder="e.g. Agege, Lagos" value={campaign.location} onChange={setC('location')} />
               <Input label="Start date" type="date" value={campaign.starts_at} onChange={setC('starts_at')} />
-              {error && <p style={{ margin: 0, color: '#dc2626', fontSize: 13 }}>{error}</p>}
+              {error && <ErrorBox message={error} />}
               <Button type="submit" variant="primary">Continue</Button>
             </form>
             <p style={{ marginTop: 20, fontSize: 13, color: '#6b7280', textAlign: 'center' }}>
@@ -107,7 +116,7 @@ export default function OutreachSignup() {
               <Input label="Your full name" placeholder="e.g. Amina Bello" value={account.display_name} onChange={setA('display_name')} />
               <Input label="Email address" type="email" placeholder="you@example.com" value={account.email} onChange={setA('email')} />
               <Input label="Password" type="password" placeholder="At least 8 characters" value={account.password} onChange={setA('password')} />
-              {error && <p style={{ margin: 0, color: '#dc2626', fontSize: 13 }}>{error}</p>}
+              {error && <ErrorBox message={error} />}
               <div style={{ display: 'flex', gap: 10 }}>
                 <Button type="button" variant="secondary" onClick={() => { setError(null); setStep('campaign') }}>Back</Button>
                 <Button type="submit" variant="primary" loading={submitting} style={{ flex: 1 }}>Send verification code</Button>

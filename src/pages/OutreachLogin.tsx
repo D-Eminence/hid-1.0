@@ -5,6 +5,15 @@ import { Button, Card, Input } from '../components/ui'
 import { loginOutreachWorker } from '../lib/outreachApi'
 import { OUTREACH_PATH, OUTREACH_SIGNUP_PATH, OUTREACH_JOIN_PATH } from '../lib/outreachRoutes'
 
+function ErrorBox({ message }: { message: string }) {
+  return (
+    <div role="alert" style={{ display: 'flex', gap: 10, alignItems: 'flex-start', background: '#fef2f2', border: '1px solid #fecaca', borderRadius: 10, padding: '12px 14px' }}>
+      <span style={{ fontSize: 15, lineHeight: 1, marginTop: 1, flexShrink: 0 }}>⚠</span>
+      <p style={{ margin: 0, color: '#b91c1c', fontSize: 13, lineHeight: 1.55 }}>{message}</p>
+    </div>
+  )
+}
+
 export default function OutreachLogin() {
   const navigate = useNavigate()
   const [email, setEmail] = useState('')
@@ -52,11 +61,7 @@ export default function OutreachLogin() {
               onChange={e => { setPassword(e.target.value); setError(null) }}
             />
 
-            {error && (
-              <div style={{ background: '#fef2f2', border: '1px solid #fecaca', borderRadius: 10, padding: '12px 16px' }}>
-                <p style={{ margin: 0, color: '#dc2626', fontSize: 13, lineHeight: 1.5 }}>{error}</p>
-              </div>
-            )}
+            {error && <ErrorBox message={error} />}
 
             <Button type="submit" variant="primary" loading={submitting}>Sign in</Button>
           </form>

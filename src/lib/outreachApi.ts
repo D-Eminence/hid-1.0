@@ -17,21 +17,30 @@ async function callEdgeFunction<T>(name: string, body: unknown): Promise<T> {
   const session = await supabase.auth.getSession()
   const token = session.data.session?.access_token ?? import.meta.env.VITE_SUPABASE_ANON_KEY
 
-  const res = await fetch(`${FUNCTIONS_URL}/${name}`, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      Authorization: `Bearer ${token}`,
-      apikey: import.meta.env.VITE_SUPABASE_ANON_KEY,
-    },
-    body: JSON.stringify(body),
-  })
-
-  const json = await res.json().catch(() => ({ error: 'Unexpected response from server.' }))
-  if (!res.ok) {
-    throw new Error(json?.error ?? 'Something went wrong. Please try again.')
+  let res: Response
+  try {
+    res = await fetch(`${FUNCTIONS_URL}/${name}`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${token}`,
+        apikey: import.meta.env.VITE_SUPABASE_ANON_KEY,
+      },
+      body: JSON.stringify(body),
+    })
+  } catch {
+    throw new Error("We're having trouble connecting right now. Please check your internet connection and try again.")
   }
-  return json.data as T
+
+  const json = await res.json().catch(() => null)
+  if (!res.ok) {
+    const message = json?.error
+    if (!message || message.toLowerCase().includes('fetch') || message.toLowerCase().includes('supabase')) {
+      throw new Error('Something went wrong on our end. Please try again in a moment.')
+    }
+    throw new Error(message)
+  }
+  return (json?.data ?? json) as T
 }
 
 export type OutreachSignupPayload = {
