@@ -65,7 +65,7 @@ export default function OutreachSignup() {
       })
       if (signUpError) throw new Error(signUpError.message)
 
-      const userId = data.session?.user.id ?? data.user?.id
+      const userId = data.session?.user.id
       if (!userId) {
         setStep('confirm-email')
         return
