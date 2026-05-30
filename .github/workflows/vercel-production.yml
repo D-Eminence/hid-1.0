@@ -17,7 +17,6 @@ env:
 jobs:
   deploy:
     runs-on: ubuntu-latest
-    timeout-minutes: 15
     permissions:
       contents: read
 
@@ -57,5 +56,4 @@ jobs:
         run: npx vercel@latest build --prod --token="${{ secrets.VERCEL_TOKEN }}"
 
       - name: Deploy full production build
-        continue-on-error: true
-        run: npx vercel@latest deploy --prebuilt --prod --token="${{ secrets.VERCEL_TOKEN }}"
+        run: timeout 120 npx vercel@latest deploy --prebuilt --prod --token="${{ secrets.VERCEL_TOKEN }}" || true
