@@ -25,6 +25,8 @@ import {
   OutreachPage,
   OutreachSignupPage,
   OutreachJoinPage,
+  OutreachLoginPage,
+  OutreachVerifyPage,
   preloadRoutesWhenIdle,
 } from './lib/routePreload'
 import {
@@ -36,7 +38,7 @@ import {
   hasStoredSupabaseAuthSession,
   isConfigured,
 } from './lib/supabaseConfig'
-import { OUTREACH_PATH, OUTREACH_SIGNUP_PATH, OUTREACH_JOIN_PATH } from './lib/outreachRoutes'
+import { OUTREACH_PATH, OUTREACH_SIGNUP_PATH, OUTREACH_JOIN_PATH, OUTREACH_LOGIN_PATH, OUTREACH_VERIFY_PATH } from './lib/outreachRoutes'
 import {
   HOSPITAL_ACCESS_PATH,
   HOSPITAL_AUTH_PATH,
@@ -259,7 +261,9 @@ export default function App() {
             <Route path={HOSPITAL_EMERGENCY_PATH} element={<DoctorEmergencyPage />} />
             <Route path="/hospital/patient-records/:hidCode" element={<DoctorPatientRecordsPage />} />
             <Route path={OUTREACH_PATH} element={<OutreachPage />} />
+            <Route path={OUTREACH_LOGIN_PATH} element={<OutreachLoginPage />} />
             <Route path={OUTREACH_SIGNUP_PATH} element={<OutreachSignupPage />} />
+            <Route path={OUTREACH_VERIFY_PATH} element={<OutreachVerifyPage />} />
             <Route path={OUTREACH_JOIN_PATH} element={<OutreachJoinPage />} />
             <Route path="/patient/auth" element={<Navigate to="/patient" replace />} />
             <Route path="/doctor/auth" element={<Navigate to={HOSPITAL_AUTH_PATH} replace />} />

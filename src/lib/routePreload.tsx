@@ -71,6 +71,8 @@ export const DoctorPatientRecordsPage = lazyWithPreload(() => import('../pages/d
 export const OutreachPage = lazyWithPreload(() => import('../pages/Outreach'))
 export const OutreachSignupPage = lazyWithPreload(() => import('../pages/OutreachSignup'))
 export const OutreachJoinPage = lazyWithPreload(() => import('../pages/OutreachJoin'))
+export const OutreachLoginPage = lazyWithPreload(() => import('../pages/OutreachLogin'))
+export const OutreachVerifyPage = lazyWithPreload(() => import('../pages/OutreachVerify'))
 
 const routeLoaders = {
   landing: LandingPage.preload,
@@ -90,6 +92,8 @@ const routeLoaders = {
   outreach: OutreachPage.preload,
   outreachSignup: OutreachSignupPage.preload,
   outreachJoin: OutreachJoinPage.preload,
+  outreachLogin: OutreachLoginPage.preload,
+  outreachVerify: OutreachVerifyPage.preload,
 }
 
 export type RoutePreloadKey = keyof typeof routeLoaders
@@ -148,8 +152,10 @@ export function getRoutePreloadKeys(path: string): RoutePreloadKey[] {
   if (path.startsWith('/patient/notifications')) return ['patientProfile', 'patientRecords', 'patientHistory']
   if (path === '/eminence' || path.startsWith('/eminence/login')) return ['adminDashboard']
   if (path.startsWith('/eminence/')) return ['adminLogin']
-  if (path === '/outreach/signup') return ['outreachSignup', 'outreachJoin']
-  if (path === '/outreach/join' || path.startsWith('/outreach/join')) return ['outreachJoin', 'outreachSignup']
+  if (path === '/outreach/login') return ['outreachLogin', 'outreachSignup', 'outreachJoin']
+  if (path === '/outreach/signup') return ['outreachSignup', 'outreachLogin', 'outreachJoin']
+  if (path === '/outreach/verify') return ['outreachVerify']
+  if (path === '/outreach/join' || path.startsWith('/outreach/join')) return ['outreachJoin', 'outreachLogin', 'outreachSignup']
   if (path === '/outreach' || path.startsWith('/outreach')) return ['outreach']
   if (path === '/hospital' || path.startsWith('/hospital/auth') || path.startsWith('/doctor/auth')) {
     return ['doctorDashboard', 'doctorAccess', 'doctorHistory', 'doctorEmergency', 'outreach']

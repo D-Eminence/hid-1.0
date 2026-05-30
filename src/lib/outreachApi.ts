@@ -11,6 +11,97 @@ import type {
   OutreachWorker,
 } from '../types/outreach'
 
+const FUNCTIONS_URL = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1`
+
+async function callEdgeFunction<T>(name: string, body: unknown): Promise<T> {
+  const session = await supabase.auth.getSession()
+  const token = session.data.session?.access_token ?? import.meta.env.VITE_SUPABASE_ANON_KEY
+
+  const res = await fetch(`${FUNCTIONS_URL}/${name}`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${token}`,
+      apikey: import.meta.env.VITE_SUPABASE_ANON_KEY,
+    },
+    body: JSON.stringify(body),
+  })
+
+  const json = await res.json().catch(() => ({ error: 'Unexpected response from server.' }))
+  if (!res.ok) {
+    throw new Error(json?.error ?? 'Something went wrong. Please try again.')
+  }
+  return json.data as T
+}
+
+export type OutreachSignupPayload = {
+  email: string
+  password: string
+  displayName: string
+  campaignName: string
+  org: string
+  location: string
+  startsAt: string
+}
+
+export type OutreachSignupResult = {
+  otpId: string
+  maskedEmail: string
+  expiresAt: string
+  expiresInMinutes: number
+}
+
+export type OutreachVerifyResult = {
+  session: { access_token: string; refresh_token: string; expires_in: number; token_type: string }
+  worker: OutreachWorker
+  campaign: OutreachCampaign
+}
+
+export type OutreachResendResult = {
+  maskedEmail: string
+  expiresAt: string
+  expiresInMinutes: number
+  resendsRemaining: number
+}
+
+export async function signupOutreachAdmin(payload: OutreachSignupPayload): Promise<OutreachSignupResult> {
+  return callEdgeFunction<OutreachSignupResult>('outreach-signup', payload)
+}
+
+export async function verifyOutreachOtp(otpId: string, code: string): Promise<OutreachVerifyResult> {
+  return callEdgeFunction<OutreachVerifyResult>('outreach-verify-otp', { otpId, code })
+}
+
+export async function resendOutreachOtp(otpId: string): Promise<OutreachResendResult> {
+  return callEdgeFunction<OutreachResendResult>('outreach-resend-otp', { otpId })
+}
+
+export async function loginOutreachWorker(email: string, password: string): Promise<OutreachWorker> {
+  const { data, error } = await supabase.auth.signInWithPassword({ email, password })
+  if (error) {
+    if (error.message?.toLowerCase().includes('invalid login credentials')) {
+      throw new Error("We couldn't find an outreach account with those details. Check your email and password and try again.")
+    }
+    throw new Error(error.message ?? 'Sign-in failed. Please try again.')
+  }
+
+  const userId = data.session?.user.id
+  if (!userId) throw new Error('Sign-in failed. Please try again.')
+
+  const { data: worker } = await supabase
+    .from('hid_outreach_workers')
+    .select('*')
+    .eq('auth_user_id', userId)
+    .maybeSingle()
+
+  if (!worker) {
+    await supabase.auth.signOut()
+    throw new Error("You don't have an outreach account linked to this email. Check your email or sign up to create one.")
+  }
+
+  return worker as OutreachWorker
+}
+
 export function getCurrentUserId(session: Session | null) {
   return session?.user.id ?? null
 }

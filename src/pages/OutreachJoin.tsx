@@ -10,6 +10,7 @@ import {
   incrementInviteUseCount,
 } from '../lib/outreachApi'
 import { OUTREACH_PATH, OUTREACH_LOGIN_PATH, OUTREACH_SIGNUP_PATH } from '../lib/outreachRoutes'
+// OUTREACH_LOGIN_PATH now points to /outreach/login (dedicated outreach auth)
 import type { OutreachCampaign, OutreachInvite } from '../types/outreach'
 
 type Step = 'code' | 'preview' | 'account' | 'confirm-email'
