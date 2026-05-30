@@ -11,36 +11,30 @@ import type {
   OutreachWorker,
 } from '../types/outreach'
 
-const FUNCTIONS_URL = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1`
-
 async function callEdgeFunction<T>(name: string, body: unknown): Promise<T> {
-  const session = await supabase.auth.getSession()
-  const token = session.data.session?.access_token ?? import.meta.env.VITE_SUPABASE_ANON_KEY
+  let data: unknown
+  let error: unknown
 
-  let res: Response
   try {
-    res = await fetch(`${FUNCTIONS_URL}/${name}`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${token}`,
-        apikey: import.meta.env.VITE_SUPABASE_ANON_KEY,
-      },
-      body: JSON.stringify(body),
-    })
+    const result = await supabase.functions.invoke(name, { body: body as Record<string, unknown> })
+    data = result.data
+    error = result.error
   } catch {
     throw new Error("We're having trouble connecting right now. Please check your internet connection and try again.")
   }
 
-  const json = await res.json().catch(() => null)
-  if (!res.ok) {
-    const message = json?.error
-    if (!message || message.toLowerCase().includes('fetch') || message.toLowerCase().includes('supabase')) {
+  if (error) {
+    const message = typeof error === 'object' && error !== null && 'message' in error
+      ? String((error as { message: unknown }).message)
+      : String(error)
+    const lower = message.toLowerCase()
+    if (!message || lower.includes('fetch') || lower.includes('supabase') || lower.includes('edge function')) {
       throw new Error('Something went wrong on our end. Please try again in a moment.')
     }
     throw new Error(message)
   }
-  return (json?.data ?? json) as T
+
+  return data as T
 }
 
 export type OutreachSignupPayload = {
