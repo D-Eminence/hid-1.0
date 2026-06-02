@@ -64,6 +64,8 @@ function isIgnoredSentryIssue(issue: SentryIssue) {
 
   return (
     text.includes('networkerror when attempting to fetch resource') ||
+    text.includes('please sign in to continue') ||
+    text.includes('infinite recursion detected in policy') ||
     (text.includes('typeerror: failed to fetch') && text.includes('supabase.co')) ||
     text.includes('authretryablefetcherror') ||
     (text.includes('request took too long') && text.includes('check your internet connection')) ||
