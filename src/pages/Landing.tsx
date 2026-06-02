@@ -20,8 +20,12 @@ type SecurityCardKind =
   | 'verified-identity'
   | 'compliance'
 
+type EcosystemKind = 'identity' | 'emr' | 'lab' | 'pharmacy' | 'outreach'
+
 const sectionPadding = '80px clamp(20px, 5vw, 48px)'
-const landingTrustBadges = ['HIPAA + NDPC aligned', 'Secure Cloud Infrastructure'] as const
+const landingTrustBadges = ['HIPAA + NDPC aligned', 'End-to-end encrypted', 'Built for African healthcare'] as const
+const SUPPORT_EMAIL = 'support@healthidentitydirectory.com'
+const PARTNER_HREF = `mailto:${SUPPORT_EMAIL}`
 
 const footerLinkStyle: React.CSSProperties = {
   display: 'block',
@@ -93,6 +97,54 @@ function SocialIconLink({
   )
 }
 
+function EcosystemIcon({ kind }: { kind: EcosystemKind }) {
+  if (kind === 'identity') {
+    return (
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+        <rect x="3.5" y="5.5" width="17" height="13" rx="2.5" stroke="currentColor" strokeWidth="1.8" />
+        <circle cx="9" cy="11" r="2.2" stroke="currentColor" strokeWidth="1.8" />
+        <path d="M5.8 16c.4-1.6 1.7-2.5 3.2-2.5s2.8.9 3.2 2.5" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
+        <path d="M14.5 10h4M14.5 13h3" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
+      </svg>
+    )
+  }
+
+  if (kind === 'emr') {
+    return (
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+        <rect x="5" y="3.5" width="14" height="17" rx="2.5" stroke="currentColor" strokeWidth="1.8" />
+        <path d="M9 3.5v2.5h6V3.5" stroke="currentColor" strokeWidth="1.8" strokeLinejoin="round" />
+        <path d="M12 10v5M9.5 12.5h5" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
+      </svg>
+    )
+  }
+
+  if (kind === 'lab') {
+    return (
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+        <path d="M10 3.5h4M10.5 3.5v6L6.5 17a2 2 0 0 0 1.8 3h7.4a2 2 0 0 0 1.8-3l-4-7.5v-6" stroke="currentColor" strokeWidth="1.8" strokeLinejoin="round" strokeLinecap="round" />
+        <path d="M8.2 14h7.6" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
+      </svg>
+    )
+  }
+
+  if (kind === 'pharmacy') {
+    return (
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+        <rect x="3.5" y="8.5" width="11" height="11" rx="3" transform="rotate(-45 3.5 8.5)" stroke="currentColor" strokeWidth="1.8" />
+        <path d="M8 7l5 5" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
+      </svg>
+    )
+  }
+
+  return (
+    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+      <circle cx="12" cy="12" r="2.5" stroke="currentColor" strokeWidth="1.8" />
+      <path d="M12 4v3M12 17v3M4 12h3M17 12h3M6.5 6.5l2 2M15.5 15.5l2 2M17.5 6.5l-2 2M6.5 17.5l2-2" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
+    </svg>
+  )
+}
+
 function SecurityCardIcon({
   kind,
 }: {
@@ -154,19 +206,164 @@ function SecurityCardIcon({
   )
 }
 
+type CtaVariant = 'primary' | 'secondary' | 'white' | 'outlineWhite'
+
+function ctaLook(variant: CtaVariant): React.CSSProperties {
+  switch (variant) {
+    case 'secondary':
+      return { background: '#fff', color: '#1a6fd4', border: '1.5px solid #1a6fd4' }
+    case 'white':
+      return { background: '#fff', color: '#1a6fd4', border: '1.5px solid #fff' }
+    case 'outlineWhite':
+      return { background: 'transparent', color: '#fff', border: '1.5px solid rgba(255,255,255,0.55)' }
+    default:
+      return { background: '#1a6fd4', color: '#fff', border: '1.5px solid #1a6fd4' }
+  }
+}
+
+function ctaHoverLook(variant: CtaVariant): React.CSSProperties {
+  switch (variant) {
+    case 'secondary':
+      return { background: '#e8f1fc' }
+    case 'white':
+      return { filter: 'brightness(0.96)' }
+    case 'outlineWhite':
+      return { background: 'rgba(255,255,255,0.1)' }
+    default:
+      return { filter: 'brightness(0.94)' }
+  }
+}
+
+function Cta({
+  variant = 'primary',
+  size = 'md',
+  href,
+  onClick,
+  onMouseEnter,
+  onFocus,
+  fullWidth,
+  children,
+}: {
+  variant?: CtaVariant
+  size?: 'sm' | 'md'
+  href?: string
+  onClick?: () => void
+  onMouseEnter?: () => void
+  onFocus?: () => void
+  fullWidth?: boolean
+  children: React.ReactNode
+}) {
+  const [hovered, setHovered] = useState(false)
+  const sizing: React.CSSProperties = size === 'sm'
+    ? { padding: '10px 22px', fontSize: 14 }
+    : { padding: '14px 28px', fontSize: 15 }
+  const style: React.CSSProperties = {
+    borderRadius: 999,
+    fontWeight: 700,
+    cursor: 'pointer',
+    display: 'inline-flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    textDecoration: 'none',
+    whiteSpace: 'nowrap',
+    lineHeight: 1,
+    boxSizing: 'border-box',
+    width: fullWidth ? '100%' : undefined,
+    transition: 'filter 0.15s ease, background 0.15s ease, color 0.15s ease',
+    ...sizing,
+    ...ctaLook(variant),
+    ...(hovered ? ctaHoverLook(variant) : null),
+  }
+  const handleEnter = () => {
+    setHovered(true)
+    onMouseEnter?.()
+  }
+  const handleLeave = () => setHovered(false)
+  const handleFocus = () => {
+    setHovered(true)
+    onFocus?.()
+  }
+  const handleBlur = () => setHovered(false)
+
+  if (href) {
+    return (
+      <a href={href} onClick={onClick} onMouseEnter={handleEnter} onMouseLeave={handleLeave} onFocus={handleFocus} onBlur={handleBlur} style={style}>
+        {children}
+      </a>
+    )
+  }
+  return (
+    <button type="button" onClick={onClick} onMouseEnter={handleEnter} onMouseLeave={handleLeave} onFocus={handleFocus} onBlur={handleBlur} style={style}>
+      {children}
+    </button>
+  )
+}
+
 export default function Landing() {
   const navigate = useNavigate()
   const [openFaq, setOpenFaq] = useState<number | null>(null)
   const [legalOpen, setLegalOpen] = useState(false)
+  const [menuOpen, setMenuOpen] = useState(false)
   const [viewportWidth, setViewportWidth] = useState(() => (typeof window !== 'undefined' ? window.innerWidth : 1024))
 
   const faqs = [
-    { q: 'What is HID?', a: 'HID (Health Identity Directory) is a unified digital health identity platform that gives every patient a single, secure ID linking their complete medical history and making it available at any hospital, anytime.' },
-    { q: 'How do I create my HID?', a: 'Sign up with your first name, last name, email address, phone number, and gender. Create your password and your HID code is generated for your record.' },
-    { q: 'Is my data safe?', a: 'Yes. All data is encrypted end-to-end, stored on secure cloud infrastructure, and designed around healthcare privacy expectations.' },
-    { q: 'Can hospitals outside my city access my HID?', a: 'Yes. Any hospital in the HID network can access records using your HID number, ensuring continuity of care anywhere.' },
-    { q: 'Do I need an account to use HID?', a: 'Yes. Patients sign in with their HID code and password, while hospitals create an organization account and sign in from the hospital portal with hospital name, email, and password.' },
+    { q: 'What is HID?', a: 'HID (Health Identity Directory) is a connected healthcare infrastructure platform. At its center is a secure digital health identity that links patients to the hospitals, laboratories, pharmacies, and outreach programs that care for them.' },
+    { q: 'What can I do with my HID?', a: 'Your HID gives you a single, secure health identity. With it, participating hospitals and clinics can access your verified medical history, prescriptions, and lab results, so your care continues seamlessly wherever you go.' },
+    { q: 'Is my data safe?', a: 'Yes. All data is encrypted in transit and at rest, stored on secure cloud infrastructure, and governed by strict consent controls. Only verified providers you authorise can access your records.' },
+    { q: 'Can any hospital access my records?', a: 'Only hospitals and clinicians in the HID network, and only with the appropriate access. Within the network, your records follow your HID, ensuring continuity of care anywhere.' },
+    { q: 'Who is HID for?', a: 'HID serves patients, hospitals, laboratories, pharmacies, and outreach programs. Patients get a unified health identity; providers get connected EMR, lab, pharmacy, and outreach tools built around it.' },
+    { q: 'How do healthcare providers partner with HID?', a: `Hospitals, labs, pharmacies, and outreach organisations can join the HID network to access EMR, diagnostics, dispensing, and outreach tools. Reach out at ${SUPPORT_EMAIL} to get started.` },
   ]
+
+  const challenges = [
+    'Fragmented patient records',
+    'Disconnected healthcare systems',
+    'Repeated tests and procedures',
+    'Delayed access to critical information',
+    'Poor continuity of care',
+    'Limited visibility across providers',
+  ]
+
+  const ecosystem: Array<{ icon: EcosystemKind; title: string; desc: string }> = [
+    { icon: 'identity', title: 'Digital Health Identity', desc: 'A unique, secure health ID that lets patients access their information and follows them across every participating provider.' },
+    { icon: 'emr', title: 'HID EMR', desc: 'Electronic medical records and clinical workflow management that help providers deliver connected, efficient care.' },
+    { icon: 'lab', title: 'HID Lab', desc: 'Laboratory operations, diagnostics management, and fast, reliable result reporting.' },
+    { icon: 'pharmacy', title: 'HID Pharmacy', desc: 'Prescription management, dispensing workflows, and real-time inventory across branches.' },
+    { icon: 'outreach', title: 'HID Outreach', desc: 'Tools to run medical outreaches, community health programs, and population health initiatives.' },
+  ]
+
+  const operationsScreens: Array<{ src: string; tag: string; title: string; desc: string; flip: boolean }> = [
+    {
+      src: '/screenshots/dashboard-hospital.png',
+      tag: 'Hospital Management',
+      title: 'Clinical Dashboards Built for the Front Line',
+      desc: 'Clinicians see their day at a glance, patients in queue, results to review, pending sign-offs, and start a consultation in one click.',
+      flip: false,
+    },
+    {
+      src: '/screenshots/dashboard-lab.png',
+      tag: 'Laboratory Operations',
+      title: 'From Sample to Verified Result',
+      desc: 'Labs of every size run the full diagnostic pipeline, registration, collection, processing, verification, and release, with critical-result alerts built in.',
+      flip: true,
+    },
+    {
+      src: '/screenshots/dashboard-pharmacy.png',
+      tag: 'Pharmacy Operations',
+      title: 'Pharmacy and Inventory, Across Every Branch',
+      desc: 'Owners track revenue, margin, and stock in real time across all branches, with reorder and top-product insights at a glance.',
+      flip: false,
+    },
+  ]
+
+  const outcomes = [
+    { title: 'Improve patient outcomes', desc: 'Complete histories mean faster, safer, better-informed clinical decisions.' },
+    { title: 'Strengthen healthcare delivery', desc: 'Connected providers reduce duplication, delays, and gaps in care.' },
+    { title: 'Support healthcare programs', desc: 'Outreach and public health initiatives reach the right people with the right data.' },
+    { title: 'Improve healthcare planning', desc: 'Aggregated, privacy-protected trends help systems plan capacity and resources.' },
+    { title: 'Enable responsible research', desc: 'Connected data, governed by consent, can support ethical medical research.' },
+  ]
+
   const securityCards: Array<{ icon: SecurityCardKind; title: string; desc: string }> = [
     { icon: 'controlled-access', title: 'Controlled Access', desc: 'Only verified medical professionals can access or update a patient health information.' },
     { icon: 'consent-sharing', title: 'Consent-Based Sharing', desc: 'Patients approve when and where their data can be accessed, keeping control in the right hands.' },
@@ -178,11 +375,13 @@ export default function Landing() {
 
   const footerGroups: Array<{ head: string; links: FooterLink[] }> = [
     {
-      head: 'Product',
+      head: 'Ecosystem',
       links: [
-        { label: 'How HID Works', href: '#how-it-works' },
-        { label: 'Features', href: '#features' },
-        { label: 'Security & Compliance', href: '#security' },
+        { label: 'Digital Health Identity', href: '#ecosystem' },
+        { label: 'HID EMR', href: '#ecosystem' },
+        { label: 'HID Lab', href: '#ecosystem' },
+        { label: 'HID Pharmacy', href: '#ecosystem' },
+        { label: 'HID Outreach', href: '#ecosystem' },
       ],
     },
     {
@@ -190,6 +389,7 @@ export default function Landing() {
       links: [
         { label: 'Patient Portal', onClick: () => navigate('/patient') },
         { label: 'Hospital Portal', onClick: () => navigate(HOSPITAL_AUTH_PATH) },
+        { label: 'Partner With Us', href: PARTNER_HREF },
         { label: 'FAQs', href: '#faq' },
       ],
     },
@@ -207,12 +407,31 @@ export default function Landing() {
   const responsiveSectionPadding = isNarrow ? '56px 18px' : sectionPadding
   const stackedGridColumns = isNarrow ? '1fr' : 'repeat(auto-fit, minmax(260px, 1fr))'
 
+  const navLinks = [
+    { label: 'Why HID', href: '#why-hid' },
+    { label: 'Ecosystem', href: '#ecosystem' },
+    { label: 'How it Works', href: '#how-it-works' },
+    { label: 'Security', href: '#security' },
+  ]
+
   useEffect(() => {
     const handleResize = () => setViewportWidth(window.innerWidth)
     handleResize()
     window.addEventListener('resize', handleResize)
     return () => window.removeEventListener('resize', handleResize)
   }, [])
+
+  useEffect(() => {
+    if (!isCompact && menuOpen) setMenuOpen(false)
+  }, [isCompact, menuOpen])
+
+  useEffect(() => {
+    if (typeof document === 'undefined') return
+    document.body.style.overflow = menuOpen ? 'hidden' : ''
+    return () => {
+      document.body.style.overflow = ''
+    }
+  }, [menuOpen])
 
   useEffect(() => preloadRoutesWhenIdle(['patientAuth', 'doctorAuth', 'adminLogin']), [])
 
@@ -228,68 +447,109 @@ export default function Landing() {
           borderBottom: '1px solid #e5e7eb',
           display: 'flex',
           alignItems: 'center',
-          justifyContent: isCompact ? 'center' : 'space-between',
+          justifyContent: 'space-between',
           padding: isNarrow ? '12px 16px' : '12px clamp(16px, 4vw, 48px)',
           minHeight: 64,
-          gap: isNarrow ? 12 : 16,
-          flexWrap: 'wrap',
+          gap: 16,
         }}
       >
         <HIDLogo size="sm" />
-        <div style={{ display: 'flex', alignItems: 'center', gap: isNarrow ? 14 : 'clamp(16px, 4vw, 32px)', flexWrap: 'wrap', justifyContent: 'center', order: isNarrow ? 3 : 0, width: isNarrow ? '100%' : 'auto' }}>
-          {['How it Works', 'Features', 'Security'].map(link => (
-            <a
-              key={link}
-              href={`#${link.toLowerCase().replace(/ /g, '-')}`}
-              style={{ fontSize: 14, fontWeight: 500, color: '#6b7280', transition: 'color 0.15s' }}
-              onMouseEnter={event => {
-                event.currentTarget.style.color = '#111827'
-              }}
-              onMouseLeave={event => {
-                event.currentTarget.style.color = '#6b7280'
-              }}
+
+        {!isCompact && (
+          <div style={{ display: 'flex', alignItems: 'center', gap: 'clamp(16px, 4vw, 32px)' }}>
+            {navLinks.map(link => (
+              <a
+                key={link.label}
+                href={link.href}
+                style={{ fontSize: 14, fontWeight: 500, color: '#6b7280', transition: 'color 0.15s' }}
+                onMouseEnter={event => {
+                  event.currentTarget.style.color = '#111827'
+                }}
+                onMouseLeave={event => {
+                  event.currentTarget.style.color = '#6b7280'
+                }}
+              >
+                {link.label}
+              </a>
+            ))}
+          </div>
+        )}
+
+        {!isCompact && (
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+            <Cta variant="secondary" size="sm" href={PARTNER_HREF}>
+              Partner With Us
+            </Cta>
+            <Cta
+              variant="primary"
+              size="sm"
+              onClick={() => navigate('/patient')}
+              onMouseEnter={() => preloadRoute('patientAuth')}
+              onFocus={() => preloadRoute('patientAuth')}
             >
-              {link}
-            </a>
-          ))}
-        </div>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap', justifyContent: 'center' }}>
+              Get Your HID
+            </Cta>
+          </div>
+        )}
+
+        {isCompact && (
           <button
-            onClick={() => navigate('/patient')}
-            onMouseEnter={() => preloadRoute('patientAuth')}
-            onFocus={() => preloadRoute('patientAuth')}
-            style={{
-              background: '#1a6fd4',
-              color: 'white',
-              border: 'none',
-              borderRadius: 999,
-              padding: '9px 22px',
-              fontSize: 14,
-              fontWeight: 600,
-              cursor: 'pointer',
-            }}
+            type="button"
+            aria-label="Open menu"
+            aria-expanded={menuOpen}
+            onClick={() => setMenuOpen(true)}
+            style={{ background: 'none', border: '1px solid #e5e7eb', borderRadius: 10, width: 42, height: 42, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', color: '#111827', cursor: 'pointer' }}
           >
-            Patient
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+              <path d="M4 7h16M4 12h16M4 17h16" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
+            </svg>
           </button>
-          <button
-            onClick={() => navigate(HOSPITAL_AUTH_PATH)}
-            onMouseEnter={() => preloadRoute('doctorAuth')}
-            onFocus={() => preloadRoute('doctorAuth')}
-            style={{
-              background: '#1a6fd4',
-              color: '#fff',
-              border: 'none',
-              borderRadius: 999,
-              padding: '9px 22px',
-              fontSize: 14,
-              fontWeight: 600,
-              cursor: 'pointer',
-            }}
-          >
-            Hospital
-          </button>
-        </div>
+        )}
       </nav>
+
+      {isCompact && menuOpen && (
+        <div style={{ position: 'fixed', inset: 0, background: '#fff', zIndex: 200, display: 'flex', flexDirection: 'column', padding: isNarrow ? '12px 16px 24px' : '12px clamp(16px, 4vw, 48px) 24px', overflowY: 'auto' }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', minHeight: 42 }}>
+            <HIDLogo size="sm" />
+            <button
+              type="button"
+              aria-label="Close menu"
+              onClick={() => setMenuOpen(false)}
+              style={{ background: 'none', border: '1px solid #e5e7eb', borderRadius: 10, width: 42, height: 42, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', color: '#111827', cursor: 'pointer' }}
+            >
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                <path d="M6 6l12 12M18 6L6 18" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
+              </svg>
+            </button>
+          </div>
+          <div style={{ display: 'flex', flexDirection: 'column', marginTop: 14 }}>
+            {navLinks.map(link => (
+              <a
+                key={link.label}
+                href={link.href}
+                onClick={() => setMenuOpen(false)}
+                style={{ fontSize: 16, fontWeight: 600, color: '#111827', textDecoration: 'none', padding: '16px 6px', borderBottom: '1px solid #f3f4f6' }}
+              >
+                {link.label}
+              </a>
+            ))}
+          </div>
+          <div style={{ display: 'grid', gap: 10, marginTop: 24 }}>
+            <Cta variant="primary" size="md" fullWidth onClick={() => { setMenuOpen(false); navigate('/patient') }}>
+              Get Your HID
+            </Cta>
+            <Cta variant="secondary" size="md" fullWidth href={PARTNER_HREF} onClick={() => setMenuOpen(false)}>
+              Partner With Us
+            </Cta>
+            <button
+              onClick={() => { setMenuOpen(false); navigate(HOSPITAL_AUTH_PATH) }}
+              style={{ marginTop: 4, background: 'none', border: 'none', color: '#6b7280', fontSize: 14, fontWeight: 500, cursor: 'pointer', padding: 8 }}
+            >
+              Hospital or provider staff? Sign in &rarr;
+            </button>
+          </div>
+        </div>
+      )}
 
       <div style={{ maxWidth: 960, margin: '0 auto', padding: isNarrow ? '42px 16px 56px' : '72px clamp(20px, 5vw, 24px) 80px', display: 'flex', flexDirection: 'column', alignItems: 'center', textAlign: 'center' }}>
         <div
@@ -303,39 +563,39 @@ export default function Landing() {
             boxShadow: '0 4px 32px rgba(0,0,0,0.06)',
           }}
         >
+          <span style={{ display: 'inline-flex', alignItems: 'center', gap: 7, background: '#e8f1fc', color: '#1a6fd4', fontSize: 12, fontWeight: 600, padding: '5px 14px', borderRadius: 999, marginBottom: 18 }}>
+            <span style={{ width: 6, height: 6, borderRadius: '50%', background: '#1a6fd4', display: 'inline-block' }} />
+            Connected Healthcare Infrastructure
+          </span>
           <h1 style={{ fontSize: isNarrow ? 30 : 36, fontWeight: 800, lineHeight: 1.15, letterSpacing: isNarrow ? 0 : '-0.8px', marginBottom: 14 }}>
-            One Patient. <span style={{ color: '#1a6fd4' }}>One ID</span>.<br />Your Health, Anywhere.
+            One Patient. One ID.<br /><span style={{ color: '#1a6fd4' }}>Better Healthcare Everywhere.</span>
           </h1>
-          <p style={{ fontSize: 14, color: '#6b7280', lineHeight: 1.7, marginBottom: 28, maxWidth: 360, margin: '0 auto 28px' }}>
-            HID gives every patient a secure, unified health identity so complete medical history is available at any hospital, anywhere, anytime.
+          <p style={{ fontSize: 14, color: '#6b7280', lineHeight: 1.7, marginBottom: 28, maxWidth: 420, margin: '0 auto 28px' }}>
+            HID gives every patient a secure health identity, and connects the hospitals, laboratories, pharmacies, and outreach programs that care for them. One record, accessible across the systems that matter, anywhere care happens.
           </p>
-          <div style={{ display: 'grid', gridTemplateColumns: isNarrow ? '1fr' : 'repeat(auto-fit, minmax(220px, 1fr))', gap: 12, marginTop: 18 }}>
-            {[
-              { title: 'Patient', path: '/patient' },
-              { title: 'Hospital', path: HOSPITAL_AUTH_PATH },
-            ].map(portal => (
-              <button
-                key={portal.title}
-                onClick={() => navigate(portal.path)}
-                onMouseEnter={() => preloadRoute(portal.path === '/patient' ? 'patientAuth' : 'doctorAuth')}
-                onFocus={() => preloadRoute(portal.path === '/patient' ? 'patientAuth' : 'doctorAuth')}
-                style={{
-                  textAlign: 'center',
-                  border: 'none',
-                  borderRadius: 999,
-                  background: '#1a6fd4',
-                  color: '#fff',
-                  padding: '14px 16px',
-                  cursor: 'pointer',
-                  fontWeight: 700,
-                  fontSize: 15,
-                  width: '100%',
-                }}
-              >
-                {portal.title}
-              </button>
-            ))}
+          <div style={{ display: 'grid', gridTemplateColumns: isNarrow ? '1fr' : 'repeat(auto-fit, minmax(200px, 1fr))', gap: 12, marginTop: 18 }}>
+            <Cta
+              variant="primary"
+              size="md"
+              fullWidth
+              onClick={() => navigate('/patient')}
+              onMouseEnter={() => preloadRoute('patientAuth')}
+              onFocus={() => preloadRoute('patientAuth')}
+            >
+              Get Your HID
+            </Cta>
+            <Cta variant="secondary" size="md" fullWidth href={PARTNER_HREF}>
+              Partner With Us
+            </Cta>
           </div>
+          <button
+            onClick={() => navigate(HOSPITAL_AUTH_PATH)}
+            onMouseEnter={() => preloadRoute('doctorAuth')}
+            onFocus={() => preloadRoute('doctorAuth')}
+            style={{ marginTop: 14, background: 'none', border: 'none', color: '#6b7280', fontSize: 13, fontWeight: 500, cursor: 'pointer' }}
+          >
+            Hospital or provider staff? Sign in &rarr;
+          </button>
 
           <div style={{ background: '#f3f4f6', borderRadius: 14, padding: 'clamp(16px, 4vw, 24px)', marginTop: 28, width: '100%' }}>
             <img
@@ -360,19 +620,117 @@ export default function Landing() {
         </div>
       </div>
 
+      <section id="why-hid" style={{ padding: responsiveSectionPadding, background: '#f8f9fb' }}>
+        <div style={{ maxWidth: 900, margin: '0 auto' }}>
+          <div style={{ textAlign: 'center', marginBottom: isNarrow ? 32 : 48 }}>
+            <h2 style={{ fontSize: isNarrow ? 24 : 28, fontWeight: 800, letterSpacing: isNarrow ? 0 : '-0.5px', maxWidth: 620, margin: '0 auto' }}>
+              Healthcare Is Disconnected. We&apos;re Building the Infrastructure to Connect It.
+            </h2>
+            <p style={{ fontSize: 14, color: '#6b7280', marginTop: 12, lineHeight: 1.7, maxWidth: 520, margin: '12px auto 0' }}>
+              Across hospitals, labs, and pharmacies, patient information lives in silos, and that fragmentation costs time, money, and lives.
+            </p>
+          </div>
+          <div style={{ display: 'grid', gridTemplateColumns: isNarrow ? '1fr' : 'repeat(auto-fit, minmax(240px, 1fr))', gap: 14 }}>
+            {challenges.map(text => (
+              <div key={text} style={{ display: 'flex', alignItems: 'center', gap: 12, background: '#fff', border: '1px solid #e5e7eb', borderRadius: 12, padding: '16px 18px' }}>
+                <span style={{ width: 26, height: 26, borderRadius: '50%', background: '#f3f4f6', color: '#6b7280', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                  <svg width="13" height="13" viewBox="0 0 14 14" fill="none"><path d="M3.5 7h7" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" /></svg>
+                </span>
+                <span style={{ fontSize: 14, fontWeight: 500, color: '#4b5563' }}>{text}</span>
+              </div>
+            ))}
+          </div>
+          <p style={{ textAlign: 'center', fontSize: 15, color: '#1a6fd4', fontWeight: 600, lineHeight: 1.7, maxWidth: 560, margin: '32px auto 0' }}>
+            HID is the connective layer, a shared health identity that links every part of the care journey.
+          </p>
+        </div>
+      </section>
+
+      <section id="ecosystem" style={{ padding: responsiveSectionPadding, background: '#fff' }}>
+        <div style={{ maxWidth: 960, margin: '0 auto' }}>
+          <div style={{ textAlign: 'center', marginBottom: isNarrow ? 32 : 48 }}>
+            <h2 style={{ fontSize: isNarrow ? 24 : 28, fontWeight: 800, letterSpacing: isNarrow ? 0 : '-0.5px' }}>
+              Building the Infrastructure for <span style={{ color: '#1a6fd4' }}>Connected Healthcare</span>
+            </h2>
+            <p style={{ fontSize: 14, color: '#6b7280', marginTop: 10, lineHeight: 1.7, maxWidth: 520, margin: '10px auto 0' }}>
+              Five connected solutions, one health identity at the center.
+            </p>
+          </div>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 18 }}>
+            {ecosystem.map(({ icon, title, desc }) => (
+              <div key={title} style={{ border: '1px solid #e5e7eb', borderRadius: 16, padding: '26px 22px' }}>
+                <div style={{ width: 46, height: 46, borderRadius: 12, background: '#e8f1fc', color: '#1a6fd4', display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: 16 }}>
+                  <EcosystemIcon kind={icon} />
+                </div>
+                <h3 style={{ fontSize: 16, fontWeight: 700, marginBottom: 8 }}>{title}</h3>
+                <p style={{ fontSize: 13, color: '#6b7280', lineHeight: 1.6 }}>{desc}</p>
+              </div>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      <section id="operations" style={{ padding: responsiveSectionPadding, background: '#f8f9fb' }}>
+        <div style={{ maxWidth: 960, margin: '0 auto' }}>
+          <div style={{ textAlign: 'center', marginBottom: isNarrow ? 32 : 48 }}>
+            <span style={{ display: 'inline-flex', alignItems: 'center', gap: 7, background: '#e8f1fc', color: '#1a6fd4', fontSize: 12, fontWeight: 600, padding: '5px 14px', borderRadius: 999, marginBottom: 14 }}>
+              <span style={{ width: 6, height: 6, borderRadius: '50%', background: '#1a6fd4', display: 'inline-block' }} />
+              Live in production
+            </span>
+            <h2 style={{ fontSize: isNarrow ? 24 : 28, fontWeight: 800, letterSpacing: isNarrow ? 0 : '-0.5px' }}>Already Powering Real Healthcare Operations</h2>
+            <p style={{ fontSize: 14, color: '#6b7280', marginTop: 10, lineHeight: 1.7, maxWidth: 540, margin: '10px auto 0' }}>
+              HID isn&apos;t a concept, it&apos;s live software running hospital, laboratory, and pharmacy workflows today.
+            </p>
+          </div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
+            {operationsScreens.map(({ src, tag, title, desc, flip }) => (
+              <div
+                key={tag}
+                style={{
+                  border: '1px solid #e5e7eb',
+                  borderRadius: 20,
+                  overflow: 'hidden',
+                  display: 'grid',
+                  gridTemplateColumns: isNarrow ? '1fr' : 'minmax(0, 1.25fr) minmax(0, 1fr)',
+                  background: '#fff',
+                  direction: !isNarrow && flip ? 'rtl' : 'ltr',
+                }}
+              >
+                <div style={{ background: '#f3f4f6', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: isNarrow ? 18 : 28, direction: 'ltr' }}>
+                  <img
+                    src={src}
+                    alt={`${tag} dashboard preview`}
+                    loading="lazy"
+                    style={{ display: 'block', width: '100%', height: 'auto', borderRadius: 10, border: '1px solid #e5e7eb', boxShadow: '0 18px 38px rgba(15,23,42,0.06)' }}
+                  />
+                </div>
+                <div style={{ padding: isNarrow ? '26px 22px 30px' : '40px 36px', display: 'flex', flexDirection: 'column', justifyContent: 'center', direction: 'ltr' }}>
+                  <span style={{ display: 'inline-flex', alignItems: 'center', background: '#e8f1fc', color: '#1a6fd4', fontSize: 12, fontWeight: 600, padding: '4px 12px', borderRadius: 999, marginBottom: 14, width: 'fit-content' }}>{tag}</span>
+                  <h3 style={{ fontSize: 20, fontWeight: 700, letterSpacing: '-0.3px', marginBottom: 12 }}>{title}</h3>
+                  <p style={{ fontSize: 14, color: '#6b7280', lineHeight: 1.7 }}>{desc}</p>
+                </div>
+              </div>
+            ))}
+          </div>
+          <p style={{ textAlign: 'center', fontSize: 13, color: '#9ca3af', marginTop: 24 }}>
+            EMR and Outreach workflows are part of the same connected platform.
+          </p>
+        </div>
+      </section>
+
       <section id="features" style={{ padding: responsiveSectionPadding, background: '#fff', maxWidth: 960, margin: '0 auto' }}>
         <div style={{ textAlign: 'center', marginBottom: isNarrow ? 32 : 48 }}>
           <h2 style={{ fontSize: isNarrow ? 24 : 28, fontWeight: 800, letterSpacing: isNarrow ? 0 : '-0.5px' }}>
-            <span style={{ color: '#1a6fd4' }}>Built With Purpose:</span> The Features Behind HID
+            <span style={{ color: '#1a6fd4' }}>Built With Purpose:</span> One Platform, Every Side of Care
           </h2>
           <p style={{ fontSize: 14, color: '#6b7280', marginTop: 10, lineHeight: 1.7, maxWidth: 520, margin: '10px auto 0' }}>
-            HID brings patients and hospitals onto one secure platform. Centralizing records, simplifying care, and ensuring every decision is informed and connected.
+            HID brings patients and healthcare providers onto one secure platform, centralizing records, simplifying care, and ensuring every decision is informed and connected.
           </p>
         </div>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
           {[
-            { tag: 'Patient Features', title: 'Your Entire Health Story, In One Secure Place', desc: 'A simple, unified patient profile stores medical history, prescriptions, lab results, and emergencies, so the right information is available when it matters.', flip: false },
-            { tag: 'Hospital Features', title: 'Hospital & Medical Staff Features', desc: 'Hospitals can retrieve verified patient records in seconds, update files in real time, and deliver faster, safer care without duplicate tests or missing details.', flip: true },
+            { tag: 'For Patients', title: 'Your Entire Health Story, In One Secure Place', desc: 'A simple, unified patient profile stores medical history, prescriptions, lab results, and emergencies, so the right information is available when it matters.', flip: false },
+            { tag: 'For Providers', title: 'Connected Tools for Hospitals, Labs & Pharmacies', desc: 'Providers retrieve verified patient records in seconds, update files in real time, and deliver faster, safer care without duplicate tests or missing details.', flip: true },
           ].map(({ tag, title, desc, flip }) => (
             <div
               key={tag}
@@ -431,13 +789,13 @@ export default function Landing() {
         <div style={{ maxWidth: 900, margin: '0 auto' }}>
           <div style={{ textAlign: 'center', marginBottom: isNarrow ? 34 : 52 }}>
             <h2 style={{ fontSize: isNarrow ? 24 : 28, fontWeight: 800, letterSpacing: isNarrow ? 0 : '-0.5px' }}>How HID Works</h2>
-            <p style={{ fontSize: 14, color: '#6b7280', marginTop: 10, lineHeight: 1.7 }}>Four steps that show exactly how HID connects you and your hospital without stress or paperwork.</p>
+            <p style={{ fontSize: 14, color: '#6b7280', marginTop: 10, lineHeight: 1.7 }}>Four steps that show exactly how HID connects you and your healthcare providers without stress or paperwork.</p>
           </div>
           {[
             { n: '01', title: 'Create Your HID Profile', desc: 'Patient sign up creates the account and issues a unique Health ID for future lookups and updates.' },
-            { n: '02', title: 'Link Your Health Records', desc: 'Hospitals upload or sync medical history. Lab results, prescriptions, and visit notes are attached to the HID profile.' },
-            { n: '03', title: 'Access Anywhere', desc: 'Patients use their HID at any hospital. Records are instantly accessible to medical staff across the country.' },
-            { n: '04', title: 'Hospital Pulls Your Data', desc: 'Hospital staff retrieve the complete patient file instantly. No paperwork, no delays, and no duplicate onboarding flow.' },
+            { n: '02', title: 'Connect Your Health Records', desc: 'Hospitals, labs, and pharmacies link records to the HID. Visit notes, prescriptions, and lab results all attach to one identity.' },
+            { n: '03', title: 'Access Anywhere', desc: 'Patients use their HID at any provider in the network. Records are instantly accessible to authorized medical staff across the country.' },
+            { n: '04', title: 'Providers Pull Your Data', desc: 'Medical staff retrieve the complete patient file instantly. No paperwork, no delays, and no duplicate onboarding flow.' },
           ].map(({ n, title, desc }, index) => (
             <div
               key={n}
@@ -474,27 +832,54 @@ export default function Landing() {
         </div>
       </section>
 
-      <section id="security" style={{ padding: responsiveSectionPadding, background: '#fff' }}>
+      <section id="better-data" style={{ padding: responsiveSectionPadding, background: '#fff' }}>
+        <div style={{ maxWidth: 900, margin: '0 auto' }}>
+          <div style={{ textAlign: 'center', marginBottom: isNarrow ? 32 : 48 }}>
+            <h2 style={{ fontSize: isNarrow ? 24 : 28, fontWeight: 800, letterSpacing: isNarrow ? 0 : '-0.5px' }}>Better Data. <span style={{ color: '#1a6fd4' }}>Better Decisions.</span></h2>
+            <p style={{ fontSize: 14, color: '#6b7280', marginTop: 10, lineHeight: 1.7, maxWidth: 520, margin: '10px auto 0' }}>
+              When healthcare information is connected, everyone makes better calls.
+            </p>
+          </div>
+          <div style={{ display: 'grid', gridTemplateColumns: isNarrow ? '1fr' : 'repeat(auto-fit, minmax(240px, 1fr))', gap: 16 }}>
+            {outcomes.map(({ title, desc }) => (
+              <div key={title} style={{ border: '1px solid #e5e7eb', borderRadius: 14, padding: '22px 20px' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 10 }}>
+                  <span style={{ width: 24, height: 24, borderRadius: '50%', background: '#e8f1fc', color: '#1a6fd4', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                    <svg width="12" height="12" viewBox="0 0 12 12" fill="none"><path d="M2 6.2l2.6 2.6L10 3.2" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" /></svg>
+                  </span>
+                  <h4 style={{ fontSize: 14, fontWeight: 700 }}>{title}</h4>
+                </div>
+                <p style={{ fontSize: 13, color: '#6b7280', lineHeight: 1.6 }}>{desc}</p>
+              </div>
+            ))}
+          </div>
+          <p style={{ textAlign: 'center', fontSize: 13, color: '#9ca3af', lineHeight: 1.7, maxWidth: 600, margin: '28px auto 0' }}>
+            Aggregated, privacy-protected insights can support public health planning and responsible research, an outcome of connected systems, never at the expense of patient trust.
+          </p>
+        </div>
+      </section>
+
+      <section id="security" style={{ padding: responsiveSectionPadding, background: '#f8f9fb' }}>
         <div style={{ maxWidth: 900, margin: '0 auto' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', marginBottom: isNarrow ? 26 : 36, flexWrap: 'wrap', gap: 16 }}>
             <div>
               <h2 style={{ fontSize: isNarrow ? 24 : 28, fontWeight: 800, letterSpacing: isNarrow ? 0 : '-0.5px', maxWidth: 420 }}>Security & Compliance</h2>
-              <p style={{ fontSize: 14, color: '#6b7280', marginTop: 10, maxWidth: 380, lineHeight: 1.7 }}>
-                HID is built with enterprise-level protection, strict privacy controls, and global healthcare compliance ensuring every patient record stays secure, encrypted, and fully under patient&apos;s control.
+              <p style={{ fontSize: 14, color: '#6b7280', marginTop: 10, maxWidth: 400, lineHeight: 1.7 }}>
+                From a single patient record to an entire hospital network, HID is built with enterprise-grade protection, strict consent controls, and healthcare compliance at every layer, keeping every record secure, encrypted, and under the patient&apos;s control.
               </p>
             </div>
             <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', width: isNarrow ? '100%' : 'auto' }}>
               <button onClick={() => navigate('/patient')} style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 13, fontWeight: 600, color: '#1a6fd4', background: 'none', border: 'none', cursor: 'pointer' }}>
                 Patient Portal <svg width="14" height="14" viewBox="0 0 14 14" fill="none"><path d="M3 7h8M7 3l4 4-4 4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" /></svg>
               </button>
-              <button onClick={() => navigate(HOSPITAL_AUTH_PATH)} style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 13, fontWeight: 600, color: '#15803d', background: 'none', border: 'none', cursor: 'pointer' }}>
+              <button onClick={() => navigate(HOSPITAL_AUTH_PATH)} style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 13, fontWeight: 600, color: '#1a6fd4', background: 'none', border: 'none', cursor: 'pointer' }}>
                 Hospital Portal <svg width="14" height="14" viewBox="0 0 14 14" fill="none"><path d="M3 7h8M7 3l4 4-4 4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" /></svg>
               </button>
             </div>
           </div>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 18 }}>
             {securityCards.map(({ icon, title, desc }) => (
-              <div key={title} style={{ border: '1px solid #e5e7eb', borderRadius: 14, padding: '24px 20px' }}>
+              <div key={title} style={{ border: '1px solid #e5e7eb', borderRadius: 14, padding: '24px 20px', background: '#fff' }}>
                 <div style={{ width: 40, height: 40, borderRadius: 10, background: '#e8f1fc', color: '#1a6fd4', display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: 14 }}>
                   <SecurityCardIcon kind={icon} />
                 </div>
@@ -506,56 +891,42 @@ export default function Landing() {
         </div>
       </section>
 
+      <section style={{ padding: responsiveSectionPadding, background: '#fff' }}>
+        <div style={{ maxWidth: 720, margin: '0 auto', textAlign: 'center' }}>
+          <span style={{ display: 'inline-flex', alignItems: 'center', gap: 7, background: '#e8f1fc', color: '#1a6fd4', fontSize: 12, fontWeight: 600, padding: '5px 14px', borderRadius: 999, marginBottom: 18 }}>
+            <span style={{ width: 6, height: 6, borderRadius: '50%', background: '#1a6fd4', display: 'inline-block' }} />
+            Our Vision
+          </span>
+          <h2 style={{ fontSize: isNarrow ? 26 : 32, fontWeight: 800, color: '#111827', letterSpacing: isNarrow ? 0 : '-0.6px', lineHeight: 1.2, marginBottom: 16, maxWidth: 600, margin: '0 auto 16px' }}>
+            Building the Future of <span style={{ color: '#1a6fd4' }}>Connected Healthcare</span>
+          </h2>
+          <p style={{ fontSize: 15, color: '#6b7280', maxWidth: 620, margin: '0 auto', lineHeight: 1.8 }}>
+            Our vision is a healthcare ecosystem where patients, providers, laboratories, pharmacies, and health programs can access the information they need to deliver better care, make better decisions, and improve health outcomes across Africa.
+          </p>
+        </div>
+      </section>
+
       <div style={{ background: 'linear-gradient(135deg, #1a6fd4 0%, #1254a8 100%)', padding: isNarrow ? '58px 18px' : '80px clamp(20px, 5vw, 48px)', textAlign: 'center' }}>
         <h2 style={{ fontSize: isNarrow ? 26 : 32, fontWeight: 800, color: 'white', letterSpacing: isNarrow ? 0 : '-0.6px', lineHeight: 1.2, marginBottom: 16, maxWidth: 560, margin: '0 auto 16px' }}>
           Get Your HID Today and Take Control of Your Health Records
         </h2>
-        <p style={{ fontSize: 14, color: 'rgba(255,255,255,0.75)', marginBottom: 28, maxWidth: 440, margin: '0 auto 28px', lineHeight: 1.7 }}>
-          Patients can manage profile and health records, while hospitals can request access and add medical records.
+        <p style={{ fontSize: 14, color: 'rgba(255,255,255,0.75)', marginBottom: 28, maxWidth: 460, margin: '0 auto 28px', lineHeight: 1.7 }}>
+          Patients manage their profile and health records. Hospitals, labs, and pharmacies join the network to deliver connected care.
         </p>
-        <div style={{ display: 'inline-flex', gap: 12, flexWrap: 'wrap', justifyContent: 'center', width: isNarrow ? '100%' : 'auto' }}>
-          <button
+        <div style={{ display: isNarrow ? 'grid' : 'inline-flex', gap: 12, justifyContent: 'center', width: isNarrow ? '100%' : 'auto' }}>
+          <Cta
+            variant="white"
+            size="md"
+            fullWidth={isNarrow}
             onClick={() => navigate('/patient')}
             onMouseEnter={() => preloadRoute('patientAuth')}
             onFocus={() => preloadRoute('patientAuth')}
-            style={{
-              background: '#1a6fd4',
-              color: '#fff',
-              border: 'none',
-              borderRadius: 999,
-              padding: '13px 32px',
-              fontSize: 14,
-              fontWeight: 700,
-              cursor: 'pointer',
-              display: 'inline-flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              width: isNarrow ? '100%' : 'auto',
-            }}
           >
-            Patient
-          </button>
-          <button
-            onClick={() => navigate(HOSPITAL_AUTH_PATH)}
-            onMouseEnter={() => preloadRoute('doctorAuth')}
-            onFocus={() => preloadRoute('doctorAuth')}
-            style={{
-              background: '#1a6fd4',
-              color: '#fff',
-              border: 'none',
-              borderRadius: 999,
-              padding: '13px 32px',
-              fontSize: 14,
-              fontWeight: 700,
-              cursor: 'pointer',
-              display: 'inline-flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              width: isNarrow ? '100%' : 'auto',
-            }}
-          >
-            Hospital
-          </button>
+            Get Your HID
+          </Cta>
+          <Cta variant="outlineWhite" size="md" fullWidth={isNarrow} href={PARTNER_HREF}>
+            Partner With Us
+          </Cta>
         </div>
       </div>
 
@@ -563,7 +934,7 @@ export default function Landing() {
         <div style={{ maxWidth: 900, margin: '0 auto', display: 'grid', gridTemplateColumns: isNarrow ? '1fr' : 'repeat(auto-fit, minmax(240px, 1fr))', gap: isNarrow ? 20 : 32 }}>
           <div>
             <h2 style={{ fontSize: isNarrow ? 26 : 32, fontWeight: 800, letterSpacing: isNarrow ? 0 : '-0.5px', marginBottom: 12 }}>FAQ</h2>
-            <p style={{ fontSize: 14, color: '#6b7280', lineHeight: 1.7 }}>Everything you need to know about HID from setup to security and accessing your health records anywhere.</p>
+            <p style={{ fontSize: 14, color: '#6b7280', lineHeight: 1.7 }}>Everything you need to know about HID, from setup and security to connecting providers and accessing health records anywhere.</p>
           </div>
           <div style={{ display: 'flex', flexDirection: 'column' }}>
             {faqs.map(({ q, a }, index) => (
@@ -607,10 +978,10 @@ export default function Landing() {
             <div>
               <HIDLogo size="sm" />
               <p style={{ fontSize: 13, color: '#6b7280', lineHeight: 1.7, marginTop: 14, maxWidth: 260 }}>
-                HID is a unified digital health identity that lets patients and hospitals securely access verified medical records anytime, anywhere.
+                Connected healthcare infrastructure, built around a unified health identity that links patients, hospitals, labs, pharmacies, and outreach programs.
               </p>
               <div style={{ display: 'grid', gap: 6, marginTop: 14 }}>
-                <a href="mailto:support@healthidentitydirectory.com" style={{ fontSize: 13, color: '#6b7280' }}>support@healthidentitydirectory.com</a>
+                <a href={`mailto:${SUPPORT_EMAIL}`} style={{ fontSize: 13, color: '#6b7280' }}>{SUPPORT_EMAIL}</a>
                 <a href="tel:+2347026717252" style={{ fontSize: 13, color: '#6b7280' }}>+2347026717252</a>
               </div>
             </div>

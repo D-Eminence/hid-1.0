@@ -128,6 +128,7 @@ export function AdminLayout({
   const [isCompact, setIsCompact] = useState(() => (
     typeof window !== 'undefined' ? window.innerWidth < 980 : false
   ))
+  const [menuOpen, setMenuOpen] = useState(false)
 
   useEffect(() => {
     if (typeof window === 'undefined') return undefined
@@ -139,6 +140,7 @@ export function AdminLayout({
 
   function scrollToSection(id: string) {
     document.getElementById(id)?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+    setMenuOpen(false)
   }
 
   return (
@@ -193,6 +195,8 @@ export function AdminLayout({
           )}
         </div>
 
+        {(!isCompact || menuOpen) && (
+          <>
         <nav
           style={{
             display: 'grid',
@@ -249,6 +253,8 @@ export function AdminLayout({
             Sign out
           </button>
         )}
+          </>
+        )}
       </aside>
 
       <main style={{ flex: 1, marginLeft: isCompact ? 0 : 92, minHeight: '100vh' }}>
@@ -273,25 +279,34 @@ export function AdminLayout({
             }}
           >
             <div style={{ display: 'flex', alignItems: 'center', gap: 10, flex: '1 1 280px' }}>
-              <button
-                type="button"
-                style={{
-                  width: 34,
-                  height: 34,
-                  borderRadius: 10,
-                  border: '1px solid var(--admin-border)',
-                  background: '#fff',
-                  color: '#8a94a6',
-                  display: 'inline-flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  cursor: 'pointer',
-                }}
-              >
-                <svg width="14" height="14" viewBox="0 0 16 16" fill="none">
-                  <path d="M3 4.5h10M3 8h10M3 11.5h10" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
-                </svg>
-              </button>
+              {isCompact && (
+                <button
+                  type="button"
+                  aria-label={menuOpen ? 'Close menu' : 'Open menu'}
+                  aria-expanded={menuOpen}
+                  onClick={() => setMenuOpen(open => !open)}
+                  style={{
+                    width: 34,
+                    height: 34,
+                    borderRadius: 10,
+                    border: '1px solid var(--admin-border)',
+                    background: '#fff',
+                    color: '#8a94a6',
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    cursor: 'pointer',
+                  }}
+                >
+                  <svg width="14" height="14" viewBox="0 0 16 16" fill="none">
+                    {menuOpen ? (
+                      <path d="M4 4l8 8M12 4l-8 8" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
+                    ) : (
+                      <path d="M3 4.5h10M3 8h10M3 11.5h10" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
+                    )}
+                  </svg>
+                </button>
+              )}
               <div style={{ position: 'relative', minWidth: 220, flex: '1 1 320px', maxWidth: 360 }}>
                 <input
                   value={searchQuery}

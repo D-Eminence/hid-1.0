@@ -104,6 +104,9 @@ export function PortalShell({
   }, [avatarInitials, title, userName])
   const [profileMenuOpen, setProfileMenuOpen] = useState(false)
   const [hasUnreadNotifications, setHasUnreadNotifications] = useState(false)
+  const [isCompact, setIsCompact] = useState(() => (typeof window !== 'undefined' ? window.innerWidth < 720 : false))
+  const [navOpen, setNavOpen] = useState(false)
+  const activeLabel = items.find(item => item.path === location.pathname)?.label ?? 'Menu'
   const likelyWarmPaths = useMemo(() => {
     const currentIndex = items.findIndex(item => item.path === location.pathname)
     const paths: string[] = []
@@ -186,6 +189,17 @@ export function PortalShell({
     return () => window.removeEventListener('mousedown', handleClickOutside)
   }, [])
 
+  useEffect(() => {
+    const handleResize = () => setIsCompact(window.innerWidth < 720)
+    handleResize()
+    window.addEventListener('resize', handleResize)
+    return () => window.removeEventListener('resize', handleResize)
+  }, [])
+
+  useEffect(() => {
+    setNavOpen(false)
+  }, [location.pathname])
+
   return (
     <div style={{ minHeight: '100vh', background: '#f5f6fa', padding: '22px clamp(12px, 2vw, 24px)' }}>
       <div style={{ maxWidth: 1360, margin: '0 auto', background: '#fff', borderRadius: 28, border: '1px solid #eef1f5', minHeight: 'calc(100vh - 44px)', padding: '36px clamp(18px, 3vw, 46px)', boxShadow: '0 18px 38px rgba(15, 23, 42, 0.04)' }}>
@@ -234,33 +248,68 @@ export function PortalShell({
         </div>
 
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 16, marginTop: 26, paddingBottom: 14, borderBottom: '1px solid #edf1f5', flexWrap: 'wrap' }}>
-          <nav style={{ display: 'flex', alignItems: 'center', gap: 24, flexWrap: 'wrap' }}>
-            {items.map((item, index) => {
-              const active = location.pathname === item.path
-              return (
-                <button
-                  key={item.path}
-                  onClick={() => navigate(item.path)}
-                  onMouseEnter={() => warmPath(item.path)}
-                  onFocus={() => warmPath(item.path)}
-                  style={{
-                    border: 'none',
-                    background: 'none',
-                    color: active ? '#111827' : '#9aa6b2',
-                    fontSize: 12,
-                    fontWeight: active ? 600 : 500,
-                    padding: '6px 0',
-                    borderBottom: active ? '2px solid #111827' : '2px solid transparent',
-                    display: 'inline-flex',
-                    alignItems: 'center',
-                  }}
-                >
-                  {item.label}
-                </button>
-              )
-            })}
-          </nav>
-
+          {isCompact ? (
+            <div style={{ position: 'relative', width: '100%' }}>
+              <button
+                type="button"
+                aria-label={navOpen ? 'Close menu' : 'Open menu'}
+                aria-expanded={navOpen}
+                onClick={() => setNavOpen(open => !open)}
+                style={{ width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, border: '1px solid #eef1f5', background: '#fff', borderRadius: 12, padding: '10px 14px', cursor: 'pointer', color: '#111827', fontSize: 13, fontWeight: 600 }}
+              >
+                <span style={{ display: 'inline-flex', alignItems: 'center', gap: 10 }}>
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h16" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" /></svg>
+                  {activeLabel}
+                </span>
+                <svg width="12" height="12" viewBox="0 0 12 12" fill="none" style={{ transform: navOpen ? 'rotate(180deg)' : 'none', transition: 'transform 0.15s' }}><path d="M2 4l4 4 4-4" stroke="#9aa6b2" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" /></svg>
+              </button>
+              {navOpen && (
+                <div style={{ position: 'absolute', top: 'calc(100% + 8px)', left: 0, right: 0, background: '#fff', border: '1px solid #eef1f5', borderRadius: 14, boxShadow: '0 18px 34px rgba(15, 23, 42, 0.12)', padding: 8, zIndex: 25, display: 'flex', flexDirection: 'column', gap: 2 }}>
+                  {items.map(item => {
+                    const active = location.pathname === item.path
+                    return (
+                      <button
+                        key={item.path}
+                        onClick={() => { navigate(item.path); setNavOpen(false) }}
+                        onMouseEnter={() => warmPath(item.path)}
+                        onFocus={() => warmPath(item.path)}
+                        style={{ width: '100%', textAlign: 'left', border: 'none', borderRadius: 10, padding: '11px 12px', background: active ? '#f0f7ff' : '#fff', color: active ? '#1a6fd4' : '#111827', fontSize: 14, fontWeight: active ? 600 : 500, cursor: 'pointer' }}
+                      >
+                        {item.label}
+                      </button>
+                    )
+                  })}
+                </div>
+              )}
+            </div>
+          ) : (
+            <nav style={{ display: 'flex', alignItems: 'center', gap: 24, flexWrap: 'wrap' }}>
+              {items.map(item => {
+                const active = location.pathname === item.path
+                return (
+                  <button
+                    key={item.path}
+                    onClick={() => navigate(item.path)}
+                    onMouseEnter={() => warmPath(item.path)}
+                    onFocus={() => warmPath(item.path)}
+                    style={{
+                      border: 'none',
+                      background: 'none',
+                      color: active ? '#111827' : '#9aa6b2',
+                      fontSize: 12,
+                      fontWeight: active ? 600 : 500,
+                      padding: '6px 0',
+                      borderBottom: active ? '2px solid #111827' : '2px solid transparent',
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                    }}
+                  >
+                    {item.label}
+                  </button>
+                )
+              })}
+            </nav>
+          )}
         </div>
 
         <div style={{ marginTop: 28 }}>
