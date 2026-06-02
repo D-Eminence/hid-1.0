@@ -17,7 +17,7 @@ const btnStyles: Record<BtnVariant, React.CSSProperties> = {
   secondary: { background: '#e8f1fc', color: '#1a6fd4', border: 'none' },
   danger: { background: '#dc2626', color: '#fff', border: 'none' },
   ghost: { background: 'transparent', color: '#6b7280', border: 'none' },
-  outline: { background: 'transparent', color: '#111827', border: '1.5px solid #e5e7eb' },
+  outline: { background: 'transparent', color: '#1a6fd4', border: '1.5px solid #1a6fd4' },
 }
 const sizeStyles: Record<BtnSize, React.CSSProperties> = {
   sm: { padding: '6px 14px', fontSize: 12, borderRadius: 6 },

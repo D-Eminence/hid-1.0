@@ -102,6 +102,7 @@ export function HospitalLayout({
   const navigate = useNavigate()
   const { pathname } = useLocation()
   const [isCompact, setIsCompact] = useState(() => (typeof window !== 'undefined' ? window.innerWidth < 820 : false))
+  const [menuOpen, setMenuOpen] = useState(false)
   const session = React.useMemo(() => getStaffSession(), [])
   const likelyWarmPaths = React.useMemo(() => {
     const currentIndex = hospitalNav.findIndex(item => item.path === pathname || (item.section === 'access' && pathname.startsWith('/hospital/patient-records/')))
@@ -134,6 +135,10 @@ export function HospitalLayout({
   }, [])
 
   useEffect(() => {
+    setMenuOpen(false)
+  }, [pathname])
+
+  useEffect(() => {
     if (likelyWarmPaths.length === 0) return () => undefined
 
     return scheduleWarmup(() => {
@@ -159,21 +164,38 @@ export function HospitalLayout({
           zIndex: 50,
         }}
       >
-        <div
-          style={{ padding: isCompact ? '4px 8px 14px' : '4px 8px 24px', cursor: 'pointer' }}
-          onMouseEnter={() => warmPath(HOSPITAL_DASHBOARD_PATH)}
-          onClick={() => navigate(HOSPITAL_DASHBOARD_PATH)}
-        >
-          <HIDLogo size="sm" />
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, padding: isCompact ? '4px 4px 10px' : '4px 8px 24px' }}>
+          <div
+            style={{ cursor: 'pointer' }}
+            onMouseEnter={() => warmPath(HOSPITAL_DASHBOARD_PATH)}
+            onClick={() => navigate(HOSPITAL_DASHBOARD_PATH)}
+          >
+            <HIDLogo size="sm" />
+          </div>
+          {isCompact && (
+            <button
+              type="button"
+              aria-label={menuOpen ? 'Close menu' : 'Open menu'}
+              aria-expanded={menuOpen}
+              onClick={() => setMenuOpen(open => !open)}
+              style={{ background: 'none', border: '1px solid #e5e7eb', borderRadius: 10, width: 40, height: 40, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', color: '#111827', cursor: 'pointer' }}
+            >
+              {menuOpen ? (
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" /></svg>
+              ) : (
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h16" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" /></svg>
+              )}
+            </button>
+          )}
         </div>
 
+        {(!isCompact || menuOpen) && (
         <nav
           style={{
-            display: isCompact ? 'grid' : 'flex',
-            gridTemplateColumns: isCompact ? 'repeat(auto-fit, minmax(140px, 1fr))' : undefined,
-            flexDirection: isCompact ? undefined : 'column',
+            display: 'flex',
+            flexDirection: 'column',
             gap: 6,
-            flex: 1,
+            flex: isCompact ? 'none' : 1,
             alignContent: 'start',
           }}
         >
@@ -182,13 +204,13 @@ export function HospitalLayout({
             return (
               <button
                 key={item.path}
-                onClick={() => navigate(item.path)}
+                onClick={() => { navigate(item.path); setMenuOpen(false) }}
                 onMouseEnter={() => warmPath(item.path)}
                 onFocus={() => warmPath(item.path)}
                 style={{
                   display: 'flex',
                   alignItems: 'center',
-                  justifyContent: isCompact ? 'center' : 'flex-start',
+                  justifyContent: 'flex-start',
                   gap: 10,
                   padding: '10px 12px',
                   borderRadius: 10,
@@ -197,7 +219,7 @@ export function HospitalLayout({
                   color: active ? '#1a6fd4' : '#374151',
                   fontWeight: active ? 600 : 400,
                   fontSize: 14,
-                  textAlign: isCompact ? 'center' : 'left',
+                  textAlign: 'left',
                   cursor: 'pointer',
                   transition: 'all 0.15s',
                   width: '100%',
@@ -209,7 +231,9 @@ export function HospitalLayout({
             )
           })}
         </nav>
+        )}
 
+        {(!isCompact || menuOpen) && (
         <div style={{ borderTop: '1px solid #e5e7eb', paddingTop: 16, marginTop: 10 }}>
           {userName && (
             <div style={{ fontSize: 11, color: '#6b7280', padding: '0 8px 10px', lineHeight: 1.6 }}>
@@ -247,6 +271,7 @@ export function HospitalLayout({
             Health Identity Directory
           </div>
         </div>
+        )}
       </aside>
 
       <main style={{ marginLeft: isCompact ? 0 : 228, flex: 1, display: 'flex', flexDirection: 'column', minHeight: '100vh' }}>
