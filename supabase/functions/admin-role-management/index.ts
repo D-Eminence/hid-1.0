@@ -14,6 +14,16 @@ const STAFF_POLICY_FIELDS = [
 
 type StaffPolicyField = typeof STAFF_POLICY_FIELDS[number]
 
+const OUTREACH_POLICY_FIELDS = [
+  'can_open_workspace',
+  'can_create_encounters',
+  'can_manage_invites',
+  'can_sync_data',
+  'can_view_campaign_data',
+] as const
+
+type OutreachPolicyField = typeof OUTREACH_POLICY_FIELDS[number]
+
 type StaffRolePolicyRow = {
   role: string
   can_open_dashboard: boolean
@@ -22,6 +32,17 @@ type StaffRolePolicyRow = {
   can_create_records: boolean
   can_use_break_glass: boolean
   can_view_history: boolean
+  updated_at: string
+  updated_by_user_profile_id: string | null
+}
+
+type OutreachRolePolicyRow = {
+  role: string
+  can_open_workspace: boolean
+  can_create_encounters: boolean
+  can_manage_invites: boolean
+  can_sync_data: boolean
+  can_view_campaign_data: boolean
   updated_at: string
   updated_by_user_profile_id: string | null
 }
@@ -50,7 +71,7 @@ type PlatformAdminProfileStateRow = {
 }
 
 type Payload = {
-  action?: 'create_admin' | 'update_staff_role_policy'
+  action?: 'create_admin' | 'update_staff_role_policy' | 'update_outreach_role_policy'
   email?: string | null
   fullName?: string | null
   role?: string | null
@@ -70,6 +91,19 @@ function normalizeRolePolicy(row: StaffRolePolicyRow) {
     canCreateRecords: row.can_create_records,
     canUseBreakGlass: row.can_use_break_glass,
     canViewHistory: row.can_view_history,
+    updatedAt: row.updated_at,
+    updatedByUserProfileId: row.updated_by_user_profile_id,
+  }
+}
+
+function normalizeOutreachRolePolicy(row: OutreachRolePolicyRow) {
+  return {
+    role: row.role,
+    canOpenWorkspace: row.can_open_workspace,
+    canCreateEncounters: row.can_create_encounters,
+    canManageInvites: row.can_manage_invites,
+    canSyncData: row.can_sync_data,
+    canViewCampaignData: row.can_view_campaign_data,
     updatedAt: row.updated_at,
     updatedByUserProfileId: row.updated_by_user_profile_id,
   }
@@ -133,6 +167,19 @@ async function listStaffRolePolicies(adminClient: ReturnType<typeof createAdminC
   }
 
   return ((response.data ?? []) as StaffRolePolicyRow[]).map(normalizeRolePolicy)
+}
+
+async function listOutreachRolePolicies(adminClient: ReturnType<typeof createAdminClient>) {
+  const response = await adminClient
+    .from('hid_outreach_role_policies')
+    .select('role, can_open_workspace, can_create_encounters, can_manage_invites, can_sync_data, can_view_campaign_data, updated_at, updated_by_user_profile_id')
+    .order('role', { ascending: true })
+
+  if (response.error) {
+    throw new HttpError(400, response.error.message, response.error)
+  }
+
+  return ((response.data ?? []) as OutreachRolePolicyRow[]).map(normalizeOutreachRolePolicy)
 }
 
 async function lookupExactAuthUserByEmail(adminClient: ReturnType<typeof createAdminClient>, email: string) {
@@ -364,17 +411,77 @@ async function updateStaffRolePolicy(
   }
 }
 
+async function updateOutreachRolePolicy(
+  adminClient: ReturnType<typeof createAdminClient>,
+  actor: { userId: string; profileId: string | null; role: string },
+  payload: Payload,
+) {
+  const role = asTrimmedString(payload.role, 'role')
+  const rawChanges = payload.changes ?? {}
+  const changes = {} as Record<OutreachPolicyField | 'updated_by_user_profile_id', boolean | string | null>
+
+  for (const field of OUTREACH_POLICY_FIELDS) {
+    if (field in rawChanges) {
+      if (typeof rawChanges[field] !== 'boolean') {
+        throw new HttpError(400, `${field} must be a boolean value.`)
+      }
+      changes[field] = rawChanges[field] as boolean
+    }
+  }
+
+  if (Object.keys(changes).length === 0) {
+    throw new HttpError(400, 'Provide at least one outreach RBAC setting to update.')
+  }
+
+  changes.updated_by_user_profile_id = actor.profileId
+
+  const updateResult = await adminClient
+    .from('hid_outreach_role_policies')
+    .update(changes)
+    .eq('role', role)
+
+  if (updateResult.error) {
+    throw new HttpError(400, updateResult.error.message, updateResult.error)
+  }
+
+  const updatedResult = await adminClient
+    .from('hid_outreach_role_policies')
+    .select('role, can_open_workspace, can_create_encounters, can_manage_invites, can_sync_data, can_view_campaign_data, updated_at, updated_by_user_profile_id')
+    .eq('role', role)
+    .maybeSingle()
+
+  if (updatedResult.error) {
+    throw new HttpError(400, updatedResult.error.message, updatedResult.error)
+  }
+  if (!updatedResult.data) {
+    throw new HttpError(404, 'That outreach role could not be found right now.')
+  }
+
+  await logAdminAuditEvent(adminClient, actor, {
+    action: 'admin_update_outreach_role_policy',
+    resourceId: role,
+    resourceType: 'outreach_role_policy',
+    reason: 'Outreach RBAC updated by HID admin',
+    metadata: changes,
+  })
+
+  return {
+    policy: normalizeOutreachRolePolicy(updatedResult.data as OutreachRolePolicyRow),
+  }
+}
+
 Deno.serve(req => withErrorHandling(req, async () => {
   const auth = await requireRole(req, ['platform_admin'])
   const adminClient = createAdminClient()
 
   if (req.method === 'GET') {
-    const [admins, staffRolePolicies] = await Promise.all([
+    const [admins, staffRolePolicies, outreachRolePolicies] = await Promise.all([
       listPlatformAdmins(adminClient),
       listStaffRolePolicies(adminClient),
+      listOutreachRolePolicies(adminClient),
     ])
 
-    return json({ data: { admins, staffRolePolicies } }, 200, buildCacheHeaders({
+    return json({ data: { admins, staffRolePolicies, outreachRolePolicies } }, 200, buildCacheHeaders({
       maxAgeSeconds: 5,
       staleWhileRevalidateSeconds: 15,
     }))
@@ -396,6 +503,11 @@ Deno.serve(req => withErrorHandling(req, async () => {
 
     if (action === 'update_staff_role_policy') {
       const data = await updateStaffRolePolicy(adminClient, actor, body)
+      return json({ data })
+    }
+
+    if (action === 'update_outreach_role_policy') {
+      const data = await updateOutreachRolePolicy(adminClient, actor, body)
       return json({ data })
     }
 

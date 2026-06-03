@@ -26,6 +26,21 @@ function err(status: number, message: string) {
   return new Response(JSON.stringify({ error: message }), { status, headers: { ...CORS, 'Content-Type': 'application/json' } })
 }
 
+async function assertOutreachSignupEnabled(db: ReturnType<typeof adminClient>) {
+  const { data, error } = await db
+    .from('hid_platform_controls')
+    .select('maintenance_mode, outreach_signup_enabled')
+    .eq('id', true)
+    .maybeSingle()
+
+  if (error) throw new Error(error.message)
+  if (data?.maintenance_mode) return err(503, 'HID is under scheduled maintenance right now. Please try again shortly.')
+  if (data && data.outreach_signup_enabled === false) {
+    return err(403, 'Outreach onboarding is temporarily disabled right now.')
+  }
+  return null
+}
+
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: CORS })
   if (req.method !== 'POST') return err(405, 'Method not allowed.')
@@ -45,6 +60,8 @@ Deno.serve(async (req) => {
 
   try {
     const db = adminClient()
+    const controlError = await assertOutreachSignupEnabled(db)
+    if (controlError) return controlError
 
     // Validate invite code
     const { data: invite, error: invErr } = await db

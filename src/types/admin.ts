@@ -292,9 +292,21 @@ export interface AdminStaffRolePolicy {
   updatedByUserProfileId: string | null
 }
 
+export interface AdminOutreachRolePolicy {
+  role: string
+  canOpenWorkspace: boolean
+  canCreateEncounters: boolean
+  canManageInvites: boolean
+  canSyncData: boolean
+  canViewCampaignData: boolean
+  updatedAt: string
+  updatedByUserProfileId: string | null
+}
+
 export interface AdminRoleManagementResponse {
   admins: AdminPlatformAdmin[]
   staffRolePolicies: AdminStaffRolePolicy[]
+  outreachRolePolicies: AdminOutreachRolePolicy[]
 }
 
 export interface AdminCreatePlatformAdminResponse {
@@ -309,12 +321,54 @@ export interface AdminPlatformControls {
   hospitalSignupEnabled: boolean
   patientPortalEnabled: boolean
   hospitalPortalEnabled: boolean
+  outreachSignupEnabled: boolean
+  outreachPortalEnabled: boolean
   breakGlassEnabled: boolean
   uploadsEnabled: boolean
   updatedAt: string
   updatedByUserProfileId: string | null
   updatedByName: string | null
   updatedByEmail: string | null
+  outreach?: {
+    summary: {
+      activeCampaigns: number
+      plannedCampaigns: number
+      closedCampaigns: number
+      workers: number
+      openInvites: number
+      encounters: number
+      queuedEncounters: number
+      referrals: number
+      urgentReferrals: number
+    }
+    campaigns: Array<{
+      id: string
+      name: string
+      org: string
+      location: string
+      status: string
+      startsAt: string
+      endsAt: string | null
+      createdAt: string
+    }>
+    workers: Array<{
+      id: string
+      displayName: string
+      role: string
+      campaignId: string
+      createdAt: string
+    }>
+    invites: Array<{
+      id: string
+      campaignId: string
+      role: string
+      useCount: number
+      maxUses: number
+      expiresAt: string | null
+      createdAt: string
+      active: boolean
+    }>
+  }
 }
 
 export interface AdminPlatformControlsResponse {

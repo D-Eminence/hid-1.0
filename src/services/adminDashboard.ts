@@ -3,6 +3,7 @@ import type {
   AdminDashboardOverview,
   AdminManagedUser,
   AdminOverviewWindow,
+  AdminOutreachRolePolicy,
   AdminPlatformControls,
   AdminPlatformControlsResponse,
   AdminRoleManagementResponse,
@@ -522,6 +523,29 @@ export async function updateAdminStaffRolePolicy(
   return data.policy
 }
 
+export async function updateAdminOutreachRolePolicy(
+  role: string,
+  changes: Partial<Pick<AdminOutreachRolePolicy, 'canOpenWorkspace' | 'canCreateEncounters' | 'canManageInvites' | 'canSyncData' | 'canViewCampaignData'>>,
+) {
+  const data = await callAdminUserManagement<{ policy: AdminOutreachRolePolicy }>(requireSupabaseFunctionUrl('admin-role-management'), {
+    method: 'POST',
+    body: JSON.stringify({
+      action: 'update_outreach_role_policy',
+      role,
+      changes: {
+        can_open_workspace: changes.canOpenWorkspace,
+        can_create_encounters: changes.canCreateEncounters,
+        can_manage_invites: changes.canManageInvites,
+        can_sync_data: changes.canSyncData,
+        can_view_campaign_data: changes.canViewCampaignData,
+      },
+    }),
+  }, 500)
+
+  invalidateAdminDashboardCaches()
+  return data.policy
+}
+
 export async function fetchAdminPlatformControls(options: { force?: boolean } = {}) {
   const cacheKey = 'platform-controls'
   if (!options.force) {
@@ -563,7 +587,7 @@ export async function fetchAdminPlatformControls(options: { force?: boolean } = 
 }
 
 export async function updateAdminPlatformControls(
-  controls: Partial<Pick<AdminPlatformControls, 'maintenanceMode' | 'patientSignupEnabled' | 'hospitalSignupEnabled' | 'patientPortalEnabled' | 'hospitalPortalEnabled' | 'breakGlassEnabled' | 'uploadsEnabled'>>,
+  controls: Partial<Pick<AdminPlatformControls, 'maintenanceMode' | 'patientSignupEnabled' | 'hospitalSignupEnabled' | 'patientPortalEnabled' | 'hospitalPortalEnabled' | 'outreachSignupEnabled' | 'outreachPortalEnabled' | 'breakGlassEnabled' | 'uploadsEnabled'>>,
 ) {
   const data = await callAdminUserManagement<AdminPlatformControlsResponse>(requireSupabaseFunctionUrl('admin-platform-controls'), {
     method: 'POST',
@@ -575,6 +599,8 @@ export async function updateAdminPlatformControls(
         hospital_signup_enabled: controls.hospitalSignupEnabled,
         patient_portal_enabled: controls.patientPortalEnabled,
         hospital_portal_enabled: controls.hospitalPortalEnabled,
+        outreach_signup_enabled: controls.outreachSignupEnabled,
+        outreach_portal_enabled: controls.outreachPortalEnabled,
         break_glass_enabled: controls.breakGlassEnabled,
         uploads_enabled: controls.uploadsEnabled,
       },

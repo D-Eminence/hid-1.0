@@ -9,6 +9,8 @@ const CONTROL_FIELDS = [
   'hospital_signup_enabled',
   'patient_portal_enabled',
   'hospital_portal_enabled',
+  'outreach_signup_enabled',
+  'outreach_portal_enabled',
   'break_glass_enabled',
   'uploads_enabled',
 ] as const
@@ -23,6 +25,35 @@ type Payload = {
 type ProfileLookupRow = {
   auth_user_id: string
   display_name: string | null
+}
+
+type OutreachCampaignRow = {
+  id: string
+  name: string
+  org: string
+  location: string
+  status: string
+  starts_at: string
+  ends_at: string | null
+  created_at: string
+}
+
+type OutreachWorkerRow = {
+  id: string
+  display_name: string
+  role: string
+  campaign_id: string
+  created_at: string
+}
+
+type OutreachInviteRow = {
+  id: string
+  campaign_id: string
+  role: string
+  use_count: number
+  max_uses: number
+  expires_at: string | null
+  created_at: string
 }
 
 async function logAdminAuditEvent(
@@ -84,12 +115,98 @@ async function decorateControls(adminClient: ReturnType<typeof createAdminClient
     hospitalSignupEnabled: controls.hospital_signup_enabled,
     patientPortalEnabled: controls.patient_portal_enabled,
     hospitalPortalEnabled: controls.hospital_portal_enabled,
+    outreachSignupEnabled: controls.outreach_signup_enabled,
+    outreachPortalEnabled: controls.outreach_portal_enabled,
     breakGlassEnabled: controls.break_glass_enabled,
     uploadsEnabled: controls.uploads_enabled,
     updatedAt: controls.updated_at,
     updatedByUserProfileId: controls.updated_by_user_profile_id,
     updatedByName,
     updatedByEmail,
+  }
+}
+
+async function loadOutreachControls(adminClient: ReturnType<typeof createAdminClient>) {
+  const [campaignsResult, workersResult, invitesResult, encountersResult, referralsResult] = await Promise.all([
+    adminClient
+      .from('hid_outreach_campaigns')
+      .select('id, name, org, location, status, starts_at, ends_at, created_at')
+      .order('created_at', { ascending: false })
+      .limit(6),
+    adminClient
+      .from('hid_outreach_workers')
+      .select('id, display_name, role, campaign_id, created_at')
+      .order('created_at', { ascending: false })
+      .limit(8),
+    adminClient
+      .from('hid_outreach_invites')
+      .select('id, campaign_id, role, use_count, max_uses, expires_at, created_at')
+      .order('created_at', { ascending: false })
+      .limit(8),
+    adminClient
+      .from('hid_outreach_encounters')
+      .select('id, status, created_at')
+      .order('created_at', { ascending: false })
+      .limit(200),
+    adminClient
+      .from('hid_outreach_referrals')
+      .select('id, urgency, created_at')
+      .order('created_at', { ascending: false })
+      .limit(100),
+  ])
+
+  for (const result of [campaignsResult, workersResult, invitesResult, encountersResult, referralsResult]) {
+    if (result.error) throw new HttpError(400, result.error.message, result.error)
+  }
+
+  const campaigns = (campaignsResult.data ?? []) as OutreachCampaignRow[]
+  const workers = (workersResult.data ?? []) as OutreachWorkerRow[]
+  const invites = (invitesResult.data ?? []) as OutreachInviteRow[]
+  const encounters = (encountersResult.data ?? []) as Array<{ status: string }>
+  const referrals = (referralsResult.data ?? []) as Array<{ urgency: string }>
+  const openInvites = invites.filter(invite => (
+    invite.use_count < invite.max_uses && (!invite.expires_at || new Date(invite.expires_at) > new Date())
+  ))
+
+  return {
+    summary: {
+      activeCampaigns: campaigns.filter(campaign => campaign.status === 'active').length,
+      plannedCampaigns: campaigns.filter(campaign => campaign.status === 'planned').length,
+      closedCampaigns: campaigns.filter(campaign => campaign.status === 'closed').length,
+      workers: workers.length,
+      openInvites: openInvites.length,
+      encounters: encounters.length,
+      queuedEncounters: encounters.filter(encounter => encounter.status === 'queued').length,
+      referrals: referrals.length,
+      urgentReferrals: referrals.filter(referral => referral.urgency === 'urgent').length,
+    },
+    campaigns: campaigns.map(campaign => ({
+      id: campaign.id,
+      name: campaign.name,
+      org: campaign.org,
+      location: campaign.location,
+      status: campaign.status,
+      startsAt: campaign.starts_at,
+      endsAt: campaign.ends_at,
+      createdAt: campaign.created_at,
+    })),
+    workers: workers.map(worker => ({
+      id: worker.id,
+      displayName: worker.display_name,
+      role: worker.role,
+      campaignId: worker.campaign_id,
+      createdAt: worker.created_at,
+    })),
+    invites: invites.map(invite => ({
+      id: invite.id,
+      campaignId: invite.campaign_id,
+      role: invite.role,
+      useCount: invite.use_count,
+      maxUses: invite.max_uses,
+      expiresAt: invite.expires_at,
+      createdAt: invite.created_at,
+      active: invite.use_count < invite.max_uses && (!invite.expires_at || new Date(invite.expires_at) > new Date()),
+    })),
   }
 }
 
@@ -139,8 +256,16 @@ async function updateControls(
     metadata: nextValues,
   })
 
+  const [controls, outreach] = await Promise.all([
+    decorateControls(adminClient),
+    loadOutreachControls(adminClient),
+  ])
+
   return {
-    controls: await decorateControls(adminClient),
+    controls: {
+      ...controls,
+      outreach,
+    },
   }
 }
 
@@ -149,9 +274,17 @@ Deno.serve(req => withErrorHandling(req, async () => {
   const adminClient = createAdminClient()
 
   if (req.method === 'GET') {
+    const [controls, outreach] = await Promise.all([
+      decorateControls(adminClient),
+      loadOutreachControls(adminClient),
+    ])
+
     return json({
       data: {
-        controls: await decorateControls(adminClient),
+        controls: {
+          ...controls,
+          outreach,
+        },
       },
     }, 200, buildCacheHeaders({
       maxAgeSeconds: 2,
