@@ -741,6 +741,9 @@ export default function Landing() {
                   <span style={{ display: 'inline-flex', alignItems: 'center', background: '#e8f1fc', color: '#1a6fd4', fontSize: 12, fontWeight: 600, padding: '4px 12px', borderRadius: 999, marginBottom: 14, width: 'fit-content' }}>{tag}</span>
                   <h3 style={{ fontSize: 20, fontWeight: 700, letterSpacing: '-0.3px', marginBottom: 12 }}>{title}</h3>
                   <p style={{ fontSize: 14, color: '#6b7280', lineHeight: 1.7 }}>{desc}</p>
+                  <div style={{ marginTop: 20 }}>
+                    <Cta variant="secondary" size="sm" href={DEMO_HREF}>Book a Demo</Cta>
+                  </div>
                 </div>
               </div>
             ))}
