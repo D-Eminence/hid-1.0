@@ -251,7 +251,7 @@ export function LegalDocumentsModal({
         />
         <AgreementSection
           number={23}
-          title="Lawful Basis for Processing (GDPR Alignment)"
+          title="Lawful Basis for Processing (GDPR, HIPAA, NDPC Alignment)"
           paragraphs={['We process personal data under the following lawful bases:']}
           bullets={[
             'Consent - where you have given clear permission.',
@@ -381,7 +381,7 @@ export function LegalDocumentsModal({
           number={36}
           title="Disclaimer on Regulatory Scope"
           paragraphs={[
-            'While HID adopts GDPR and HIPAA-aligned best practices, users acknowledge that HID operates primarily under Nigerian law (NDPR).',
+            'While HID adopts NDPC, GDPR and HIPAA-aligned best practices, users acknowledge that HID operates primarily under Nigerian law (NDPC).',
             'Full HIPAA compliance applies only where explicitly required through partnerships with covered entities.',
           ]}
         />
