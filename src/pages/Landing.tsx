@@ -26,6 +26,7 @@ const sectionPadding = '80px clamp(20px, 5vw, 48px)'
 const landingTrustBadges = ['HIPAA + NDPC aligned', 'End-to-end encrypted', 'Built for African healthcare'] as const
 const SUPPORT_EMAIL = 'support@healthidentitydirectory.com'
 const PARTNER_HREF = `mailto:${SUPPORT_EMAIL}`
+const DEMO_HREF = `mailto:${SUPPORT_EMAIL}?subject=Book a Demo`
 
 const footerLinkStyle: React.CSSProperties = {
   display: 'block',
@@ -299,6 +300,32 @@ function Cta({
   )
 }
 
+function OpsImage({ src, alt, label }: { src: string; alt: string; label: string }) {
+  const [errored, setErrored] = useState(false)
+  if (errored) {
+    return (
+      <div style={{ width: '100%', minHeight: 180, borderRadius: 10, border: '1px dashed #bfdbfe', background: '#fff', boxShadow: '0 18px 38px rgba(15,23,42,0.06)', padding: '36px 18px', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 10, color: '#1a6fd4', textAlign: 'center' }}>
+        <svg width="34" height="34" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+          <circle cx="12" cy="8.5" r="3.2" stroke="currentColor" strokeWidth="1.7" />
+          <path d="M5.5 19a6.5 6.5 0 0 1 13 0" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" />
+          <path d="M16.5 4.5l1.5 1.5 3-3" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" />
+        </svg>
+        <span style={{ fontSize: 13, fontWeight: 700 }}>{label}</span>
+        <span style={{ fontSize: 11, color: '#9ca3af', fontWeight: 500 }}>Preview coming soon</span>
+      </div>
+    )
+  }
+  return (
+    <img
+      src={src}
+      alt={alt}
+      loading="lazy"
+      onError={() => setErrored(true)}
+      style={{ display: 'block', width: '100%', height: 'auto', borderRadius: 10, border: '1px solid #e5e7eb', boxShadow: '0 18px 38px rgba(15,23,42,0.06)' }}
+    />
+  )
+}
+
 export default function Landing() {
   const navigate = useNavigate()
   const [openFaq, setOpenFaq] = useState<number | null>(null)
@@ -354,6 +381,13 @@ export default function Landing() {
       desc: 'Owners track revenue, margin, and stock in real time across all branches, with reorder and top-product insights at a glance.',
       flip: false,
     },
+    {
+      src: '/screenshots/dashboard-outreach.png',
+      tag: 'Medical Outreach',
+      title: 'Community Health, Coordinated in the Field',
+      desc: 'Run medical outreaches and community health programs, register encounters, capture consent, and sync records back to each patient identity.',
+      flip: true,
+    },
   ]
 
   const outcomes = [
@@ -389,6 +423,7 @@ export default function Landing() {
       links: [
         { label: 'Patient Portal', onClick: () => navigate('/patient') },
         { label: 'Hospital Portal', onClick: () => navigate(HOSPITAL_AUTH_PATH) },
+        { label: 'Book a Demo', href: DEMO_HREF },
         { label: 'Partner With Us', href: PARTNER_HREF },
         { label: 'FAQs', href: '#faq' },
       ],
@@ -477,8 +512,8 @@ export default function Landing() {
 
         {!isCompact && (
           <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-            <Cta variant="secondary" size="sm" href={PARTNER_HREF}>
-              Partner With Us
+            <Cta variant="secondary" size="sm" href={DEMO_HREF}>
+              Book a Demo
             </Cta>
             <Cta
               variant="primary"
@@ -538,6 +573,9 @@ export default function Landing() {
             <Cta variant="primary" size="md" fullWidth onClick={() => { setMenuOpen(false); navigate('/patient') }}>
               Get Your HID
             </Cta>
+            <Cta variant="secondary" size="md" fullWidth href={DEMO_HREF} onClick={() => setMenuOpen(false)}>
+              Book a Demo
+            </Cta>
             <Cta variant="secondary" size="md" fullWidth href={PARTNER_HREF} onClick={() => setMenuOpen(false)}>
               Partner With Us
             </Cta>
@@ -584,8 +622,8 @@ export default function Landing() {
             >
               Get Your HID
             </Cta>
-            <Cta variant="secondary" size="md" fullWidth href={PARTNER_HREF}>
-              Partner With Us
+            <Cta variant="secondary" size="md" fullWidth href={DEMO_HREF}>
+              Book a Demo
             </Cta>
           </div>
           <button
@@ -679,7 +717,7 @@ export default function Landing() {
             </span>
             <h2 style={{ fontSize: isNarrow ? 24 : 28, fontWeight: 800, letterSpacing: isNarrow ? 0 : '-0.5px' }}>Already Powering Real Healthcare Operations</h2>
             <p style={{ fontSize: 14, color: '#6b7280', marginTop: 10, lineHeight: 1.7, maxWidth: 540, margin: '10px auto 0' }}>
-              HID isn&apos;t a concept, it&apos;s live software running hospital, laboratory, and pharmacy workflows today.
+              HID isn&apos;t a concept, it&apos;s live software running hospital, laboratory, pharmacy, and outreach workflows today.
             </p>
           </div>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
@@ -697,12 +735,7 @@ export default function Landing() {
                 }}
               >
                 <div style={{ background: '#f3f4f6', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: isNarrow ? 18 : 28, direction: 'ltr' }}>
-                  <img
-                    src={src}
-                    alt={`${tag} dashboard preview`}
-                    loading="lazy"
-                    style={{ display: 'block', width: '100%', height: 'auto', borderRadius: 10, border: '1px solid #e5e7eb', boxShadow: '0 18px 38px rgba(15,23,42,0.06)' }}
-                  />
+                  <OpsImage src={src} alt={`${tag} dashboard preview`} label={tag} />
                 </div>
                 <div style={{ padding: isNarrow ? '26px 22px 30px' : '40px 36px', display: 'flex', flexDirection: 'column', justifyContent: 'center', direction: 'ltr' }}>
                   <span style={{ display: 'inline-flex', alignItems: 'center', background: '#e8f1fc', color: '#1a6fd4', fontSize: 12, fontWeight: 600, padding: '4px 12px', borderRadius: 999, marginBottom: 14, width: 'fit-content' }}>{tag}</span>
@@ -713,7 +746,7 @@ export default function Landing() {
             ))}
           </div>
           <p style={{ textAlign: 'center', fontSize: 13, color: '#9ca3af', marginTop: 24 }}>
-            EMR and Outreach workflows are part of the same connected platform.
+            All four run on the same connected platform, with EMR woven through every workflow.
           </p>
         </div>
       </section>
@@ -924,8 +957,8 @@ export default function Landing() {
           >
             Get Your HID
           </Cta>
-          <Cta variant="outlineWhite" size="md" fullWidth={isNarrow} href={PARTNER_HREF}>
-            Partner With Us
+          <Cta variant="outlineWhite" size="md" fullWidth={isNarrow} href={DEMO_HREF}>
+            Book a Demo
           </Cta>
         </div>
       </div>
