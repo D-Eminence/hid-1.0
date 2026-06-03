@@ -56,4 +56,4 @@ jobs:
         run: npx vercel@latest build --prod --token="${{ secrets.VERCEL_TOKEN }}"
 
       - name: Deploy full production build
-        run: timeout 120 npx vercel@latest deploy --prebuilt --prod --token="${{ secrets.VERCEL_TOKEN }}" || true
+        run: timeout 600 npx vercel@latest deploy --prebuilt --prod --token="${{ secrets.VERCEL_TOKEN }}"
