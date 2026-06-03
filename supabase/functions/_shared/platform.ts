@@ -13,6 +13,8 @@ export type PlatformControlsRow = {
   hospital_signup_enabled: boolean
   patient_portal_enabled: boolean
   hospital_portal_enabled: boolean
+  outreach_signup_enabled: boolean
+  outreach_portal_enabled: boolean
   break_glass_enabled: boolean
   uploads_enabled: boolean
   updated_at: string
@@ -45,6 +47,8 @@ const DEFAULT_PLATFORM_CONTROLS: PlatformControlsRow = {
   hospital_signup_enabled: true,
   patient_portal_enabled: true,
   hospital_portal_enabled: true,
+  outreach_signup_enabled: true,
+  outreach_portal_enabled: true,
   break_glass_enabled: true,
   uploads_enabled: true,
   updated_at: new Date(0).toISOString(),
@@ -105,7 +109,7 @@ export async function loadPlatformControls(adminClient: AdminClient) {
 
   const response = await adminClient
     .from('hid_platform_controls')
-    .select('maintenance_mode, patient_signup_enabled, hospital_signup_enabled, patient_portal_enabled, hospital_portal_enabled, break_glass_enabled, uploads_enabled, updated_at, updated_by_user_profile_id')
+    .select('maintenance_mode, patient_signup_enabled, hospital_signup_enabled, patient_portal_enabled, hospital_portal_enabled, outreach_signup_enabled, outreach_portal_enabled, break_glass_enabled, uploads_enabled, updated_at, updated_by_user_profile_id')
     .eq('id', true)
     .maybeSingle()
 

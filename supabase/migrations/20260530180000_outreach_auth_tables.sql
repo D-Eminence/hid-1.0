@@ -1,6 +1,6 @@
 -- Outreach authentication: OTP verification + audit log
 
-CREATE TABLE hid_outreach_otp (
+CREATE TABLE IF NOT EXISTS hid_outreach_otp (
   id UUID NOT NULL DEFAULT gen_random_uuid() PRIMARY KEY,
   email TEXT NOT NULL,
   auth_user_id UUID REFERENCES auth.users(id) ON DELETE CASCADE,
@@ -20,12 +20,12 @@ CREATE TABLE hid_outreach_otp (
 -- No RLS policies = service role only (edge functions)
 ALTER TABLE hid_outreach_otp ENABLE ROW LEVEL SECURITY;
 
-CREATE INDEX idx_hid_outreach_otp_email ON hid_outreach_otp(email);
-CREATE INDEX idx_hid_outreach_otp_auth_user_id ON hid_outreach_otp(auth_user_id);
-CREATE INDEX idx_hid_outreach_otp_expires_at ON hid_outreach_otp(expires_at);
+CREATE INDEX IF NOT EXISTS idx_hid_outreach_otp_email ON hid_outreach_otp(email);
+CREATE INDEX IF NOT EXISTS idx_hid_outreach_otp_auth_user_id ON hid_outreach_otp(auth_user_id);
+CREATE INDEX IF NOT EXISTS idx_hid_outreach_otp_expires_at ON hid_outreach_otp(expires_at);
 
 -- Audit log for admin visibility
-CREATE TABLE hid_outreach_auth_log (
+CREATE TABLE IF NOT EXISTS hid_outreach_auth_log (
   id UUID NOT NULL DEFAULT gen_random_uuid() PRIMARY KEY,
   event TEXT NOT NULL,
   email TEXT,
@@ -40,6 +40,7 @@ CREATE TABLE hid_outreach_auth_log (
 ALTER TABLE hid_outreach_auth_log ENABLE ROW LEVEL SECURITY;
 
 -- Admins can read the auth log
+DROP POLICY IF EXISTS "auth_log_select_admins" ON hid_outreach_auth_log;
 CREATE POLICY "auth_log_select_admins" ON hid_outreach_auth_log
   FOR SELECT TO authenticated USING (
     EXISTS (
@@ -48,6 +49,6 @@ CREATE POLICY "auth_log_select_admins" ON hid_outreach_auth_log
     )
   );
 
-CREATE INDEX idx_hid_outreach_auth_log_event ON hid_outreach_auth_log(event);
-CREATE INDEX idx_hid_outreach_auth_log_email ON hid_outreach_auth_log(email);
-CREATE INDEX idx_hid_outreach_auth_log_created_at ON hid_outreach_auth_log(created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_hid_outreach_auth_log_event ON hid_outreach_auth_log(event);
+CREATE INDEX IF NOT EXISTS idx_hid_outreach_auth_log_email ON hid_outreach_auth_log(email);
+CREATE INDEX IF NOT EXISTS idx_hid_outreach_auth_log_created_at ON hid_outreach_auth_log(created_at DESC);

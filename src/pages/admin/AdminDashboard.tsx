@@ -15,6 +15,7 @@ import {
   fetchAdminRoleManagement,
   fetchDeletedAdminUsers,
   searchAdminUsers,
+  updateAdminOutreachRolePolicy,
   updateAdminPlatformControls,
   updateAdminStaffRolePolicy,
 } from '../../services/adminDashboard'
@@ -22,6 +23,7 @@ import type {
   AdminAlert,
   AdminManagedUser,
   AdminOverviewWindow,
+  AdminOutreachRolePolicy,
   AdminPlatformAdmin,
   AdminPlatformControls,
   AdminStaffRolePolicy,
@@ -264,8 +266,20 @@ const staffRoleCapabilityFields: Array<{
   { key: 'canViewHistory', label: 'History', helper: 'View hospital audit and history' },
 ]
 
+const outreachRoleCapabilityFields: Array<{
+  key: keyof Pick<AdminOutreachRolePolicy, 'canOpenWorkspace' | 'canCreateEncounters' | 'canManageInvites' | 'canSyncData' | 'canViewCampaignData'>
+  label: string
+  helper: string
+}> = [
+  { key: 'canOpenWorkspace', label: 'Workspace', helper: 'Open the outreach workspace' },
+  { key: 'canCreateEncounters', label: 'Create Encounters', helper: 'Capture field encounters and patient details' },
+  { key: 'canManageInvites', label: 'Manage Invites', helper: 'Generate and share campaign invite links' },
+  { key: 'canSyncData', label: 'Sync Data', helper: 'Queue and sync outreach records' },
+  { key: 'canViewCampaignData', label: 'Campaign Data', helper: 'View campaign encounters and activity' },
+]
+
 const platformControlFields: Array<{
-  key: keyof Pick<AdminPlatformControls, 'maintenanceMode' | 'patientSignupEnabled' | 'hospitalSignupEnabled' | 'patientPortalEnabled' | 'hospitalPortalEnabled' | 'breakGlassEnabled' | 'uploadsEnabled'>
+  key: keyof Pick<AdminPlatformControls, 'maintenanceMode' | 'patientSignupEnabled' | 'hospitalSignupEnabled' | 'patientPortalEnabled' | 'hospitalPortalEnabled' | 'outreachSignupEnabled' | 'outreachPortalEnabled' | 'breakGlassEnabled' | 'uploadsEnabled'>
   label: string
   helper: string
 }> = [
@@ -274,6 +288,8 @@ const platformControlFields: Array<{
   { key: 'hospitalSignupEnabled', label: 'Hospital Signup', helper: 'Allow new hospital or staff onboarding' },
   { key: 'patientPortalEnabled', label: 'Patient Portal', helper: 'Allow patient portal sign-in and API access' },
   { key: 'hospitalPortalEnabled', label: 'Hospital Portal', helper: 'Allow hospital portal sign-in and API access' },
+  { key: 'outreachSignupEnabled', label: 'Outreach Signup', helper: 'Allow outreach campaign admins and invited workers to join' },
+  { key: 'outreachPortalEnabled', label: 'Outreach Portal', helper: 'Keep outreach workspace access enabled for field teams' },
   { key: 'breakGlassEnabled', label: 'Break Glass', helper: 'Allow emergency access requests' },
   { key: 'uploadsEnabled', label: 'File Uploads', helper: 'Allow medical record file uploads' },
 ]
@@ -294,6 +310,7 @@ export default function AdminDashboard() {
   const [actioning, setActioning] = useState<AdminUserManagementAction | null>(null)
   const [platformAdmins, setPlatformAdmins] = useState<AdminPlatformAdmin[]>([])
   const [staffRolePolicies, setStaffRolePolicies] = useState<AdminStaffRolePolicy[]>([])
+  const [outreachRolePolicies, setOutreachRolePolicies] = useState<AdminOutreachRolePolicy[]>([])
   const [platformControls, setPlatformControls] = useState<AdminPlatformControls | null>(null)
   const [roleManagementLoading, setRoleManagementLoading] = useState(false)
   const [platformControlsLoading, setPlatformControlsLoading] = useState(false)
@@ -302,6 +319,7 @@ export default function AdminDashboard() {
   const [creatingAdmin, setCreatingAdmin] = useState(false)
   const [savingPlatformControls, setSavingPlatformControls] = useState(false)
   const [savingStaffRole, setSavingStaffRole] = useState<string | null>(null)
+  const [savingOutreachRole, setSavingOutreachRole] = useState<string | null>(null)
   const [newAdminForm, setNewAdminForm] = useState({ fullName: '', email: '' })
   const [newAdminArtifact, setNewAdminArtifact] = useState<{ email: string; passwordSetupLink: string } | null>(null)
   const [activeSection, setActiveSection] = useState('dashboard')
@@ -383,6 +401,7 @@ export default function AdminDashboard() {
       const response = await fetchAdminRoleManagement({ force })
       setPlatformAdmins(response.admins)
       setStaffRolePolicies(response.staffRolePolicies)
+      setOutreachRolePolicies(response.outreachRolePolicies ?? [])
     } catch (reason) {
       const message = reason instanceof Error ? reason.message : 'Admin role settings could not be loaded right now.'
       setRoleManagementError(message)
@@ -473,6 +492,12 @@ export default function AdminDashboard() {
     )))
   }
 
+  function updateOutreachRolePolicyDraft(role: string, field: keyof Pick<AdminOutreachRolePolicy, 'canOpenWorkspace' | 'canCreateEncounters' | 'canManageInvites' | 'canSyncData' | 'canViewCampaignData'>, value: boolean) {
+    setOutreachRolePolicies(current => current.map(policy => (
+      policy.role === role ? { ...policy, [field]: value } : policy
+    )))
+  }
+
   async function saveStaffRolePolicy(role: string) {
     const policy = staffRolePolicies.find(item => item.role === role)
     if (!policy) return
@@ -498,6 +523,30 @@ export default function AdminDashboard() {
     }
   }
 
+  async function saveOutreachRolePolicy(role: string) {
+    const policy = outreachRolePolicies.find(item => item.role === role)
+    if (!policy) return
+
+    setSavingOutreachRole(role)
+    try {
+      const updated = await updateAdminOutreachRolePolicy(role, {
+        canOpenWorkspace: policy.canOpenWorkspace,
+        canCreateEncounters: policy.canCreateEncounters,
+        canManageInvites: policy.canManageInvites,
+        canSyncData: policy.canSyncData,
+        canViewCampaignData: policy.canViewCampaignData,
+      })
+      setOutreachRolePolicies(current => current.map(item => item.role === role ? updated : item))
+      showToast(`${role} outreach RBAC updated successfully.`, 'success')
+    } catch (reason) {
+      const message = reason instanceof Error ? reason.message : 'The outreach RBAC definition could not be updated right now.'
+      showToast(message, 'error')
+      void loadRoleManagement(true)
+    } finally {
+      setSavingOutreachRole(null)
+    }
+  }
+
   async function savePlatformControls() {
     if (!platformControls) return
 
@@ -509,6 +558,8 @@ export default function AdminDashboard() {
         hospitalSignupEnabled: platformControls.hospitalSignupEnabled,
         patientPortalEnabled: platformControls.patientPortalEnabled,
         hospitalPortalEnabled: platformControls.hospitalPortalEnabled,
+        outreachSignupEnabled: platformControls.outreachSignupEnabled,
+        outreachPortalEnabled: platformControls.outreachPortalEnabled,
         breakGlassEnabled: platformControls.breakGlassEnabled,
         uploadsEnabled: platformControls.uploadsEnabled,
       })
@@ -1601,6 +1652,70 @@ export default function AdminDashboard() {
           </div>
 
           <div style={{ marginTop: 14 }}>
+            {sectionTitle('Outreach Platform Control')}
+            <div style={{ fontSize: 11.5, color: 'var(--admin-muted)', marginBottom: 12, lineHeight: 1.6 }}>
+              Monitor outreach campaigns, workers, invites, and field sync readiness from the same platform control surface.
+            </div>
+            <div style={{ display: 'grid', gridTemplateColumns: viewportWidth < 1180 ? '1fr' : 'minmax(0, 0.8fr) minmax(0, 1.2fr)', gap: 12 }}>
+              <div style={{ border: '1px solid var(--admin-border)', borderRadius: 12, background: '#fbfdff', padding: 14 }}>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: 10 }}>
+                  <div style={{ border: '1px solid #eef2f7', borderRadius: 10, padding: '10px 12px', background: '#fff' }}>
+                    <div style={{ fontSize: 10.5, color: 'var(--admin-muted)', textTransform: 'uppercase', letterSpacing: '0.04em' }}>Active Campaigns</div>
+                    <div style={{ fontSize: 20, fontWeight: 800, marginTop: 4 }}>{formatCompact(platformControls?.outreach?.summary.activeCampaigns ?? 0)}</div>
+                  </div>
+                  <div style={{ border: '1px solid #eef2f7', borderRadius: 10, padding: '10px 12px', background: '#fff' }}>
+                    <div style={{ fontSize: 10.5, color: 'var(--admin-muted)', textTransform: 'uppercase', letterSpacing: '0.04em' }}>Workers</div>
+                    <div style={{ fontSize: 20, fontWeight: 800, marginTop: 4 }}>{formatCompact(platformControls?.outreach?.summary.workers ?? 0)}</div>
+                  </div>
+                  <div style={{ border: '1px solid #eef2f7', borderRadius: 10, padding: '10px 12px', background: '#fff' }}>
+                    <div style={{ fontSize: 10.5, color: 'var(--admin-muted)', textTransform: 'uppercase', letterSpacing: '0.04em' }}>Open Invites</div>
+                    <div style={{ fontSize: 20, fontWeight: 800, marginTop: 4 }}>{formatCompact(platformControls?.outreach?.summary.openInvites ?? 0)}</div>
+                  </div>
+                  <div style={{ border: '1px solid #eef2f7', borderRadius: 10, padding: '10px 12px', background: '#fff' }}>
+                    <div style={{ fontSize: 10.5, color: 'var(--admin-muted)', textTransform: 'uppercase', letterSpacing: '0.04em' }}>Queued Encounters</div>
+                    <div style={{ fontSize: 20, fontWeight: 800, marginTop: 4 }}>{formatCompact(platformControls?.outreach?.summary.queuedEncounters ?? 0)}</div>
+                  </div>
+                </div>
+                <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginTop: 12 }}>
+                  <Badge color={platformControls?.outreachSignupEnabled ? 'green' : 'amber'}>
+                    Signup {platformControls?.outreachSignupEnabled ? 'enabled' : 'disabled'}
+                  </Badge>
+                  <Badge color={platformControls?.outreachPortalEnabled ? 'green' : 'amber'}>
+                    Portal {platformControls?.outreachPortalEnabled ? 'enabled' : 'disabled'}
+                  </Badge>
+                  {(platformControls?.outreach?.summary.urgentReferrals ?? 0) > 0 && (
+                    <Badge color="red">{formatCompact(platformControls?.outreach?.summary.urgentReferrals ?? 0)} urgent referrals</Badge>
+                  )}
+                </div>
+              </div>
+
+              <div style={{ border: '1px solid var(--admin-border)', borderRadius: 12, background: '#fff', padding: 14 }}>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, marginBottom: 10 }}>
+                  <div style={{ fontSize: 12, fontWeight: 700 }}>Recent Campaigns</div>
+                  <Button size="sm" variant="outline" onClick={() => void loadPlatformControlsState(true)} loading={platformControlsLoading}>
+                    Refresh
+                  </Button>
+                </div>
+                {(platformControls?.outreach?.campaigns.length ?? 0) === 0 ? (
+                  <div style={{ fontSize: 11.5, color: 'var(--admin-muted)' }}>No outreach campaigns have been created yet.</div>
+                ) : (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                    {platformControls?.outreach?.campaigns.slice(0, 4).map(campaign => (
+                      <div key={campaign.id} style={{ border: '1px solid #eef2f7', borderRadius: 10, padding: '10px 12px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10 }}>
+                        <div style={{ minWidth: 0 }}>
+                          <div style={{ fontSize: 12.5, fontWeight: 700, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{campaign.name}</div>
+                          <div style={{ fontSize: 10.5, color: 'var(--admin-muted)' }}>{campaign.org} • {campaign.location} • {formatRelativeTime(campaign.createdAt)}</div>
+                        </div>
+                        <Badge color={campaign.status === 'active' ? 'green' : campaign.status === 'planned' ? 'blue' : 'gray'}>{campaign.status}</Badge>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+
+          <div style={{ marginTop: 14 }}>
             {sectionTitle('Hospital RBAC')}
             <div style={{ fontSize: 11.5, color: 'var(--admin-muted)', marginBottom: 12, lineHeight: 1.6 }}>
               Edit what each hospital role can do in the active product. These permissions are enforced in the existing hospital access, records, history, and emergency endpoints.
@@ -1651,6 +1766,59 @@ export default function AdminDashboard() {
               ))}
               {roleManagementLoading && staffRolePolicies.length === 0 && (
                 <div style={{ fontSize: 11.5, color: 'var(--admin-muted)' }}>Loading RBAC definitions...</div>
+              )}
+            </div>
+          </div>
+
+          <div style={{ marginTop: 14 }}>
+            {sectionTitle('Outreach RBAC')}
+            <div style={{ fontSize: 11.5, color: 'var(--admin-muted)', marginBottom: 12, lineHeight: 1.6 }}>
+              Control what each outreach role can do across campaign workspaces, invite management, encounter capture, and sync operations.
+            </div>
+            {roleManagementError && (
+              <div style={{ ...alertToneStyle('warning'), borderRadius: 10, padding: '10px 12px', marginBottom: 12, fontSize: 11.5 }}>
+                {roleManagementError}
+              </div>
+            )}
+            <div style={{ display: 'grid', gap: 10 }}>
+              {outreachRolePolicies.map(policy => (
+                <div key={policy.role} style={{ border: '1px solid var(--admin-border)', borderRadius: 12, padding: '12px 14px', background: '#fff' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, marginBottom: 10, flexWrap: 'wrap' }}>
+                    <div>
+                      <div style={{ fontSize: 12.5, fontWeight: 800, textTransform: 'capitalize' }}>{policy.role.replace(/_/g, ' ')}</div>
+                      <div style={{ fontSize: 10.5, color: 'var(--admin-muted)' }}>
+                        Updated {formatRelativeTime(policy.updatedAt)}
+                      </div>
+                    </div>
+                    <Button
+                      size="sm"
+                      onClick={() => void saveOutreachRolePolicy(policy.role)}
+                      loading={savingOutreachRole === policy.role}
+                    >
+                      Save Role
+                    </Button>
+                  </div>
+                  <div style={{ display: 'grid', gridTemplateColumns: viewportWidth < 1320 ? '1fr' : 'repeat(3, minmax(0, 1fr))', gap: 8 }}>
+                    {outreachRoleCapabilityFields.map(field => (
+                      <label key={`${policy.role}-${field.key}`} style={{ display: 'flex', alignItems: 'flex-start', gap: 10, border: '1px solid #eef2f7', borderRadius: 10, padding: '10px 12px', background: '#fbfdff' }}>
+                        <input
+                          type="checkbox"
+                          checked={Boolean(policy[field.key])}
+                          disabled={savingOutreachRole === policy.role}
+                          onChange={event => updateOutreachRolePolicyDraft(policy.role, field.key, event.target.checked)}
+                          style={{ marginTop: 2 }}
+                        />
+                        <div>
+                          <div style={{ fontSize: 12, fontWeight: 700 }}>{field.label}</div>
+                          <div style={{ fontSize: 10.5, color: 'var(--admin-muted)', lineHeight: 1.5 }}>{field.helper}</div>
+                        </div>
+                      </label>
+                    ))}
+                  </div>
+                </div>
+              ))}
+              {roleManagementLoading && outreachRolePolicies.length === 0 && (
+                <div style={{ fontSize: 11.5, color: 'var(--admin-muted)' }}>Loading outreach RBAC definitions...</div>
               )}
             </div>
           </div>

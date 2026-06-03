@@ -100,6 +100,21 @@ function emailHtml(code: string, name: string) {
 </div></body></html>`
 }
 
+async function assertOutreachSignupEnabled(db: ReturnType<typeof adminClient>) {
+  const { data, error } = await db
+    .from('hid_platform_controls')
+    .select('maintenance_mode, outreach_signup_enabled')
+    .eq('id', true)
+    .maybeSingle()
+
+  if (error) throw new Error(error.message)
+  if (data?.maintenance_mode) return err(503, 'HID is under scheduled maintenance right now. Please try again shortly.')
+  if (data && data.outreach_signup_enabled === false) {
+    return err(403, 'Outreach onboarding is temporarily disabled right now.')
+  }
+  return null
+}
+
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: CORS })
 
@@ -126,6 +141,8 @@ Deno.serve(async (req) => {
 
   try {
     const db = adminClient()
+    const controlError = await assertOutreachSignupEnabled(db)
+    if (controlError) return controlError
 
     // Check for an active unexpired OTP for this email
     const { data: existingOtp } = await db
