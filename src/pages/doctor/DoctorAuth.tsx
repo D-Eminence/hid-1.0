@@ -15,7 +15,6 @@ import {
   isTotpEnrollmentUnavailableError,
   providerSignUp,
   providerSignIn,
-  sendStaffVerificationEmail,
   sendStaffPasswordReset,
   updateCurrentUserPassword,
   verifyPrivilegedTotp,
@@ -80,7 +79,7 @@ export default function DoctorAuth() {
   const [forgotOtpVerified, setForgotOtpVerified] = useState(false)
   const [resetPassword, setResetPassword] = useState('')
   const [confirmResetPassword, setConfirmResetPassword] = useState('')
-  const [signupVerification, setSignupVerification] = useState({ email: '', password: '', code: '' })
+  const [signupVerification, setSignupVerification] = useState({ challengeId: '', email: '', password: '', code: '' })
   const [signupAccepted, setSignupAccepted] = useState(false)
   const [pendingStaffAccount, setPendingStaffAccount] = useState<StaffAccount | null>(null)
   const [mfaCode, setMfaCode] = useState('')
@@ -250,14 +249,9 @@ export default function DoctorAuth() {
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Invalid hospital credentials.'
       if (error instanceof Error && message.toLowerCase().includes('email not confirmed') && /\S+@\S+\.\S+/.test(loginForm.email.trim())) {
-        await sendStaffVerificationEmail(loginForm.email.trim().toLowerCase(), captchaTokenOverride).catch(() => {})
-        setSignupVerification({
-          email: loginForm.email.trim().toLowerCase(),
-          password: loginForm.password,
-          code: '',
-        })
-        setStep('verify')
-        showToast('Enter the 6-digit verification code we sent to your email to continue.', 'info')
+        setSignupForm(current => ({ ...current, email: loginForm.email.trim().toLowerCase(), password: loginForm.password, confirmPassword: loginForm.password }))
+        setStep('signup')
+        showToast('Finish hospital sign-up again to receive a fresh verification code.', 'info')
         return
       }
       showToast(message, 'error')
@@ -298,6 +292,7 @@ export default function DoctorAuth() {
       if (!result.staffAccount) {
         trackEvent('hospital_signup_pending_verification')
         setSignupVerification({
+          challengeId: result.challengeId,
           email: signupForm.email.trim().toLowerCase(),
           password: signupForm.password,
           code: '',
@@ -319,14 +314,14 @@ export default function DoctorAuth() {
   }
 
   async function verifySignupCode(nextCode = signupVerification.code) {
-    if (nextCode.trim().length !== 6 || !signupVerification.email || !signupVerification.password) {
+    if (nextCode.trim().length !== 6 || !signupVerification.challengeId || !signupVerification.email || !signupVerification.password) {
       showToast('Enter the full 6-digit verification code first.', 'error')
       return
     }
 
     setLoading(true)
     try {
-      const staffAccount = await verifyStaffSignupOtp(signupVerification.email, signupVerification.password, nextCode.trim())
+      const staffAccount = await verifyStaffSignupOtp(signupVerification.challengeId, signupVerification.email, signupVerification.password, nextCode.trim())
       trackEvent('hospital_signup_completed')
       showToast('Email verified. Continue with your authenticator to finish signing in.', 'success')
       await moveIntoStaffMfaFlow(staffAccount)
@@ -349,7 +344,19 @@ export default function DoctorAuth() {
   async function performResendSignupCode(captchaTokenOverride: string | null = captchaToken) {
     setLoading(true)
     try {
-      await sendStaffVerificationEmail(signupVerification.email, captchaTokenOverride)
+      const result = await providerSignUp({
+        captchaToken: captchaTokenOverride,
+        country: signupForm.country,
+        email: signupVerification.email || signupForm.email,
+        hospitalName: signupForm.hospitalName,
+        password: signupVerification.password || signupForm.password,
+        state: signupForm.state,
+      })
+      setSignupVerification(current => ({
+        ...current,
+        challengeId: result.challengeId,
+        code: '',
+      }))
       showToast('A new verification code has been sent to your email.', 'success')
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Unable to send another verification code right now.'

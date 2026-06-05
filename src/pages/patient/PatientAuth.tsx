@@ -12,7 +12,6 @@ import {
   fetchMyPatient,
   patientSignIn,
   patientSignUpWithPassword,
-  sendPatientVerificationEmail,
   startPatientPasswordReset,
   verifyPatientSignupOtp,
   verifyPatientPasswordResetCode,
@@ -111,7 +110,7 @@ export default function PatientAuth() {
   })
   const [forgot, setForgot] = useState<ForgotState>(() => emptyForgotState())
   const [forgotOtpVerified, setForgotOtpVerified] = useState(false)
-  const [signupVerification, setSignupVerification] = useState({ email: '', password: '', code: '' })
+  const [signupVerification, setSignupVerification] = useState({ challengeId: '', email: '', password: '', code: '' })
   const {
     captchaNotice,
     captchaResetKey,
@@ -219,6 +218,7 @@ export default function PatientAuth() {
       if (!result.profile) {
         trackEvent('patient_signup_pending_verification')
         setSignupVerification({
+          challengeId: result.challengeId,
           email: signup.email.trim().toLowerCase(),
           password: signup.password,
           code: '',
@@ -268,14 +268,9 @@ export default function PatientAuth() {
     } catch (error) {
       const message = error instanceof Error ? error.message : 'The sign-in details are not correct.'
       if (error instanceof Error && message.toLowerCase().includes('email not confirmed') && looksLikeEmail(signin.identifier)) {
-        await sendPatientVerificationEmail(signin.identifier.trim().toLowerCase(), captchaTokenOverride).catch(() => {})
-        setSignupVerification({
-          email: signin.identifier.trim().toLowerCase(),
-          password: signin.password,
-          code: '',
-        })
-        setStep('verify')
-        showToast('Enter the 6-digit verification code we sent to your email to continue.', 'info')
+        setSignup(current => ({ ...current, email: signin.identifier.trim().toLowerCase(), password: signin.password, confirmPassword: signin.password }))
+        setStep('signup')
+        showToast('Finish sign-up again to receive a fresh verification code.', 'info')
         return
       }
       showToast(message, 'error')
@@ -286,14 +281,14 @@ export default function PatientAuth() {
   }
 
   async function verifySignupCode(nextCode = signupVerification.code) {
-    if (nextCode.trim().length !== 6 || !signupVerification.email || !signupVerification.password) {
+    if (nextCode.trim().length !== 6 || !signupVerification.challengeId || !signupVerification.email || !signupVerification.password) {
       showToast('Enter the full 6-digit verification code first.', 'error')
       return
     }
 
     setLoading(true)
     try {
-      const profile = await verifyPatientSignupOtp(signupVerification.email, signupVerification.password, nextCode.trim())
+      const profile = await verifyPatientSignupOtp(signupVerification.challengeId, signupVerification.email, signupVerification.password, nextCode.trim())
       trackEvent('patient_signup_completed')
       setGeneratedHid(profile.patient.hid_code)
       setPatientSession({
@@ -322,7 +317,20 @@ export default function PatientAuth() {
   async function performResendSignupCode(captchaTokenOverride: string | null = captchaToken) {
     setLoading(true)
     try {
-      await sendPatientVerificationEmail(signupVerification.email, captchaTokenOverride)
+      const result = await patientSignUpWithPassword({
+        captchaToken: captchaTokenOverride,
+        email: signupVerification.email || signup.email,
+        firstName: signup.firstName,
+        lastName: signup.lastName,
+        phone: signup.phone,
+        gender: signup.gender,
+        password: signupVerification.password || signup.password,
+      })
+      setSignupVerification(current => ({
+        ...current,
+        challengeId: result.challengeId,
+        code: '',
+      }))
       showToast('A new verification code has been sent to your email.', 'success')
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Unable to send another verification code right now.'

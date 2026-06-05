@@ -4,8 +4,11 @@ import { HttpError } from './http.ts'
 
 const PASSWORD_RESET_CHALLENGE = 'patient_password_reset'
 const ACCOUNT_DELETE_CHALLENGE = 'account_deletion'
+const PATIENT_SIGNUP_CHALLENGE = 'patient_signup'
+const HOSPITAL_SIGNUP_CHALLENGE = 'hospital_signup'
 
-type AuthChallengeType = typeof PASSWORD_RESET_CHALLENGE | typeof ACCOUNT_DELETE_CHALLENGE
+type SignupChallengeType = typeof PATIENT_SIGNUP_CHALLENGE | typeof HOSPITAL_SIGNUP_CHALLENGE
+type AuthChallengeType = typeof PASSWORD_RESET_CHALLENGE | typeof ACCOUNT_DELETE_CHALLENGE | SignupChallengeType
 
 type AuthChallengeRow = {
   id: string
@@ -41,6 +44,10 @@ export function passwordResetOtpTtlMinutes() {
 
 export function accountDeletionOtpTtlMinutes() {
   return passwordResetOtpTtlMinutes()
+}
+
+export function signupOtpTtlMinutes() {
+  return parsePositiveInt(optionalEnv('HID_SIGNUP_OTP_TTL_MINUTES', '10'), 10, 5, 30)
 }
 
 function maxAttempts() {
@@ -126,7 +133,10 @@ async function createChallenge(
 ) {
   const length = otpLength()
   const code = generateDigits(length)
-  const expiresAt = new Date(Date.now() + passwordResetOtpTtlMinutes() * 60 * 1000).toISOString()
+  const ttlMinutes = params.challengeType === PATIENT_SIGNUP_CHALLENGE || params.challengeType === HOSPITAL_SIGNUP_CHALLENGE
+    ? signupOtpTtlMinutes()
+    : passwordResetOtpTtlMinutes()
+  const expiresAt = new Date(Date.now() + ttlMinutes * 60 * 1000).toISOString()
 
   await invalidateActiveChallenges(adminClient, params.authUserId, params.challengeType)
 
@@ -306,6 +316,26 @@ export async function createAccountDeletionChallenge(
   })
 }
 
+export async function createSignupChallenge(
+  adminClient: SupabaseClient,
+  params: {
+    authUserId: string
+    challengeType: SignupChallengeType
+    deliveryChannels: Array<'sms' | 'email'>
+    deliverySummary: Record<string, unknown>
+    metadata?: Record<string, unknown>
+  },
+) {
+  return createChallenge(adminClient, {
+    authUserId: params.authUserId,
+    challengeType: params.challengeType,
+    deliveryChannels: params.deliveryChannels,
+    deliverySummary: params.deliverySummary,
+    metadata: params.metadata,
+    patientId: null,
+  })
+}
+
 export async function verifyPatientPasswordResetChallenge(
   adminClient: SupabaseClient,
   challengeId: string,
@@ -330,6 +360,26 @@ export async function verifyAccountDeletionChallenge(
     challengeType: ACCOUNT_DELETE_CHALLENGE,
     code,
   })
+}
+
+export async function verifySignupChallenge(
+  adminClient: SupabaseClient,
+  challengeId: string,
+  challengeType: SignupChallengeType,
+  code: string,
+) {
+  return verifyChallenge(adminClient, {
+    challengeId,
+    challengeType,
+    code,
+  })
+}
+
+export async function consumeSignupChallenge(
+  adminClient: SupabaseClient,
+  challengeId: string,
+) {
+  await consumeChallenge(adminClient, challengeId)
 }
 
 export async function completePatientPasswordResetChallenge(

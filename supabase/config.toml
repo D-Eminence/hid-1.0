@@ -138,6 +138,12 @@ verify_jwt = false
 [functions.signup-availability]
 verify_jwt = false
 
+[functions.signup-start]
+verify_jwt = false
+
+[functions.signup-verify]
+verify_jwt = false
+
 [functions.account-delete-start]
 verify_jwt = true
 

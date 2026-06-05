@@ -17,6 +17,11 @@ type AuthSignupStateRow = {
   has_staff: boolean
 }
 
+type ProfileStateRow = {
+  app_role: string | null
+  deleted_at: string | null
+}
+
 function normalizePhone(value: string | null | undefined) {
   return `${value ?? ''}`.replace(/[^0-9+]/g, '').trim()
 }
@@ -70,14 +75,27 @@ Deno.serve(req => withErrorHandling(req, async () => {
     const authState = (Array.isArray(authStateResult.data) ? authStateResult.data[0] : authStateResult.data) as AuthSignupStateRow | null
 
     if (authState?.auth_user_id) {
-      const isOrphanUnverified = !authState.email_confirmed && !authState.phone_confirmed && !authState.has_patient && !authState.has_staff
+      const targetRole = accountType === 'hospital' ? 'org_admin' : 'patient'
+      const profileResult = await adminClient
+        .from('hid_user_profiles')
+        .select('app_role, deleted_at')
+        .eq('auth_user_id', authState.auth_user_id)
+        .maybeSingle()
 
-      if (isOrphanUnverified) {
+      if (profileResult.error) {
+        throw new HttpError(400, 'We could not verify this email right now.', profileResult.error)
+      }
+
+      const profile = (profileResult.data ?? null) as ProfileStateRow | null
+      const isCompletedAccount = authState.has_patient || authState.has_staff
+      const isReusablePendingSignup = !isCompletedAccount && !profile?.deleted_at && (!profile?.app_role || profile.app_role === targetRole)
+
+      if (!profile && !isCompletedAccount) {
         const deleteResult = await adminClient.auth.admin.deleteUser(authState.auth_user_id)
         if (deleteResult.error) {
           throw new HttpError(400, 'We could not verify this email right now.', deleteResult.error)
         }
-      } else {
+      } else if (!isReusablePendingSignup) {
         emailInUse = true
         emailOwner = authState.has_patient
           ? 'patient'

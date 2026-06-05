@@ -86,6 +86,13 @@ type AccountDeletionVerifyResponse = {
   verificationToken: string
 }
 
+type SignupStartResponse = {
+  challengeId: string
+  deliveryChannels: Array<'email'>
+  expiresAt: string
+  maskedEmail: string | null
+}
+
 type RecordCreationResponse = {
   record_id: string
   version_id: string
@@ -648,26 +655,6 @@ async function getCurrentUserAppRole() {
   return profile?.app_role ?? null
 }
 
-async function requestSignupVerificationEmail(email: string, path: 'patient' | 'hospital', captchaToken?: string | null) {
-  const normalizedEmail = email.trim().toLowerCase()
-  if (!looksLikeEmailIdentifier(normalizedEmail)) {
-    throw new HidApiError(400, 'Enter a valid email address first.')
-  }
-
-  const { error } = await supabase.auth.resend({
-    type: 'signup',
-    email: normalizedEmail,
-    options: {
-      captchaToken: captchaToken ?? undefined,
-      emailRedirectTo: authRedirectUrl(path),
-    },
-  })
-
-  if (error) {
-    throw new HidApiError(400, error.message, error)
-  }
-}
-
 function formatSignupAvailabilityConflict(result: SignupAvailabilityResponse) {
   if (result.emailInUse && result.phoneInUse) {
     return 'The information has already been used, Try to sign in.'
@@ -736,6 +723,26 @@ async function assertNoSilentSignupConflict(params: {
     formatSignupAvailabilityConflict(availability) ?? 'The information has already been used, Try to sign in.',
     availability,
   )
+}
+
+async function startSignupVerification(params: {
+  accountType: 'patient' | 'hospital'
+  captchaToken?: string | null
+  email: string
+  patient?: PendingPatientSignup
+  staff?: PendingStaffOnboarding
+}) {
+  return edgeRequest<SignupStartResponse>('signup-start', {
+    method: 'POST',
+    requireAuth: false,
+    body: {
+      accountType: params.accountType,
+      email: params.email.trim().toLowerCase(),
+      patient: params.patient,
+      staff: params.staff,
+      turnstileToken: params.captchaToken ?? null,
+    },
+  })
 }
 
 function toFriendlyFactorLabel(value: unknown) {
@@ -867,38 +874,6 @@ async function verifyEmailOtp(email: string, code: string) {
 
   if (!data.session) {
     throw new HidApiError(400, 'The verification code is not correct.')
-  }
-}
-
-async function verifySignupOtpAndEnsureSession(email: string, password: string, code: string) {
-  const normalizedEmail = email.trim().toLowerCase()
-  const normalizedCode = code.trim()
-
-  const { data, error } = await supabase.auth.verifyOtp({
-    email: normalizedEmail,
-    token: normalizedCode,
-    type: 'signup',
-  })
-
-  if (error) {
-    throw new HidApiError(400, error.message, error)
-  }
-
-  if (!data.session) {
-    const { error: signInError } = await supabase.auth.signInWithPassword({
-      email: normalizedEmail,
-      password,
-    })
-
-    if (signInError) {
-      throw new HidApiError(
-        401,
-        isBannedAuthMessage(signInError.message)
-          ? BANNED_ACCOUNT_MESSAGE
-          : signInError.message,
-        signInError
-      )
-    }
   }
 }
 
@@ -1671,7 +1646,14 @@ export async function revokeAccessGrant(grantId: string, reason?: string) {
   return response
 }
 
-export async function patientSignUpWithPassword(params: PendingPatientSignup & { password: string; captchaToken?: string | null }) {
+export async function patientSignUpWithPassword(params: PendingPatientSignup & { password: string; captchaToken?: string | null }): Promise<{
+  challengeId: string
+  deliveryChannels: Array<'email'>
+  expiresAt: string
+  maskedEmail: string | null
+  profile: Awaited<ReturnType<typeof ensurePatientProfileRegistered>> | null
+  requiresVerification: boolean
+}> {
   const normalizedEmail = params.email?.trim().toLowerCase() ?? ''
   const normalizedPhone = normalizeOptionalText(normalizePhone(params.phone ?? ''))
   const pendingData: PendingPatientSignup = {
@@ -1690,51 +1672,42 @@ export async function patientSignUpWithPassword(params: PendingPatientSignup & {
   })
   await clearConflictingAuthSession(normalizedEmail)
 
-  const redirectTo = authRedirectUrl('patient')
-  const { data, error } = await supabase.auth.signUp({
-    email: normalizedEmail,
-    password: params.password,
-    options: {
-      captchaToken: params.captchaToken ?? undefined,
-      emailRedirectTo: redirectTo,
-      data: {
-        pending_patient_signup: pendingData,
-        requested_role: 'patient',
-      },
-    },
-  })
-
-  if (error) {
-    if (isExistingAccountError(error)) {
-      throw new HidApiError(409, 'The information has already been used, Try to sign in.', error)
-    }
-
-    throw new HidApiError(400, error.message, error)
-  }
-
-  await assertNoSilentSignupConflict({
+  const verification = await startSignupVerification({
     accountType: 'patient',
+    captchaToken: params.captchaToken,
     email: normalizedEmail,
-    phone: normalizedPhone,
-    user: data.user,
+    patient: pendingData,
   })
-
-  if (data.session) {
-    const profile = await ensurePatientProfileRegistered(pendingData)
-    return {
-      requiresVerification: false,
-      profile,
-    }
-  }
 
   return {
+    ...verification,
     requiresVerification: true,
     profile: null,
   }
 }
 
-export async function verifyPatientSignupOtp(email: string, password: string, code: string) {
-  await verifySignupOtpAndEnsureSession(email, password, code)
+export async function verifyPatientSignupOtp(challengeId: string, email: string, password: string, code: string) {
+  const response = await edgeRequest<{ session: HidSessionPayload }>('signup-verify', {
+    method: 'POST',
+    requireAuth: false,
+    body: {
+      accountType: 'patient',
+      challengeId,
+      code,
+      email,
+      password,
+    },
+  })
+
+  const { error } = await supabase.auth.setSession({
+    access_token: response.session.access_token,
+    refresh_token: response.session.refresh_token,
+  })
+
+  if (error) {
+    throw new HidApiError(401, isBannedAuthMessage(error.message) ? BANNED_ACCOUNT_MESSAGE : error.message, error)
+  }
+
   return ensurePatientProfileRegistered()
 }
 
@@ -1936,10 +1909,6 @@ export async function ensureStaffAccountReady(override?: PendingStaffOnboarding)
   return created
 }
 
-export async function sendPatientVerificationEmail(email: string, captchaToken?: string | null) {
-  await requestSignupVerificationEmail(email, 'patient', captchaToken)
-}
-
 export async function providerActivateInvite(params: PendingStaffOnboarding & { email: string; password: string; captchaToken?: string | null }) {
   await assertSignupAvailability({
     accountType: 'hospital',
@@ -2000,7 +1969,14 @@ export async function providerSignUp(params: {
   country: string
   password: string
   captchaToken?: string | null
-}) {
+}): Promise<{
+  challengeId: string
+  deliveryChannels: Array<'email'>
+  expiresAt: string
+  maskedEmail: string | null
+  requiresVerification: boolean
+  staffAccount: Awaited<ReturnType<typeof ensureStaffAccountReady>> | null
+}> {
   const hospitalName = params.hospitalName.trim()
   const normalizedEmail = params.email.trim().toLowerCase()
   await assertSignupAvailability({
@@ -2018,58 +1994,45 @@ export async function providerSignUp(params: {
     state: normalizeOptionalText(params.state),
   }
 
-  const redirectTo = authRedirectUrl('hospital')
-  const { data, error } = await supabase.auth.signUp({
-    email: normalizedEmail,
-    password: params.password,
-    options: {
-      captchaToken: params.captchaToken ?? undefined,
-      emailRedirectTo: redirectTo,
-      data: {
-        full_name: pendingData.fullName,
-        pending_staff_onboarding: pendingData,
-        requested_role: 'org_admin',
-      },
-    },
-  })
-
-  if (error) {
-    if (!isExistingAccountError(error)) {
-      throw new HidApiError(400, error.message, error)
-    }
-    throw new HidApiError(409, 'The information has already been used, Try to sign in.', error)
-  }
-
-  await assertNoSilentSignupConflict({
+  const verification = await startSignupVerification({
     accountType: 'hospital',
+    captchaToken: params.captchaToken,
     email: normalizedEmail,
-    user: data.user,
+    staff: pendingData,
   })
-
-  if (data.session) {
-    await assertHospitalAccountCompatibleEmail()
-    const staffAccount = await ensureStaffAccountReady(pendingData)
-    return {
-      requiresVerification: false,
-      staffAccount,
-    }
-  }
 
   return {
+    ...verification,
     requiresVerification: true,
     staffAccount: null,
   }
 }
 
-export async function verifyStaffSignupOtp(email: string, password: string, code: string) {
+export async function verifyStaffSignupOtp(challengeId: string, email: string, password: string, code: string) {
   await clearConflictingAuthSession(email)
-  await verifySignupOtpAndEnsureSession(email, password, code)
+  const response = await edgeRequest<{ session: HidSessionPayload }>('signup-verify', {
+    method: 'POST',
+    requireAuth: false,
+    body: {
+      accountType: 'hospital',
+      challengeId,
+      code,
+      email,
+      password,
+    },
+  })
+
+  const { error } = await supabase.auth.setSession({
+    access_token: response.session.access_token,
+    refresh_token: response.session.refresh_token,
+  })
+
+  if (error) {
+    throw new HidApiError(401, isBannedAuthMessage(error.message) ? BANNED_ACCOUNT_MESSAGE : error.message, error)
+  }
+
   await assertHospitalAccountCompatibleEmail()
   return ensureStaffAccountReady()
-}
-
-export async function sendStaffVerificationEmail(email: string, captchaToken?: string | null) {
-  await requestSignupVerificationEmail(email, 'hospital', captchaToken)
 }
 
 export async function providerSignIn(hospitalName: string, email: string, password: string, captchaToken?: string | null) {
