@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react'
+import React, { useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { AuthLegalConsent } from '../../components/AuthLegalConsent'
 import { AuthShell } from '../../components/AuthShell'
@@ -80,6 +80,7 @@ export default function DoctorAuth() {
   const [resetPassword, setResetPassword] = useState('')
   const [confirmResetPassword, setConfirmResetPassword] = useState('')
   const [signupVerification, setSignupVerification] = useState({ challengeId: '', email: '', password: '', code: '' })
+  const signupVerifyInFlightRef = useRef(false)
   const [signupAccepted, setSignupAccepted] = useState(false)
   const [pendingStaffAccount, setPendingStaffAccount] = useState<StaffAccount | null>(null)
   const [mfaCode, setMfaCode] = useState('')
@@ -314,11 +315,13 @@ export default function DoctorAuth() {
   }
 
   async function verifySignupCode(nextCode = signupVerification.code) {
+    if (signupVerifyInFlightRef.current) return
     if (nextCode.trim().length !== 6 || !signupVerification.challengeId || !signupVerification.email || !signupVerification.password) {
       showToast('Enter the full 6-digit verification code first.', 'error')
       return
     }
 
+    signupVerifyInFlightRef.current = true
     setLoading(true)
     try {
       const staffAccount = await verifyStaffSignupOtp(signupVerification.challengeId, signupVerification.email, signupVerification.password, nextCode.trim())
@@ -329,6 +332,7 @@ export default function DoctorAuth() {
       const message = error instanceof Error ? error.message : 'The verification code is not correct.'
       showToast(message, 'error')
     } finally {
+      signupVerifyInFlightRef.current = false
       setLoading(false)
     }
   }

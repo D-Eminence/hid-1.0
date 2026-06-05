@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react'
+import React, { useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { AuthLegalConsent } from '../../components/AuthLegalConsent'
 import { AuthShell } from '../../components/AuthShell'
@@ -111,6 +111,7 @@ export default function PatientAuth() {
   const [forgot, setForgot] = useState<ForgotState>(() => emptyForgotState())
   const [forgotOtpVerified, setForgotOtpVerified] = useState(false)
   const [signupVerification, setSignupVerification] = useState({ challengeId: '', email: '', password: '', code: '' })
+  const signupVerifyInFlightRef = useRef(false)
   const {
     captchaNotice,
     captchaResetKey,
@@ -281,11 +282,13 @@ export default function PatientAuth() {
   }
 
   async function verifySignupCode(nextCode = signupVerification.code) {
+    if (signupVerifyInFlightRef.current) return
     if (nextCode.trim().length !== 6 || !signupVerification.challengeId || !signupVerification.email || !signupVerification.password) {
       showToast('Enter the full 6-digit verification code first.', 'error')
       return
     }
 
+    signupVerifyInFlightRef.current = true
     setLoading(true)
     try {
       const profile = await verifyPatientSignupOtp(signupVerification.challengeId, signupVerification.email, signupVerification.password, nextCode.trim())
@@ -302,6 +305,7 @@ export default function PatientAuth() {
       const message = error instanceof Error ? error.message : 'The verification code is not correct.'
       showToast(message, 'error')
     } finally {
+      signupVerifyInFlightRef.current = false
       setLoading(false)
     }
   }

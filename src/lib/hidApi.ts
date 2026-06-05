@@ -1687,17 +1687,37 @@ export async function patientSignUpWithPassword(params: PendingPatientSignup & {
 }
 
 export async function verifyPatientSignupOtp(challengeId: string, email: string, password: string, code: string) {
-  const response = await edgeRequest<{ session: HidSessionPayload }>('signup-verify', {
-    method: 'POST',
-    requireAuth: false,
-    body: {
-      accountType: 'patient',
-      challengeId,
-      code,
-      email,
+  let response: { session: HidSessionPayload } | null = null
+
+  try {
+    response = await edgeRequest<{ session: HidSessionPayload }>('signup-verify', {
+      method: 'POST',
+      requireAuth: false,
+      body: {
+        accountType: 'patient',
+        challengeId,
+        code,
+        email,
+        password,
+      },
+    })
+  } catch (error) {
+    const message = error instanceof Error ? error.message.toLowerCase() : ''
+    if (!message.includes('verification session has already been used')) {
+      throw error
+    }
+
+    const { error: signInError } = await supabase.auth.signInWithPassword({
+      email: email.trim().toLowerCase(),
       password,
-    },
-  })
+    })
+
+    if (signInError) {
+      throw error
+    }
+
+    return ensurePatientProfileRegistered()
+  }
 
   const { error } = await supabase.auth.setSession({
     access_token: response.session.access_token,
@@ -2010,17 +2030,38 @@ export async function providerSignUp(params: {
 
 export async function verifyStaffSignupOtp(challengeId: string, email: string, password: string, code: string) {
   await clearConflictingAuthSession(email)
-  const response = await edgeRequest<{ session: HidSessionPayload }>('signup-verify', {
-    method: 'POST',
-    requireAuth: false,
-    body: {
-      accountType: 'hospital',
-      challengeId,
-      code,
-      email,
+  let response: { session: HidSessionPayload } | null = null
+
+  try {
+    response = await edgeRequest<{ session: HidSessionPayload }>('signup-verify', {
+      method: 'POST',
+      requireAuth: false,
+      body: {
+        accountType: 'hospital',
+        challengeId,
+        code,
+        email,
+        password,
+      },
+    })
+  } catch (error) {
+    const message = error instanceof Error ? error.message.toLowerCase() : ''
+    if (!message.includes('verification session has already been used')) {
+      throw error
+    }
+
+    const { error: signInError } = await supabase.auth.signInWithPassword({
+      email: email.trim().toLowerCase(),
       password,
-    },
-  })
+    })
+
+    if (signInError) {
+      throw error
+    }
+
+    await assertHospitalAccountCompatibleEmail()
+    return ensureStaffAccountReady()
+  }
 
   const { error } = await supabase.auth.setSession({
     access_token: response.session.access_token,
