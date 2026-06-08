@@ -1,6 +1,6 @@
 import { createAdminClient, requireRole } from '../_shared/auth.ts'
 import { optionalEnv } from '../_shared/env.ts'
-import { HttpError, json, withErrorHandling } from '../_shared/http.ts'
+import { buildCacheHeaders, HttpError, json, withErrorHandling } from '../_shared/http.ts'
 
 type OverviewWindow = '24h' | '7d' | '30d'
 
@@ -34,6 +34,111 @@ type OverviewScope = {
   periodStart: Date
   selectedDate: string | null
   windowKey: OverviewWindow
+}
+
+type OverviewPayload = {
+  alerts: Array<{ id: string; level: 'info' | 'warning' | 'critical'; message: string; title: string }>
+  checkedAt: string
+  posthog: {
+    configured: boolean
+    events: number | null
+    otpCompleted: number | null
+    otpStarted: number | null
+    topEvents: MetricPoint[]
+    uniqueUsers: number | null
+  }
+  providers: {
+    activeProviders: number
+    recordsUploadedByProviders: number
+    totalOrganizations: number
+    totalProviders: number
+  }
+  records: {
+    averagePerUser: number
+    recentUploads: Array<{
+      createdAt: string
+      fileName: string
+      fileType: string | null
+      id: string
+      uploadedBy: string | null
+      uploadedFor: string | null
+    }>
+    storageBytes: number
+    totalRecords: number
+    uploadedToday: number
+    uploads: MetricPoint[]
+  }
+  security: {
+    failedLoginAttempts: number
+    otpSuccessRate: number | null
+    suspiciousActivityCount: number
+  }
+  sentry: {
+    configured: boolean
+    criticalIssues: number | null
+    issueEvents: number | null
+    issues: SentryIssue[]
+    unresolvedIssues: number | null
+    uniqueUsers: number | null
+  }
+  selectedDate: string | null
+  system: {
+    apiResponseTimeMs: number
+    errorRate: number | null
+    failedRequests: number
+    uptimePercent: number
+  }
+  users: {
+    activeUsers24h: number
+    activeUsersWindow: number
+    funnel: Array<{ conversionFromPrevious: number | null; key: string; label: string; value: number }>
+    growth: MetricPoint[]
+    newSignupsToday: number
+    newSignupsWindow: number
+    recentUsers: Array<{
+      createdAt: string
+      email: string | null
+      id: string
+      lastSignInAt: string | null
+      name: string | null
+      role: string | null
+      status: 'verified' | 'unverified'
+    }>
+    totalPatients: number
+    totalUsers: number
+    unverifiedUsers: number
+    verifiedUsers: number
+  }
+  window: OverviewWindow
+}
+
+const OVERVIEW_CACHE_TTL_MS = 15_000
+
+type OverviewCacheEntry = {
+  expiresAt: number
+  payload: OverviewPayload
+}
+
+const overviewCache = new Map<string, OverviewCacheEntry>()
+
+function buildOverviewCacheKey(scope: OverviewScope) {
+  return `overview:${scope.windowKey}:${scope.selectedDate ?? 'none'}`
+}
+
+function getCachedOverview(scope: OverviewScope) {
+  const entry = overviewCache.get(buildOverviewCacheKey(scope))
+  if (!entry || entry.expiresAt <= Date.now()) {
+    if (entry) overviewCache.delete(buildOverviewCacheKey(scope))
+    return null
+  }
+  return entry.payload
+}
+
+function setCachedOverview(scope: OverviewScope, payload: OverviewPayload) {
+  overviewCache.set(buildOverviewCacheKey(scope), {
+    expiresAt: Date.now() + OVERVIEW_CACHE_TTL_MS,
+    payload,
+  })
 }
 
 const POSTHOG_OTP_STARTED_EVENTS = [
@@ -744,11 +849,25 @@ Deno.serve(req => withErrorHandling(req, async () => {
   if (req.method !== 'GET') throw new HttpError(405, 'Method not allowed.')
 
   await requireRole(req, ['platform_admin'])
-  const adminClient = createAdminClient()
   const url = new URL(req.url)
   const windowKey = parseWindow(url.searchParams.get('window'))
   const selectedDate = parseSelectedDate(url.searchParams.get('date'))
   const scope = createOverviewScope(windowKey, selectedDate)
+  const cachedOverview = getCachedOverview(scope)
+  if (cachedOverview) {
+    return json({
+      data: {
+        ...cachedOverview,
+        checkedAt: new Date().toISOString(),
+      },
+    }, 200, buildCacheHeaders({
+      maxAgeSeconds: 15,
+      scope: 'private',
+      staleWhileRevalidateSeconds: 30,
+    }))
+  }
+
+  const adminClient = createAdminClient()
   const periodStart = scope.periodStart
   const periodEnd = scope.periodEnd
   const focusDayStart = selectedDate ? scope.periodStart : startOfToday()
@@ -1029,52 +1148,60 @@ Deno.serve(req => withErrorHandling(req, async () => {
     } : null,
   ].filter((value): value is { id: string; level: 'info' | 'warning' | 'critical'; message: string; title: string } => Boolean(value))
 
-  return json({
-    data: {
-      alerts,
-      checkedAt: new Date().toISOString(),
-      posthog,
-      providers: {
-        activeProviders: activeProvidersCountResponse.count ?? 0,
-        recordsUploadedByProviders: providerRecordCountResponse.count ?? 0,
-        totalOrganizations: organizationsCountResponse.count ?? 0,
-        totalProviders: totalProvidersCountResponse.count ?? 0,
-      },
-      records: {
-        averagePerUser,
-        recentUploads,
-        storageBytes,
-        totalRecords: totalRecordsResponse.count ?? 0,
-        uploadedToday,
-        uploads: recordUploads,
-      },
-      security: {
-        failedLoginAttempts,
-        otpSuccessRate,
-        suspiciousActivityCount,
-      },
-      sentry,
-      selectedDate,
-      system: {
-        apiResponseTimeMs,
-        errorRate,
-        failedRequests,
-        uptimePercent,
-      },
-      users: {
-        activeUsers24h,
-        activeUsersWindow,
-        funnel,
-        growth: userGrowth,
-        newSignupsToday,
-        newSignupsWindow,
-        recentUsers,
-        totalPatients,
-        totalUsers,
-        unverifiedUsers,
-        verifiedUsers,
-      },
-      window: windowKey,
+  const payload: OverviewPayload = {
+    alerts,
+    checkedAt: new Date().toISOString(),
+    posthog,
+    providers: {
+      activeProviders: activeProvidersCountResponse.count ?? 0,
+      recordsUploadedByProviders: providerRecordCountResponse.count ?? 0,
+      totalOrganizations: organizationsCountResponse.count ?? 0,
+      totalProviders: totalProvidersCountResponse.count ?? 0,
     },
-  })
+    records: {
+      averagePerUser,
+      recentUploads,
+      storageBytes,
+      totalRecords: totalRecordsResponse.count ?? 0,
+      uploadedToday,
+      uploads: recordUploads,
+    },
+    security: {
+      failedLoginAttempts,
+      otpSuccessRate,
+      suspiciousActivityCount,
+    },
+    sentry,
+    selectedDate,
+    system: {
+      apiResponseTimeMs,
+      errorRate,
+      failedRequests,
+      uptimePercent,
+    },
+    users: {
+      activeUsers24h,
+      activeUsersWindow,
+      funnel,
+      growth: userGrowth,
+      newSignupsToday,
+      newSignupsWindow,
+      recentUsers,
+      totalPatients,
+      totalUsers,
+      unverifiedUsers,
+      verifiedUsers,
+    },
+    window: windowKey,
+  }
+
+  setCachedOverview(scope, payload)
+
+  return json({
+    data: payload,
+  }, 200, buildCacheHeaders({
+    maxAgeSeconds: 15,
+    scope: 'private',
+    staleWhileRevalidateSeconds: 30,
+  }))
 }))

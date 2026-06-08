@@ -12,6 +12,10 @@ const CORS = {
   'Access-Control-Allow-Methods': 'POST, OPTIONS',
 }
 
+const OUTREACH_OTP_COLUMNS = 'id, email, auth_user_id, otp_hash, expires_at, consumed_at, attempt_count, max_attempts, metadata'
+const OUTREACH_CAMPAIGN_COLUMNS = 'id, name, org, location, status, starts_at, ends_at, services, created_at'
+const OUTREACH_WORKER_COLUMNS = 'id, auth_user_id, campaign_id, display_name, role, created_at'
+
 function adminClient() {
   return createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, {
     auth: { autoRefreshToken: false, persistSession: false },
@@ -57,7 +61,7 @@ Deno.serve(async (req) => {
 
     const { data: otp, error: fetchErr } = await db
       .from('hid_outreach_otp')
-      .select('*')
+      .select(OUTREACH_OTP_COLUMNS)
       .eq('id', otpId)
       .single()
 
@@ -122,7 +126,7 @@ Deno.serve(async (req) => {
     const { data: campaign, error: campaignErr } = await db
       .from('hid_outreach_campaigns')
       .insert({ name: campaignName, org, location, starts_at: new Date(startsAt).toISOString(), status: 'planned', services: ['registration'] })
-      .select('*').single()
+      .select(OUTREACH_CAMPAIGN_COLUMNS).single()
 
     if (campaignErr || !campaign) {
       console.error(JSON.stringify({ event: 'create_campaign_failed', otp_id: otpId, error: campaignErr?.message }))
@@ -133,7 +137,7 @@ Deno.serve(async (req) => {
     const { data: worker, error: workerErr } = await db
       .from('hid_outreach_workers')
       .insert({ auth_user_id: authUserId, campaign_id: campaign.id, display_name: displayName, role: 'admin' })
-      .select('*').single()
+      .select(OUTREACH_WORKER_COLUMNS).single()
 
     if (workerErr || !worker) {
       console.error(JSON.stringify({ event: 'create_worker_failed', otp_id: otpId, error: workerErr?.message }))

@@ -15,6 +15,8 @@ const CORS = {
   'Access-Control-Allow-Methods': 'POST, OPTIONS',
 }
 
+const OUTREACH_OTP_COLUMNS = 'id, email, auth_user_id, consumed_at, resend_count, max_resends, last_resend_at, metadata'
+
 function adminClient() {
   return createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, {
     auth: { autoRefreshToken: false, persistSession: false },
@@ -111,7 +113,7 @@ Deno.serve(async (req) => {
   try {
     const db = adminClient()
 
-    const { data: otp, error: fetchErr } = await db.from('hid_outreach_otp').select('*').eq('id', otpId).single()
+    const { data: otp, error: fetchErr } = await db.from('hid_outreach_otp').select(OUTREACH_OTP_COLUMNS).eq('id', otpId).single()
     if (fetchErr || !otp) return err(400, 'This verification session could not be found. Please start your registration again.')
     if (otp.consumed_at) return err(400, 'This verification has already been completed.')
     if ((otp.resend_count as number) >= (otp.max_resends as number)) {

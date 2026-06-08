@@ -12,6 +12,9 @@ const CORS = {
   'Access-Control-Allow-Methods': 'POST, OPTIONS',
 }
 
+const OUTREACH_INVITE_COLUMNS = 'id, campaign_id, role, use_count, max_uses, expires_at'
+const OUTREACH_WORKER_COLUMNS = 'id, auth_user_id, campaign_id, display_name, role, created_at'
+
 function adminClient() {
   return createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, {
     auth: { autoRefreshToken: false, persistSession: false },
@@ -66,7 +69,7 @@ Deno.serve(async (req) => {
     // Validate invite code
     const { data: invite, error: invErr } = await db
       .from('hid_outreach_invites')
-      .select('id, campaign_id, role, use_count, max_uses, expires_at')
+      .select(OUTREACH_INVITE_COLUMNS)
       .eq('code', code)
       .maybeSingle()
 
@@ -111,7 +114,7 @@ Deno.serve(async (req) => {
         display_name: displayName,
         role: invite.role ?? 'enumerator',
       })
-      .select('*')
+      .select(OUTREACH_WORKER_COLUMNS)
       .single()
 
     if (workerErr || !worker) {

@@ -11,6 +11,12 @@ import type {
   OutreachWorker,
 } from '../types/outreach'
 
+const OUTREACH_CAMPAIGN_COLUMNS = 'id, name, org, location, status, starts_at, ends_at, services, created_at'
+const OUTREACH_ENCOUNTER_COLUMNS = 'id, campaign_id, worker_id, patient_hid, provisional_patient_id, full_name, sex, age_years, phone, service_type, status, notes, consent_captured_at, consent_method, created_at, synced_at'
+const OUTREACH_INVITE_COLUMNS = 'id, campaign_id, created_by, code, role, max_uses, use_count, expires_at, created_at'
+const OUTREACH_SYNC_QUEUE_COLUMNS = 'id, campaign_id, worker_id, entity, action, payload, status, error, created_at, synced_at'
+const OUTREACH_WORKER_COLUMNS = 'id, auth_user_id, campaign_id, display_name, role, created_at'
+
 async function callEdgeFunction<T>(name: string, body: unknown): Promise<T> {
   let result: { data: unknown; error: unknown }
 
@@ -122,7 +128,7 @@ export async function loginOutreachWorker(email: string, password: string): Prom
 
   const { data: worker } = await supabase
     .from('hid_outreach_workers')
-    .select('*')
+    .select(OUTREACH_WORKER_COLUMNS)
     .eq('auth_user_id', userId)
     .maybeSingle()
 
@@ -141,7 +147,7 @@ export function getCurrentUserId(session: Session | null) {
 export async function fetchOutreachWorker(userId: string): Promise<OutreachWorker | null> {
   const { data, error } = await supabase
     .from('hid_outreach_workers')
-    .select('*')
+    .select(OUTREACH_WORKER_COLUMNS)
     .eq('auth_user_id', userId)
     .maybeSingle()
 
@@ -153,7 +159,7 @@ export async function fetchOutreachWorker(userId: string): Promise<OutreachWorke
 }
 
 export async function fetchOutreachCampaigns(campaignId?: string): Promise<OutreachCampaign[]> {
-  let query = supabase.from('hid_outreach_campaigns').select('*')
+  let query = supabase.from('hid_outreach_campaigns').select(OUTREACH_CAMPAIGN_COLUMNS)
   if (campaignId) {
     query = query.eq('id', campaignId)
   }
@@ -167,7 +173,7 @@ export async function fetchOutreachCampaigns(campaignId?: string): Promise<Outre
 export async function fetchOutreachEncounters(campaignId: string): Promise<OutreachEncounter[]> {
   const { data, error } = await supabase
     .from('hid_outreach_encounters')
-    .select('*')
+    .select(OUTREACH_ENCOUNTER_COLUMNS)
     .eq('campaign_id', campaignId)
     .order('created_at', { ascending: false })
 
@@ -181,7 +187,7 @@ export async function fetchOutreachEncounters(campaignId: string): Promise<Outre
 export async function fetchOutreachSyncQueue(campaignId: string): Promise<OutreachSyncQueueItem[]> {
   const { data, error } = await supabase
     .from('hid_sync_queue')
-    .select('*')
+    .select(OUTREACH_SYNC_QUEUE_COLUMNS)
     .eq('campaign_id', campaignId)
     .order('created_at', { ascending: false })
 
@@ -211,7 +217,7 @@ export async function createOutreachEncounter(
       consent_method: payload.consent_method ?? null,
       status: 'queued',
     })
-    .select('*')
+    .select(OUTREACH_ENCOUNTER_COLUMNS)
     .single()
 
   if (error) {
@@ -229,7 +235,7 @@ export async function createOutreachCampaign(
 ): Promise<OutreachCampaign> {
   const { data, error } = await (supabase.from('hid_outreach_campaigns') as any)
     .insert({ name, org, location, starts_at: startsAt, status: 'planned', services: ['registration'] })
-    .select('*')
+    .select(OUTREACH_CAMPAIGN_COLUMNS)
     .single()
   if (error) throw new Error(error.message)
   return data as OutreachCampaign
@@ -243,7 +249,7 @@ export async function createOutreachWorker(
 ): Promise<OutreachWorker> {
   const { data, error } = await (supabase.from('hid_outreach_workers') as any)
     .insert({ auth_user_id: authUserId, campaign_id: campaignId, display_name: displayName, role })
-    .select('*')
+    .select(OUTREACH_WORKER_COLUMNS)
     .single()
   if (error) throw new Error(error.message)
   return data as OutreachWorker
@@ -266,7 +272,7 @@ export async function createInviteCode(
   const code = generateCode()
   const { data, error } = await (supabase.from('hid_outreach_invites') as any)
     .insert({ campaign_id: campaignId, created_by: workerId, code, role, max_uses: 50 })
-    .select('*')
+    .select(OUTREACH_INVITE_COLUMNS)
     .single()
   if (error) throw new Error(error.message)
   return data as OutreachInvite
@@ -275,7 +281,7 @@ export async function createInviteCode(
 export async function fetchCampaignInvite(campaignId: string, workerId: string): Promise<OutreachInvite | null> {
   const { data } = await supabase
     .from('hid_outreach_invites')
-    .select('*')
+    .select(OUTREACH_INVITE_COLUMNS)
     .eq('campaign_id', campaignId)
     .eq('created_by', workerId)
     .order('created_at', { ascending: false })
@@ -288,7 +294,7 @@ export async function fetchInviteByCode(rawCode: string): Promise<OutreachInvite
   const code = rawCode.replace(/-/g, '').toUpperCase()
   const { data, error } = await supabase
     .from('hid_outreach_invites')
-    .select('*')
+    .select(OUTREACH_INVITE_COLUMNS)
     .eq('code', code)
     .maybeSingle()
   if (error) throw new Error(error.message)
@@ -298,7 +304,7 @@ export async function fetchInviteByCode(rawCode: string): Promise<OutreachInvite
 export async function fetchCampaignById(id: string): Promise<OutreachCampaign | null> {
   const { data, error } = await supabase
     .from('hid_outreach_campaigns')
-    .select('*')
+    .select(OUTREACH_CAMPAIGN_COLUMNS)
     .eq('id', id)
     .maybeSingle()
   if (error) throw new Error(error.message)
