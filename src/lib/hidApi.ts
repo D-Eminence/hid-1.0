@@ -1181,6 +1181,10 @@ function toLegacyMedicalRecord(
     created_by: version?.created_by_name ?? bundle.record.created_by_name ?? 'Authorized user',
     added_by_role: version?.created_by_role ?? bundle.record.created_by_role ?? 'patient',
     created_at: bundle.record.created_at,
+    info_type: bundle.record.info_type ?? 'document',
+    structured_data: version?.structured_data ?? null,
+    created_by_org: version?.created_by_org ?? bundle.record.created_by_org ?? null,
+    created_by_verified: version?.created_by_verified ?? bundle.record.created_by_verified ?? false,
   }
 }
 
@@ -1496,6 +1500,8 @@ export async function createMedicalRecordWithUploads({
   record,
   notes,
   uploads,
+  infoType,
+  structuredData,
 }: {
   patientIdentifier: string
   title: string
@@ -1503,6 +1509,8 @@ export async function createMedicalRecordWithUploads({
   record: string
   notes?: string | null
   uploads?: UploadDraft[]
+  infoType?: string
+  structuredData?: Record<string, unknown> | null
 }) {
   pruneRecentRecordSaves()
   const normalizedNotes = normalizeOptionalText(notes)
@@ -1516,6 +1524,8 @@ export async function createMedicalRecordWithUploads({
     record.trim(),
     normalizedNotes ?? '',
     uploadsFingerprint,
+    infoType ?? '',
+    structuredData ? JSON.stringify(structuredData) : '',
   ].join('::')
 
   const existing = inflightRecordSaves.get(requestKey)
@@ -1534,6 +1544,8 @@ export async function createMedicalRecordWithUploads({
           category,
           record,
           notes: normalizedNotes,
+          info_type: infoType,
+          structured_data: structuredData ?? null,
         },
       })
 

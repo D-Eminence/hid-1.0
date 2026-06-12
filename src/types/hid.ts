@@ -84,6 +84,7 @@ export interface HidMedicalRecord {
   patient_id: string
   title: string
   category: string
+  info_type?: string
   created_by_user_profile_id: string
   created_by_staff_account_id: string | null
   current_version_id: string | null
@@ -91,6 +92,8 @@ export interface HidMedicalRecord {
   updated_at: string
   created_by_name?: string | null
   created_by_role?: string | null
+  created_by_org?: string | null
+  created_by_verified?: boolean
 }
 
 export interface HidMedicalRecordVersion {
@@ -100,11 +103,14 @@ export interface HidMedicalRecordVersion {
   record: string
   notes: string | null
   transcription_text: string | null
+  structured_data?: Record<string, unknown> | null
   created_by_user_profile_id: string
   created_by_staff_account_id: string | null
   created_at: string
   created_by_name?: string | null
   created_by_role?: string | null
+  created_by_org?: string | null
+  created_by_verified?: boolean
 }
 
 export interface HidMedicalRecordFile {

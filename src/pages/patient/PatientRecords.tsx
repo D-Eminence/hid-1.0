@@ -1,22 +1,19 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { PortalShell } from '../../components/PortalShell'
-import { Badge, Button, Card, EmptyState, Input, Modal, PageLoader, Textarea, showToast } from '../../components/ui'
-import { FileAttachmentPreview, MedicalRecordMarkdownView } from '../../components/RecordMarkdownView'
-import { VoiceToTextButton } from '../../components/VoiceToTextButton'
+import { Badge, Button, Card, EmptyState, Input, PageLoader, showToast } from '../../components/ui'
+import { MedicalRecordMarkdownView } from '../../components/RecordMarkdownView'
+import { AddHealthInformationModal, type HealthInformationSubmission } from '../../components/AddHealthInformationModal'
 import { getPatientSession, signOutAndClearSessions } from '../../lib/auth'
 import { readPatientRecordsSnapshot, seedPatientProfileCache, seedPatientRecordsCache } from '../../lib/experienceWarmup'
 import {
+  buildHealthInfoRecordBody,
   buildOptimisticMedicalRecord,
-  buildStructuredRecordBody,
   countAllRecordAttachments,
-  createEmptyRecordForm,
   filterRecordsByQuery,
   getInvalidRecordUploadNames,
   groupRecordsByDay,
-  hasRecordContent,
-  inferRecordCategory,
-  RECORD_UPLOAD_ACCEPT,
+  inferLegacyCategoryFromInfoType,
   type UploadDraft,
 } from '../../lib/medicalRecordUtils'
 import { createMedicalRecordWithUploads, fetchPatientRecordsView } from '../../lib/hidApi'
@@ -44,7 +41,7 @@ export default function PatientRecords() {
   const [saving, setSaving] = useState(false)
   const [preparingUploads, setPreparingUploads] = useState(false)
   const [search, setSearch] = useState('')
-  const [recordForm, setRecordForm] = useState(createEmptyRecordForm())
+  const [uploads, setUploads] = useState<UploadDraft[]>([])
   const saveLockRef = useRef(false)
 
   useEffect(() => {
@@ -89,7 +86,7 @@ export default function PatientRecords() {
 
     setPreparingUploads(true)
     try {
-      const uploads = await Promise.all(selectedFiles.map(file => new Promise<UploadDraft>((resolve, reject) => {
+      const newUploads = await Promise.all(selectedFiles.map(file => new Promise<UploadDraft>((resolve, reject) => {
         const reader = new FileReader()
         reader.onload = () => resolve({
           file_name: file.name,
@@ -100,10 +97,7 @@ export default function PatientRecords() {
         reader.readAsDataURL(file)
       })))
 
-      setRecordForm(current => ({
-        ...current,
-        uploads: [...current.uploads, ...uploads],
-      }))
+      setUploads(current => [...current, ...newUploads])
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Unable to prepare the selected files right now.'
       showToast(message, 'error')
@@ -112,34 +106,26 @@ export default function PatientRecords() {
     }
   }
 
-  async function savePatientRecord() {
+  async function saveHealthInformation(submission: HealthInformationSubmission) {
     if (!session || saving || saveLockRef.current) return
-    if (preparingUploads) {
-      showToast('Attached files are still being prepared. Please wait a moment, then save again.', 'error')
-      return
-    }
-    if (!recordForm.title.trim()) {
-      showToast('Enter a record title before saving.', 'error')
-      return
-    }
-    if (!hasRecordContent(recordForm)) {
-      showToast('Add a note, result, detail, audio note, or file before saving.', 'error')
-      return
-    }
 
     saveLockRef.current = true
     setSaving(true)
-    const formSnapshot = recordForm
+    const category = inferLegacyCategoryFromInfoType(submission.infoType)
+    const recordBody = buildHealthInfoRecordBody(submission.notes, submission.transcriptionText)
+    const structuredData = Object.keys(submission.structuredData).length > 0 ? submission.structuredData : null
     const optimisticEntry = buildOptimisticMedicalRecord({
-      category: inferRecordCategory(recordForm),
+      category,
       createdBy: session.fullName,
       createdByRole: 'patient',
       hidCode: session.hidCode,
-      notes: recordForm.roleNote.trim() || null,
-      record: buildStructuredRecordBody(recordForm),
-      title: recordForm.title.trim(),
-      transcriptionText: recordForm.transcriptionText.trim() || null,
-      uploads: recordForm.uploads,
+      notes: submission.notes.trim() || null,
+      record: recordBody,
+      title: submission.title,
+      transcriptionText: submission.transcriptionText.trim() || null,
+      uploads: submission.uploads,
+      infoType: submission.infoType,
+      structuredData,
     })
 
     setRecords(current => [optimisticEntry.record, ...current])
@@ -148,18 +134,20 @@ export default function PatientRecords() {
       [optimisticEntry.record.id]: optimisticEntry.attachments,
     }))
     setOpen(false)
-    setRecordForm(createEmptyRecordForm())
+    setUploads([])
     try {
       await createMedicalRecordWithUploads({
         patientIdentifier: session.hidCode,
-        title: recordForm.title.trim(),
-        category: inferRecordCategory(recordForm),
-        record: buildStructuredRecordBody(recordForm),
-        notes: recordForm.roleNote.trim() || null,
-        uploads: recordForm.uploads,
+        title: submission.title,
+        category,
+        record: recordBody,
+        notes: submission.notes.trim() || null,
+        uploads: submission.uploads,
+        infoType: submission.infoType,
+        structuredData,
       })
       await loadPageData(true)
-      showToast('Medical record saved.', 'success')
+      showToast('Health information saved.', 'success')
     } catch (error) {
       setRecords(current => current.filter(item => item.id !== optimisticEntry.record.id))
       setRecordFiles(current => {
@@ -167,9 +155,7 @@ export default function PatientRecords() {
         delete next[optimisticEntry.record.id]
         return next
       })
-      setOpen(true)
-      setRecordForm(formSnapshot)
-      const message = error instanceof Error ? error.message : 'Unable to save the medical record.'
+      const message = error instanceof Error ? error.message : 'Unable to save health information.'
       showToast(message, 'error')
     } finally {
       setSaving(false)
@@ -177,15 +163,8 @@ export default function PatientRecords() {
     }
   }
 
-  function appendAudioTranscript(transcript: string) {
-    setRecordForm(current => ({
-      ...current,
-      transcriptionText: `${current.transcriptionText}${current.transcriptionText.trim() ? '\n' : ''}${transcript}`.trim(),
-    }))
-  }
-
   function removeUpload(index: number) {
-    setRecordForm(current => ({ ...current, uploads: current.uploads.filter((_, currentIndex) => currentIndex !== index) }))
+    setUploads(current => current.filter((_, currentIndex) => currentIndex !== index))
   }
 
   const filteredRecords = useMemo(() => filterRecordsByQuery(records, search), [records, search])
@@ -242,7 +221,7 @@ export default function PatientRecords() {
               New records appear first. You can search by date, record title, or any keyword saved in a record.
             </div>
           </div>
-          <Button onClick={() => setOpen(true)}>Add medical record</Button>
+          <Button onClick={() => setOpen(true)}>Add health information</Button>
         </div>
 
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 14, marginTop: 20 }}>
@@ -267,8 +246,8 @@ export default function PatientRecords() {
           <EmptyState
             icon={<span style={{ fontSize: 28 }}>[]</span>}
             title="No medical records yet"
-            description="Add your first medical record with notes, prescriptions, lab results, audio text, or files."
-            action={<Button onClick={() => setOpen(true)}>Add medical record</Button>}
+            description="Add your first piece of health information: a condition, lab result, medication, allergy, vaccination, procedure, hospital visit, or report."
+            action={<Button onClick={() => setOpen(true)}>Add health information</Button>}
           />
         </Card>
       ) : recordSections.length === 0 ? (
@@ -300,40 +279,16 @@ export default function PatientRecords() {
         </div>
       )}
 
-      <Modal open={open} onClose={() => { setOpen(false); setRecordForm(createEmptyRecordForm()) }} title="Add medical record" width={780}>
-        <div style={{ display: 'grid', gap: 14 }}>
-          <Input label="Record title" value={recordForm.title} onChange={event => setRecordForm(current => ({ ...current, title: event.target.value }))} />
-          <Textarea label="Patient note" value={recordForm.roleNote} onChange={event => setRecordForm(current => ({ ...current, roleNote: event.target.value }))} />
-          <Textarea label="Prescription" value={recordForm.prescription} onChange={event => setRecordForm(current => ({ ...current, prescription: event.target.value }))} />
-          <Textarea label="Lab result" value={recordForm.labResult} onChange={event => setRecordForm(current => ({ ...current, labResult: event.target.value }))} />
-          <Textarea label="Other" value={recordForm.other} onChange={event => setRecordForm(current => ({ ...current, other: event.target.value }))} />
-          <Textarea label="Audio to text note" value={recordForm.transcriptionText} onChange={event => setRecordForm(current => ({ ...current, transcriptionText: event.target.value }))} />
-          <VoiceToTextButton onTranscript={appendAudioTranscript} label="Start audio to text note" />
-
-          <div style={{ display: 'grid', gap: 8 }}>
-            <label style={{ fontSize: 13, fontWeight: 500, color: '#374151' }}>Choose file</label>
-            <input type="file" multiple accept={RECORD_UPLOAD_ACCEPT} disabled={preparingUploads || saving} onChange={event => void onAttachment(event.target.files)} />
-          </div>
-
-          <div style={{ display: 'grid', gap: 8 }}>
-            {recordForm.uploads.map((file, index) => (
-              <div key={`${file.file_name}-${index}`} style={{ display: 'grid', gap: 8 }}>
-                <FileAttachmentPreview attachment={file} />
-                <button type="button" onClick={() => removeUpload(index)} style={{ border: 'none', background: 'none', color: '#dc2626', cursor: 'pointer', fontWeight: 600, justifySelf: 'flex-end' }}>
-                  Remove
-                </button>
-              </div>
-            ))}
-          </div>
-
-          <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 12, marginTop: 4 }}>
-            <Button variant="secondary" onClick={() => { setOpen(false); setRecordForm(createEmptyRecordForm()) }}>Cancel</Button>
-            <Button loading={saving || preparingUploads} disabled={preparingUploads} onClick={savePatientRecord}>
-              {preparingUploads ? 'Preparing files...' : 'Save medical record'}
-            </Button>
-          </div>
-        </div>
-      </Modal>
+      <AddHealthInformationModal
+        open={open}
+        onClose={() => { setOpen(false); setUploads([]) }}
+        saving={saving}
+        preparingUploads={preparingUploads}
+        uploads={uploads}
+        onAttachment={onAttachment}
+        onRemoveUpload={removeUpload}
+        onSubmit={saveHealthInformation}
+      />
     </PortalShell>
   )
 }

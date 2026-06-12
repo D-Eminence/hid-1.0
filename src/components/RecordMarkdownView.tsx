@@ -1,6 +1,7 @@
 import React from 'react'
-import { formatRecordCategory, getRoleNoteLabel } from '../lib/medicalRecordUtils'
-import { formatDateTime } from '../lib/utils'
+import { Badge } from './ui'
+import { formatHealthInfoType, getHealthInfoTypeConfig, getRecordSourceBadge, getRoleNoteLabel } from '../lib/medicalRecordUtils'
+import { formatDate, formatDateTime } from '../lib/utils'
 import type { MedicalRecord, MedicalRecordFile, PatientNote } from '../types/database'
 
 function markdownShell(lines: string[]) {
@@ -103,6 +104,25 @@ export function FileAttachmentPreview({ attachment }: { attachment: { file_name:
   )
 }
 
+export function RecordSourceBadge({ record }: { record: MedicalRecord }) {
+  const source = getRecordSourceBadge(record)
+  return (
+    <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 8, fontSize: 12, color: '#6b7280' }}>
+      <Badge color={source.color}>{source.label}</Badge>
+      <span>{record.created_by}</span>
+      {record.created_by_org && <span>· {record.created_by_org}</span>}
+      <span>· {formatDateTime(record.created_at)}</span>
+    </div>
+  )
+}
+
+function formatStructuredFieldValue(value: unknown, kind: string | undefined, options?: { value: string; label: string }[]) {
+  const raw = String(value)
+  if (kind === 'date') return formatDate(raw)
+  if (kind === 'select') return options?.find(option => option.value === raw)?.label ?? raw
+  return raw
+}
+
 export function MedicalRecordMarkdownView({ record, attachments = [] }: { record: MedicalRecord; attachments?: MedicalRecordFile[] }) {
   const allAttachments = attachments.length > 0
     ? attachments
@@ -114,17 +134,30 @@ export function MedicalRecordMarkdownView({ record, attachments = [] }: { record
         file_data_url: record.attachment_data_url,
         created_at: record.created_at,
       }] : [])
+
+  const structuredData = record.structured_data
+  const typeConfig = getHealthInfoTypeConfig(record.info_type)
+  const structuredEntries = structuredData ? Object.entries(structuredData) : []
+
   const lines = [
     `# ${record.title}`,
     '',
-    `- Category: ${formatRecordCategory(record.category)}`,
+    `- Type: ${formatHealthInfoType(record.info_type, record.category)}`,
     `- Saved by: ${record.created_by}`,
     `- Saved at: ${formatDateTime(record.created_at)}`,
     `- Files attached: ${allAttachments.length}`,
-    '',
-    `## Record details`,
-    record.record || '-',
   ]
+
+  if (structuredEntries.length > 0) {
+    lines.push('', '## Details')
+    structuredEntries.forEach(([key, value]) => {
+      const field = typeConfig?.fields.find(item => item.key === key)
+      const label = field?.label ?? key
+      lines.push(`- ${label}: ${formatStructuredFieldValue(value, field?.kind, field?.options)}`)
+    })
+  }
+
+  lines.push('', `## Record details`, record.record || '-')
 
   if (record.notes) {
     lines.push('', `## ${getRoleNoteLabel(record.added_by_role)}`, record.notes)
@@ -138,6 +171,7 @@ export function MedicalRecordMarkdownView({ record, attachments = [] }: { record
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+      <RecordSourceBadge record={record} />
       {markdownShell(lines)}
       {allAttachments.length > 0 && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>

@@ -23,6 +23,229 @@ export interface RecordDateSection {
   records: MedicalRecord[]
 }
 
+export type HealthInfoFieldKind = 'text' | 'date' | 'select' | 'textarea'
+
+export interface HealthInfoField {
+  key: string
+  label: string
+  kind: HealthInfoFieldKind
+  options?: { value: string; label: string }[]
+  required?: boolean
+}
+
+export interface HealthInfoTypeConfig {
+  id: string
+  label: string
+  description: string
+  accent: string
+  fields: HealthInfoField[]
+  supportsAttachments: boolean
+  requiresAttachment: boolean
+}
+
+export type HealthInfoValues = Record<string, string>
+
+export type RecordSourceBadgeColor = 'blue' | 'green' | 'red' | 'amber' | 'gray'
+
+export interface RecordSourceBadgeInfo {
+  label: string
+  color: RecordSourceBadgeColor
+}
+
+export const HEALTH_INFO_TYPES: HealthInfoTypeConfig[] = [
+  {
+    id: 'condition',
+    label: 'Condition / Diagnosis',
+    description: 'A diagnosed condition, illness, or ongoing health issue.',
+    accent: '#1877e6',
+    supportsAttachments: true,
+    requiresAttachment: false,
+    fields: [
+      { key: 'condition_name', label: 'Condition', kind: 'text', required: true },
+      { key: 'date_diagnosed', label: 'Date diagnosed', kind: 'date' },
+      { key: 'status', label: 'Status', kind: 'select', options: [
+        { value: 'active', label: 'Active' },
+        { value: 'resolved', label: 'Resolved' },
+        { value: 'unsure', label: 'Unsure' },
+      ] },
+      { key: 'facility', label: 'Facility', kind: 'text' },
+      { key: 'provider', label: 'Provider', kind: 'text' },
+    ],
+  },
+  {
+    id: 'lab_result',
+    label: 'Laboratory Result',
+    description: 'Results from a lab test, such as blood work or imaging.',
+    accent: '#15803d',
+    supportsAttachments: true,
+    requiresAttachment: false,
+    fields: [
+      { key: 'test_name', label: 'Test name', kind: 'text', required: true },
+      { key: 'date', label: 'Date', kind: 'date' },
+      { key: 'laboratory_name', label: 'Laboratory name', kind: 'text' },
+    ],
+  },
+  {
+    id: 'medication',
+    label: 'Medication',
+    description: 'A medication you are taking or have taken.',
+    accent: '#b45309',
+    supportsAttachments: false,
+    requiresAttachment: false,
+    fields: [
+      { key: 'medication_name', label: 'Medication name', kind: 'text', required: true },
+      { key: 'dosage', label: 'Dosage', kind: 'text' },
+      { key: 'frequency', label: 'Frequency', kind: 'text' },
+      { key: 'start_date', label: 'Start date', kind: 'date' },
+      { key: 'end_date', label: 'End date', kind: 'date' },
+      { key: 'prescribing_provider', label: 'Prescribing provider', kind: 'text' },
+    ],
+  },
+  {
+    id: 'allergy',
+    label: 'Allergy',
+    description: 'An allergy or sensitivity to a food, medication, or substance.',
+    accent: '#dc2626',
+    supportsAttachments: false,
+    requiresAttachment: false,
+    fields: [
+      { key: 'allergy_name', label: 'Allergy', kind: 'text', required: true },
+      { key: 'category', label: 'Category', kind: 'select', options: [
+        { value: 'food', label: 'Food' },
+        { value: 'medication', label: 'Medication' },
+        { value: 'environmental', label: 'Environmental' },
+        { value: 'other', label: 'Other' },
+      ] },
+      { key: 'severity', label: 'Severity', kind: 'select', options: [
+        { value: 'mild', label: 'Mild' },
+        { value: 'moderate', label: 'Moderate' },
+        { value: 'severe', label: 'Severe' },
+      ] },
+      { key: 'symptoms', label: 'Symptoms', kind: 'text' },
+    ],
+  },
+  {
+    id: 'vaccination',
+    label: 'Vaccination',
+    description: 'A vaccine or immunization you have received.',
+    accent: '#0ea5e9',
+    supportsAttachments: false,
+    requiresAttachment: false,
+    fields: [
+      { key: 'vaccine_name', label: 'Vaccine', kind: 'text', required: true },
+      { key: 'date', label: 'Date', kind: 'date' },
+      { key: 'provider', label: 'Provider', kind: 'text' },
+    ],
+  },
+  {
+    id: 'procedure',
+    label: 'Surgery / Procedure',
+    description: 'A surgery or medical procedure you have had.',
+    accent: '#7c3aed',
+    supportsAttachments: true,
+    requiresAttachment: false,
+    fields: [
+      { key: 'procedure_name', label: 'Procedure', kind: 'text', required: true },
+      { key: 'date', label: 'Date', kind: 'date' },
+      { key: 'facility', label: 'Facility', kind: 'text' },
+      { key: 'provider', label: 'Provider', kind: 'text' },
+    ],
+  },
+  {
+    id: 'hospital_visit',
+    label: 'Hospital Visit',
+    description: 'A hospital admission, emergency visit, or appointment.',
+    accent: '#0f766e',
+    supportsAttachments: true,
+    requiresAttachment: false,
+    fields: [
+      { key: 'facility', label: 'Facility', kind: 'text', required: true },
+      { key: 'date', label: 'Date', kind: 'date' },
+      { key: 'reason', label: 'Reason for visit', kind: 'text' },
+      { key: 'provider', label: 'Provider', kind: 'text' },
+    ],
+  },
+  {
+    id: 'document',
+    label: 'Upload Existing Report',
+    description: 'Upload an existing medical report, letter, or scan.',
+    accent: '#6b7280',
+    supportsAttachments: true,
+    requiresAttachment: true,
+    fields: [],
+  },
+]
+
+export function getHealthInfoTypeConfig(typeId: string | null | undefined): HealthInfoTypeConfig | undefined {
+  return HEALTH_INFO_TYPES.find(type => type.id === typeId)
+}
+
+export function createEmptyHealthInfoValues(typeId: string): HealthInfoValues {
+  const config = getHealthInfoTypeConfig(typeId)
+  const values: HealthInfoValues = {}
+  config?.fields.forEach(field => { values[field.key] = '' })
+  return values
+}
+
+export function buildHealthInfoTitle(typeId: string, values: HealthInfoValues, fallback?: string): string {
+  const config = getHealthInfoTypeConfig(typeId)
+  const primaryField = config?.fields[0]
+  const primaryValue = primaryField ? (values[primaryField.key] ?? '').trim() : ''
+  if (primaryValue) return primaryValue
+  if (fallback?.trim()) return fallback.trim()
+  return config?.label ?? 'Health Information'
+}
+
+export function inferLegacyCategoryFromInfoType(infoType: string): RecordCategory {
+  if (infoType === 'lab_result') return 'lab_results'
+  if (infoType === 'medication') return 'drug_prescription'
+  if (infoType === 'document') return 'medical_report'
+  return 'other'
+}
+
+export function buildHealthInfoRecordBody(notes: string, transcriptionText?: string): string {
+  const sections: string[] = []
+
+  if (notes.trim()) {
+    sections.push('Notes', notes.trim())
+  }
+
+  if (transcriptionText?.trim()) {
+    sections.push('Audio to text note', transcriptionText.trim())
+  }
+
+  return sections.join('\n\n').trim() || 'No additional notes provided.'
+}
+
+export function formatHealthInfoType(infoType: string | null | undefined, fallbackCategory?: RecordCategory): string {
+  const config = getHealthInfoTypeConfig(infoType)
+  if (config) return config.label
+  if (fallbackCategory) return formatRecordCategory(fallbackCategory)
+  return 'Other'
+}
+
+export function getRecordSourceBadge(record: MedicalRecord): RecordSourceBadgeInfo {
+  const role = record.added_by_role ?? 'patient'
+  const verified = record.created_by_verified ?? false
+  switch (role) {
+    case 'doctor':
+      return { label: verified ? 'Verified HID Doctor' : 'Clinician Verified', color: 'blue' }
+    case 'nurse':
+    case 'clinician':
+      return { label: 'Clinician Verified', color: 'blue' }
+    case 'lab':
+      return { label: 'Laboratory Verified', color: 'green' }
+    case 'pharmacist':
+      return { label: 'Pharmacy Verified', color: 'amber' }
+    case 'admin':
+    case 'org_admin':
+    case 'platform_admin':
+      return { label: 'Hospital Verified', color: 'blue' }
+    default:
+      return { label: 'Patient Reported', color: 'gray' }
+  }
+}
+
 export const RECORD_UPLOAD_ACCEPT = '.img,.png,.jpg,.jpeg,.pdf,image/png,image/jpeg,application/pdf'
 const allowedUploadExtensions = ['.img', '.png', '.jpg', '.jpeg', '.pdf']
 const allowedUploadMimeTypes = ['image/png', 'image/jpeg', 'application/pdf']
@@ -128,6 +351,8 @@ export function buildOptimisticMedicalRecord(params: {
   title: string
   transcriptionText?: string | null
   uploads?: UploadDraft[]
+  infoType?: string
+  structuredData?: Record<string, unknown> | null
 }) {
   const createdAt = new Date().toISOString()
   const optimisticRecord = {
@@ -144,6 +369,10 @@ export function buildOptimisticMedicalRecord(params: {
     created_by: params.createdBy,
     added_by_role: params.createdByRole,
     created_at: createdAt,
+    info_type: params.infoType ?? 'document',
+    structured_data: params.structuredData ?? null,
+    created_by_org: null,
+    created_by_verified: false,
   } satisfies MedicalRecord
 
   return {
@@ -190,6 +419,8 @@ export function buildRecordSearchText(record: MedicalRecord): string {
     record.record,
     record.notes,
     record.transcription_text,
+    formatHealthInfoType(record.info_type, record.category),
+    record.structured_data ? JSON.stringify(record.structured_data) : '',
   ].join(' ').toLowerCase()
 }
 

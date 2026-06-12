@@ -88,6 +88,10 @@ export type Database = {
           created_by: string
           added_by_role: string | null
           created_at: string
+          info_type: string
+          structured_data: Record<string, unknown> | null
+          created_by_org: string | null
+          created_by_verified: boolean
         }
         Insert: {
           id?: string
@@ -103,6 +107,10 @@ export type Database = {
           created_by: string
           added_by_role?: string | null
           created_at?: string
+          info_type?: string
+          structured_data?: Record<string, unknown> | null
+          created_by_org?: string | null
+          created_by_verified?: boolean
         }
         Update: Partial<Database['public']['Tables']['medical_records']['Insert']>
       }

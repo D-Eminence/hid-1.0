@@ -10,6 +10,8 @@ type Payload = {
   category: string
   record: string
   notes?: string | null
+  info_type?: string
+  structured_data?: Record<string, unknown> | null
 }
 
 Deno.serve(req => withErrorHandling(req, async () => {
@@ -37,6 +39,8 @@ Deno.serve(req => withErrorHandling(req, async () => {
     p_category: asTrimmedString(body.category, 'category'),
     p_record: asTrimmedString(body.record, 'record'),
     p_notes: optionalTrimmedString(body.notes),
+    p_info_type: optionalTrimmedString(body.info_type) ?? 'document',
+    p_structured_data: body.structured_data ?? null,
   })
 
   if (error) throw new HttpError(403, error.message, error)
