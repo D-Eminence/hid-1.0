@@ -78,6 +78,12 @@ verify_jwt = true
 [functions.records-create]
 verify_jwt = true
 
+[functions.health-events]
+verify_jwt = true
+
+[functions.health-event-update]
+verify_jwt = true
+
 [functions.records-version-create]
 verify_jwt = true
 

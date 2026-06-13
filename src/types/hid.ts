@@ -154,6 +154,23 @@ export interface HidPatientRecordsResponse {
   records: HidPatientRecordBundle[]
 }
 
+export type HidHealthEventStatus = 'open' | 'closed'
+
+export interface HidHealthEvent {
+  id: string
+  patient_id: string
+  title: string
+  info_category: string
+  status: HidHealthEventStatus
+  started_at: string | null
+  ended_at: string | null
+  created_by_user_profile_id: string | null
+  created_by_staff_account_id: string | null
+  created_at: string
+  updated_at: string
+  record_ids: string[]
+}
+
 export interface HidHistoryPendingRequest {
   request_id: string
   staff_account_id: string

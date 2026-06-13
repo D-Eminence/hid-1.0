@@ -1,6 +1,7 @@
 import type { Session } from '@supabase/supabase-js'
 import type { AccessLog, AccessRequest, MedicalRecord, MedicalRecordFile, Notification, Patient } from '../types/database'
 import type {
+  HidHealthEvent,
   HidHistoryActiveGrant,
   HidHistoryEvent,
   HidHistoryPendingRequest,
@@ -1576,6 +1577,88 @@ export async function createMedicalRecordWithUploads({
   } finally {
     inflightRecordSaves.delete(requestKey)
   }
+}
+
+export async function fetchPatientHealthEvents(patientIdentifier?: string, options: { forceRefresh?: boolean } = {}) {
+  const cacheKey = `health-events:${patientIdentifier ?? 'self'}`
+  if (options.forceRefresh) {
+    viewCache.delete(cacheKey)
+  }
+
+  return loadCachedView(cacheKey, async () => {
+    const response = await edgeRequest<{ data: HidHealthEvent[] }>('health-events', {
+      query: {
+        patientIdentifier: patientIdentifier ?? null,
+      },
+    })
+
+    return response.data ?? []
+  }, patientIdentifier ? 0 : VIEW_CACHE_TTL_MS)
+}
+
+export async function createHealthEvent({
+  patientIdentifier,
+  title,
+  infoCategory,
+  recordIds,
+}: {
+  patientIdentifier: string
+  title: string
+  infoCategory?: string
+  recordIds?: string[]
+}) {
+  const result = await edgeRequest<{ data: { event_id: string } }>('health-events', {
+    method: 'POST',
+    body: {
+      patientIdentifier,
+      title,
+      infoCategory,
+      recordIds,
+    },
+  })
+
+  invalidateViewCache('health-events:')
+  return result.data
+}
+
+export async function addRecordToHealthEvent(healthEventId: string, recordId: string) {
+  const result = await edgeRequest<{ data: { ok: boolean } }>('health-event-update', {
+    method: 'POST',
+    body: { healthEventId, action: 'add_record', recordId },
+  })
+
+  invalidateViewCache('health-events:')
+  return result.data
+}
+
+export async function removeRecordFromHealthEvent(healthEventId: string, recordId: string) {
+  const result = await edgeRequest<{ data: { ok: boolean } }>('health-event-update', {
+    method: 'POST',
+    body: { healthEventId, action: 'remove_record', recordId },
+  })
+
+  invalidateViewCache('health-events:')
+  return result.data
+}
+
+export async function renameHealthEvent(healthEventId: string, title: string) {
+  const result = await edgeRequest<{ data: { ok: boolean } }>('health-event-update', {
+    method: 'POST',
+    body: { healthEventId, action: 'rename', title },
+  })
+
+  invalidateViewCache('health-events:')
+  return result.data
+}
+
+export async function setHealthEventStatus(healthEventId: string, status: 'open' | 'closed') {
+  const result = await edgeRequest<{ data: { ok: boolean } }>('health-event-update', {
+    method: 'POST',
+    body: { healthEventId, action: status === 'closed' ? 'close' : 'reopen' },
+  })
+
+  invalidateViewCache('health-events:')
+  return result.data
 }
 
 export async function uploadRecordFiles(recordId: string, uploads: UploadDraft[], uploadedFileKeys = new Set<string>()) {

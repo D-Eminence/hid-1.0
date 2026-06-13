@@ -4,6 +4,8 @@ import { PortalShell } from '../../components/PortalShell'
 import { Badge, Button, Card, EmptyState, Input, PageLoader, showToast } from '../../components/ui'
 import { MedicalRecordMarkdownView } from '../../components/RecordMarkdownView'
 import { AddHealthInformationModal, type HealthInformationSubmission } from '../../components/AddHealthInformationModal'
+import { HealthEventTimeline } from '../../components/HealthEventTimeline'
+import { CreateHealthEventModal } from '../../components/CreateHealthEventModal'
 import { getPatientSession, signOutAndClearSessions } from '../../lib/auth'
 import { readPatientRecordsSnapshot, seedPatientProfileCache, seedPatientRecordsCache } from '../../lib/experienceWarmup'
 import {
@@ -16,9 +18,20 @@ import {
   inferLegacyCategoryFromInfoType,
   type UploadDraft,
 } from '../../lib/medicalRecordUtils'
-import { createMedicalRecordWithUploads, fetchPatientRecordsView } from '../../lib/hidApi'
+import { sortHealthEvents } from '../../lib/healthEventUtils'
+import {
+  addRecordToHealthEvent,
+  createHealthEvent,
+  createMedicalRecordWithUploads,
+  fetchPatientHealthEvents,
+  fetchPatientRecordsView,
+  removeRecordFromHealthEvent,
+  renameHealthEvent,
+  setHealthEventStatus,
+} from '../../lib/hidApi'
 import { formatDateTime, getPersonInitials } from '../../lib/utils'
 import type { MedicalRecord, MedicalRecordFile, Patient } from '../../types/database'
+import type { HidHealthEvent, HidHealthEventStatus } from '../../types/hid'
 
 const patientNav = [
   { path: '/patient/profile', label: 'Home' },
@@ -42,6 +55,8 @@ export default function PatientRecords() {
   const [preparingUploads, setPreparingUploads] = useState(false)
   const [search, setSearch] = useState('')
   const [uploads, setUploads] = useState<UploadDraft[]>([])
+  const [healthEvents, setHealthEvents] = useState<HidHealthEvent[]>([])
+  const [createEventOpen, setCreateEventOpen] = useState(false)
   const saveLockRef = useRef(false)
 
   useEffect(() => {
@@ -68,6 +83,50 @@ export default function PatientRecords() {
     } finally {
       if (!silent) setLoading(false)
     }
+
+    try {
+      const events = await fetchPatientHealthEvents(session.hidCode)
+      setHealthEvents(sortHealthEvents(events))
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Unable to load health events.'
+      showToast(message, 'error')
+    }
+  }
+
+  async function handleCreateHealthEvent({ title, infoCategory, recordIds }: { title: string; infoCategory: string; recordIds: string[] }) {
+    if (!session) return
+    await createHealthEvent({ patientIdentifier: session.hidCode, title, infoCategory, recordIds })
+    const events = await fetchPatientHealthEvents(session.hidCode, { forceRefresh: true })
+    setHealthEvents(sortHealthEvents(events))
+    showToast('Health event created.', 'success')
+  }
+
+  async function handleAddRecordToEvent(eventId: string, recordId: string) {
+    if (!session) return
+    await addRecordToHealthEvent(eventId, recordId)
+    const events = await fetchPatientHealthEvents(session.hidCode, { forceRefresh: true })
+    setHealthEvents(sortHealthEvents(events))
+  }
+
+  async function handleRemoveRecordFromEvent(eventId: string, recordId: string) {
+    if (!session) return
+    await removeRecordFromHealthEvent(eventId, recordId)
+    const events = await fetchPatientHealthEvents(session.hidCode, { forceRefresh: true })
+    setHealthEvents(sortHealthEvents(events))
+  }
+
+  async function handleRenameHealthEvent(eventId: string, title: string) {
+    if (!session) return
+    await renameHealthEvent(eventId, title)
+    const events = await fetchPatientHealthEvents(session.hidCode, { forceRefresh: true })
+    setHealthEvents(sortHealthEvents(events))
+  }
+
+  async function handleToggleHealthEventStatus(eventId: string, status: HidHealthEventStatus) {
+    if (!session) return
+    await setHealthEventStatus(eventId, status)
+    const events = await fetchPatientHealthEvents(session.hidCode, { forceRefresh: true })
+    setHealthEvents(sortHealthEvents(events))
   }
 
   async function logout() {
@@ -241,6 +300,16 @@ export default function PatientRecords() {
         </div>
       </Card>
 
+      <HealthEventTimeline
+        events={healthEvents}
+        records={records}
+        onCreateEvent={() => setCreateEventOpen(true)}
+        onAddRecord={handleAddRecordToEvent}
+        onRemoveRecord={handleRemoveRecordFromEvent}
+        onRename={handleRenameHealthEvent}
+        onToggleStatus={handleToggleHealthEventStatus}
+      />
+
       {records.length === 0 ? (
         <Card style={{ borderRadius: 24 }}>
           <EmptyState
@@ -288,6 +357,13 @@ export default function PatientRecords() {
         onAttachment={onAttachment}
         onRemoveUpload={removeUpload}
         onSubmit={saveHealthInformation}
+      />
+
+      <CreateHealthEventModal
+        open={createEventOpen}
+        onClose={() => setCreateEventOpen(false)}
+        records={records}
+        onSubmit={handleCreateHealthEvent}
       />
     </PortalShell>
   )
