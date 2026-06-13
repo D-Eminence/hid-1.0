@@ -57,6 +57,7 @@ function lazyWithPreload<T extends React.ComponentType<any>>(
 export const LandingPage = lazyWithPreload(() => import('../pages/Landing'))
 export const PatientAuthPage = lazyWithPreload(() => import('../pages/patient/PatientAuth'))
 export const PatientProfilePage = lazyWithPreload(() => import('../pages/patient/PatientProfile'))
+export const PatientBioDataPage = lazyWithPreload(() => import('../pages/patient/PatientBioData'))
 export const PatientRecordsPage = lazyWithPreload(() => import('../pages/patient/PatientRecords'))
 export const PatientHistoryPage = lazyWithPreload(() => import('../pages/patient/PatientHistory'))
 export const PatientNotificationsPage = lazyWithPreload(() => import('../pages/patient/PatientNotifications'))
@@ -78,6 +79,7 @@ const routeLoaders = {
   landing: LandingPage.preload,
   patientAuth: PatientAuthPage.preload,
   patientProfile: PatientProfilePage.preload,
+  patientBioData: PatientBioDataPage.preload,
   patientRecords: PatientRecordsPage.preload,
   patientHistory: PatientHistoryPage.preload,
   patientNotifications: PatientNotificationsPage.preload,
@@ -144,12 +146,13 @@ export function getRoutePreloadKeys(path: string): RoutePreloadKey[] {
   if (!path) return []
   if (path === '/' || path.startsWith('/#')) return ['patientAuth', 'doctorAuth', 'adminLogin']
   if (path === '/signup' || path === '/login' || path === '/register' || path === '/patient' || path.startsWith('/patient/auth')) {
-    return ['patientProfile', 'patientRecords', 'patientHistory', 'patientNotifications']
+    return ['patientProfile', 'patientRecords', 'patientHistory', 'patientBioData', 'patientNotifications']
   }
-  if (path.startsWith('/patient/profile')) return ['patientRecords', 'patientHistory', 'patientNotifications']
-  if (path === '/records' || path.startsWith('/patient/records')) return ['patientProfile', 'patientHistory', 'patientNotifications']
-  if (path === '/logs' || path.startsWith('/patient/history')) return ['patientProfile', 'patientRecords', 'patientNotifications']
-  if (path.startsWith('/patient/notifications')) return ['patientProfile', 'patientRecords', 'patientHistory']
+  if (path.startsWith('/patient/profile')) return ['patientRecords', 'patientHistory', 'patientBioData', 'patientNotifications']
+  if (path === '/records' || path.startsWith('/patient/records')) return ['patientProfile', 'patientHistory', 'patientBioData', 'patientNotifications']
+  if (path === '/logs' || path.startsWith('/patient/history')) return ['patientProfile', 'patientRecords', 'patientBioData', 'patientNotifications']
+  if (path.startsWith('/patient/biodata')) return ['patientProfile', 'patientRecords', 'patientHistory', 'patientNotifications']
+  if (path.startsWith('/patient/notifications')) return ['patientProfile', 'patientRecords', 'patientHistory', 'patientBioData']
   if (path === '/eminence' || path.startsWith('/eminence/login')) return ['adminDashboard']
   if (path.startsWith('/eminence/')) return ['adminLogin']
   if (path === '/outreach/login') return ['outreachLogin', 'outreachSignup', 'outreachJoin']

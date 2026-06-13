@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { PortalShell } from '../../components/PortalShell'
-import { Badge, Button, Card, Input, Modal, PageLoader, Textarea, showToast } from '../../components/ui'
+import { Badge, Button, Card, Input, Modal, PageLoader, SectionHeader, Textarea, showToast } from '../../components/ui'
 import { getPatientSession, signOutAndClearSessions } from '../../lib/auth'
 import { subscribeToAccessChanges } from '../../lib/accessRealtime'
 import { readPatientHistorySnapshot, readPatientProfileSnapshot, seedPatientHistoryCache, seedPatientProfileCache } from '../../lib/experienceWarmup'
@@ -22,7 +22,7 @@ const patientNav = [
   { path: '/patient/profile', label: 'Home' },
   { path: '/patient/records', label: 'Records' },
   { path: '/patient/history', label: 'Access History' },
-  { path: '/patient/notifications', label: 'Notifications' },
+  { path: '/patient/biodata', label: 'Biodata' },
 ]
 
 export default function PatientHistory() {
@@ -186,13 +186,8 @@ export default function PatientHistory() {
       onShareSuccess={() => void loadHistoryData(true)}
     >
       <Card style={{ borderRadius: 24, marginBottom: 18 }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 16, flexWrap: 'wrap' }}>
-          <div>
-            <div style={{ fontSize: 24, fontWeight: 700, color: '#111827' }}>Active access</div>
-            <div style={{ color: '#8a95a6', marginTop: 6, fontSize: 13 }}>Providers that currently have access to your records.</div>
-          </div>
-        </div>
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(248px, 100%), 1fr))', gap: 18, marginTop: 24 }}>
+        <SectionHeader title="Active access" subtitle="Providers that currently have access to your records." />
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(248px, 100%), 1fr))', gap: 18 }}>
           {activeAccessGroups.map(group => {
             const request = group.primary
             const isEmergency = request.request_type === 'emergency'
@@ -308,9 +303,8 @@ export default function PatientHistory() {
 
       {pendingInvites.length > 0 && (
         <Card style={{ borderRadius: 24, marginBottom: 18 }}>
-          <div style={{ fontSize: 24, fontWeight: 700, color: '#111827' }}>Pending invitations</div>
-          <div style={{ color: '#8a95a6', marginTop: 6, fontSize: 13 }}>Providers you've invited who haven't joined HID yet.</div>
-          <div style={{ display: 'grid', gap: 12, marginTop: 18 }}>
+          <SectionHeader title="Pending invitations" subtitle="Providers you've invited who haven't joined HID yet." />
+          <div style={{ display: 'grid', gap: 12 }}>
             {pendingInvites.map(invite => (
               <div
                 key={invite.invite_id}
@@ -348,9 +342,8 @@ export default function PatientHistory() {
       )}
 
       <Card style={{ borderRadius: 24 }}>
-        <div style={{ fontSize: 24, fontWeight: 700, color: '#111827' }}>Access Logs</div>
-        <div style={{ color: '#8a95a6', marginTop: 6, fontSize: 13 }}>Security-relevant activity related to your record access.</div>
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 12, marginTop: 18 }}>
+        <SectionHeader title="Access Logs" subtitle="Security-relevant activity related to your record access." />
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 12 }}>
           <Input
             placeholder="Search by provider, action, reason, or date"
             value={logSearch}

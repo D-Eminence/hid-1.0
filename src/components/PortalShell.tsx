@@ -125,26 +125,12 @@ function EditIcon({ size = 14 }: { size?: number }) {
   )
 }
 
-function ToggleSwitch({ checked, onClick }: { checked: boolean; onClick?: () => void }) {
+function BioDataIcon({ size = 18 }: { size?: number }) {
   return (
-    <button
-      type="button"
-      role="switch"
-      aria-checked={checked}
-      onClick={onClick}
-      style={{
-        width: 36, height: 20, borderRadius: 999, border: 'none', padding: 2,
-        background: checked ? '#1a6fd4' : '#d1d5db', position: 'relative',
-        cursor: onClick ? 'pointer' : 'default', flexShrink: 0,
-        transition: 'background 0.15s ease',
-      }}
-    >
-      <span style={{
-        display: 'block', width: 16, height: 16, borderRadius: '50%', background: '#fff',
-        transform: checked ? 'translateX(16px)' : 'translateX(0)',
-        transition: 'transform 0.15s ease', boxShadow: '0 1px 2px rgba(0,0,0,0.15)',
-      }} />
-    </button>
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" aria-hidden="true">
+      <circle cx="12" cy="8" r="3.5" stroke="currentColor" strokeWidth="1.6" />
+      <path d="M5 19.5c0-3 3-5 7-5s7 2 7 5" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
+    </svg>
   )
 }
 
@@ -152,6 +138,7 @@ function getNavIcon(path: string) {
   if (path.includes('/notifications')) return <NotificationsIcon />
   if (path.includes('/records')) return <RecordsIcon />
   if (path.includes('/history')) return <HistoryIcon />
+  if (path.includes('/biodata')) return <BioDataIcon />
   return <HomeIcon />
 }
 
@@ -195,7 +182,6 @@ export function PortalShell({
   const [isCompact, setIsCompact] = useState(() => (typeof window !== 'undefined' ? window.innerWidth < 720 : false))
   const [navOpen, setNavOpen] = useState(false)
   const [shareModalOpen, setShareModalOpen] = useState(false)
-  const [profileLive, setProfileLive] = useState(true)
   const activeLabel = items.find(item => item.path === location.pathname)?.label ?? 'Menu'
   const likelyWarmPaths = useMemo(() => {
     const currentIndex = items.findIndex(item => item.path === location.pathname)
@@ -418,16 +404,12 @@ export function PortalShell({
               size="sm"
               variant="outline"
               icon={<EditIcon />}
-              onClick={() => navigate('/patient/profile')}
-              onMouseEnter={() => warmPath('/patient/profile')}
+              onClick={() => navigate('/patient/biodata')}
+              onMouseEnter={() => warmPath('/patient/biodata')}
               style={{ borderRadius: 999, borderColor: '#e5e7eb', color: '#374151' }}
             >
-              Edit Profile
+              Biodata
             </Button>
-            <div style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}>
-              <span style={{ fontSize: 12, fontWeight: 600, color: '#111827', whiteSpace: 'nowrap' }}>Profile is live</span>
-              <ToggleSwitch checked={profileLive} onClick={() => setProfileLive(value => !value)} />
-            </div>
           </div>
         </div>
 

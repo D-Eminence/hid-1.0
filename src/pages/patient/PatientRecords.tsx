@@ -38,7 +38,7 @@ const patientNav = [
   { path: '/patient/profile', label: 'Home' },
   { path: '/patient/records', label: 'Records' },
   { path: '/patient/history', label: 'Access History' },
-  { path: '/patient/notifications', label: 'Notifications' },
+  { path: '/patient/biodata', label: 'Biodata' },
 ]
 
 type RecordsTab = 'history' | 'documents' | 'medication'

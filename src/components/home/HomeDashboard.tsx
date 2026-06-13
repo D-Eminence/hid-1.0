@@ -131,9 +131,7 @@ function PatientOverviewCard({ patient, onOpenShare, onAddHealthInfo }: {
       </div>
 
       <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', marginTop: 20 }}>
-        <Button size="sm" onClick={onOpenShare}>Share Profile</Button>
-        <Button size="sm" variant="outline" onClick={onOpenShare}>Share Records</Button>
-        <Button size="sm" variant="outline" onClick={onOpenShare}>Find Provider</Button>
+        <Button size="sm" onClick={onOpenShare}>Share Records</Button>
         <Button size="sm" variant="secondary" onClick={onAddHealthInfo}>Add Health Information</Button>
       </div>
     </Card>

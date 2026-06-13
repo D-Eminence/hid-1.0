@@ -18,6 +18,7 @@ import {
   LandingPage,
   PatientAuthPage,
   getRoutePreloadKeys,
+  PatientBioDataPage,
   PatientHistoryPage,
   PatientNotificationsPage,
   PatientProfilePage,
@@ -158,6 +159,7 @@ function requiresImmediateSessionBootstrap(pathname: string) {
     pathname.startsWith('/patient/profile') ||
     pathname.startsWith('/patient/records') ||
     pathname.startsWith('/patient/history') ||
+    pathname.startsWith('/patient/biodata') ||
     pathname.startsWith('/patient/notifications') ||
     pathname.startsWith('/hospital/dashboard') ||
     pathname.startsWith('/hospital/access') ||
@@ -247,6 +249,7 @@ export default function App() {
             <Route path="/logs" element={<Navigate to="/patient/history" replace />} />
             <Route path="/patient" element={<PatientAuthPage />} />
             <Route path="/patient/profile" element={<PatientProfilePage />} />
+            <Route path="/patient/biodata" element={<PatientBioDataPage />} />
             <Route path="/patient/records" element={<PatientRecordsPage />} />
             <Route path="/patient/history" element={<PatientHistoryPage />} />
             <Route path="/patient/notifications" element={<PatientNotificationsPage />} />
