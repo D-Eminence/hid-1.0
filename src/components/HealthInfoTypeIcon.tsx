@@ -64,6 +64,14 @@ export function getHealthInfoTypeIcon(typeId: string | undefined | null, size = 
           <path d="M12 17v-5M9.5 14.5 12 12l2.5 2.5" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
         </svg>
       )
+    case 'voice_note':
+      return (
+        <svg {...props}>
+          <rect x="9" y="2" width="6" height="12" rx="3" stroke="currentColor" strokeWidth="1.8" />
+          <path d="M5 11a7 7 0 0 0 14 0" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
+          <path d="M12 18v3M9 21h6" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
+        </svg>
+      )
     default:
       return (
         <svg {...props}>

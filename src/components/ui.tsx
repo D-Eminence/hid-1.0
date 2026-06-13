@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react'
+import React, { useEffect, useRef, useState } from 'react'
 
 // ── Button ──────────────────────────────────────────────────────────────────
 type BtnVariant = 'primary' | 'secondary' | 'danger' | 'ghost' | 'outline'
@@ -269,7 +269,7 @@ interface CardProps {
   onClick?: () => void
 }
 export function Card({ children, style, padding = 24, onClick }: CardProps) {
-  const resolvedPadding = typeof padding === 'number' ? `clamp(14px, 4vw, ${padding}px)` : padding
+  const resolvedPadding = typeof padding === 'number' ? `clamp(12px, 3.5vw, ${padding}px)` : padding
   return (
     <div onClick={onClick} style={{
       background: '#fff', borderRadius: 12, border: '1px solid #e5e7eb',
@@ -349,9 +349,9 @@ export function SectionHeader({ title, subtitle, action }: {
   title: string; subtitle?: string; action?: React.ReactNode
 }) {
   return (
-    <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: 20, gap: 16, flexWrap: 'wrap', rowGap: 12 }}>
+    <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: 'clamp(14px, 4vw, 20px)', gap: 16, flexWrap: 'wrap', rowGap: 12 }}>
       <div style={{ minWidth: 0 }}>
-        <h2 style={{ fontSize: 'clamp(16px, 4vw, 18px)', fontWeight: 700, letterSpacing: '-0.3px' }}>{title}</h2>
+        <h2 style={{ fontSize: 'clamp(15px, 3.5vw, 18px)', fontWeight: 700, letterSpacing: '-0.3px' }}>{title}</h2>
         {subtitle && <p style={{ fontSize: 13, color: '#6b7280', marginTop: 4 }}>{subtitle}</p>}
       </div>
       {action}
@@ -388,6 +388,218 @@ export function Modal({ open, onClose, title, children, width = 480 }: {
         </div>
         <div style={{ padding: 'clamp(16px, 4vw, 24px)', overflowY: 'auto', overflowX: 'hidden', maxHeight: 'calc(100vh - 132px)' }}>{children}</div>
       </div>
+    </div>
+  )
+}
+
+// ── Bottom Sheet ──────────────────────────────────────────────────────────────
+export function BottomSheet({ open, onClose, title, children }: {
+  open: boolean; onClose: () => void; title: string; children: React.ReactNode
+}) {
+  const sheetRef = useRef<HTMLDivElement>(null)
+  const dragRef = useRef<{ startY: number } | null>(null)
+
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose() }
+    if (open) document.addEventListener('keydown', handler)
+    return () => document.removeEventListener('keydown', handler)
+  }, [open, onClose])
+
+  if (!open) return null
+
+  function handlePointerDown(event: React.PointerEvent) {
+    dragRef.current = { startY: event.clientY }
+  }
+  function handlePointerMove(event: React.PointerEvent) {
+    if (!dragRef.current || !sheetRef.current) return
+    const delta = event.clientY - dragRef.current.startY
+    if (delta > 0) sheetRef.current.style.transform = `translateY(${delta}px)`
+  }
+  function handlePointerUp(event: React.PointerEvent) {
+    if (!dragRef.current || !sheetRef.current) return
+    const delta = event.clientY - dragRef.current.startY
+    dragRef.current = null
+    if (delta > 80) {
+      onClose()
+    } else {
+      sheetRef.current.style.transform = ''
+    }
+  }
+
+  return (
+    <div
+      style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.45)', zIndex: 1000, display: 'flex', alignItems: 'flex-end', justifyContent: 'center' }}
+      onClick={e => { if (e.target === e.currentTarget) onClose() }}
+    >
+      <div
+        ref={sheetRef}
+        style={{
+          background: '#fff', width: '100%', maxWidth: 560,
+          borderRadius: '20px 20px 0 0', maxHeight: '92vh', minHeight: '40vh',
+          display: 'flex', flexDirection: 'column',
+          boxShadow: '0 -10px 40px rgba(0,0,0,0.15)',
+          animation: 'sheetIn 0.25s ease', transition: 'transform 0.2s ease',
+        }}
+      >
+        <style>{`@keyframes sheetIn{from{transform:translateY(100%)}to{transform:translateY(0)}}`}</style>
+        <div
+          onPointerDown={handlePointerDown}
+          onPointerMove={handlePointerMove}
+          onPointerUp={handlePointerUp}
+          onPointerCancel={handlePointerUp}
+          style={{ padding: 'clamp(10px, 3vw, 14px) clamp(16px, 4vw, 24px) 14px', cursor: 'grab', touchAction: 'none', flexShrink: 0 }}
+        >
+          <div style={{ width: 40, height: 4, borderRadius: 999, background: '#e5e7eb', margin: '0 auto 14px' }} />
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
+            <h3 style={{ fontSize: 16, fontWeight: 700, minWidth: 0, overflowWrap: 'anywhere' }}>{title}</h3>
+            <button onClick={onClose} aria-label="Close" style={{ background: 'none', border: 'none', color: '#9ca3af', padding: 4, borderRadius: 6, display: 'flex', alignItems: 'center', flexShrink: 0 }}>
+              <svg width="18" height="18" viewBox="0 0 18 18" fill="none"><path d="M4 4l10 10M14 4L4 14" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"/></svg>
+            </button>
+          </div>
+        </div>
+        <div style={{ padding: '0 clamp(16px, 4vw, 24px) clamp(16px, 4vw, 24px)', overflowY: 'auto', flex: 1 }}>{children}</div>
+      </div>
+    </div>
+  )
+}
+
+// ── Chips ─────────────────────────────────────────────────────────────────────
+export function Chip({ active, onClick, children, disabled }: {
+  active: boolean; onClick: () => void; children: React.ReactNode; disabled?: boolean
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      disabled={disabled}
+      style={{
+        border: `1px solid ${active ? '#1a6fd4' : '#e5e7eb'}`,
+        borderRadius: 999,
+        padding: '6px 14px',
+        fontSize: 12,
+        fontWeight: 500,
+        cursor: disabled ? 'not-allowed' : 'pointer',
+        background: active ? '#e8f1fc' : '#fff',
+        color: active ? '#1a6fd4' : '#484f58',
+        opacity: disabled ? 0.6 : 1,
+      }}
+    >
+      {children}
+    </button>
+  )
+}
+
+export function ChipGroup({ options, value, onChange }: {
+  options: { value: string; label: string }[]; value: string; onChange: (value: string) => void
+}) {
+  return (
+    <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+      {options.map(option => (
+        <Chip key={option.value} active={value === option.value} onClick={() => onChange(option.value)}>
+          {option.label}
+        </Chip>
+      ))}
+    </div>
+  )
+}
+
+// ── Selection Cards ───────────────────────────────────────────────────────────
+export function SelectionCard({ label, description, icon, active, onClick }: {
+  label: string; description?: string; icon?: React.ReactNode; active: boolean; onClick: () => void
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      style={{
+        textAlign: 'left',
+        border: `1.5px solid ${active ? '#1a6fd4' : '#e5e7eb'}`,
+        background: active ? '#e8f1fc' : '#fff',
+        borderRadius: 12,
+        padding: 14,
+        cursor: 'pointer',
+        display: 'flex',
+        flexDirection: 'column',
+        gap: 6,
+        minWidth: 0,
+      }}
+    >
+      {icon && <span style={{ color: active ? '#1a6fd4' : '#6b7280' }}>{icon}</span>}
+      <span style={{ fontWeight: 600, fontSize: 14, color: '#111827' }}>{label}</span>
+      {description && <span style={{ fontSize: 12, color: '#6b7280' }}>{description}</span>}
+    </button>
+  )
+}
+
+export function SelectionCardGrid({ options, value, onChange }: {
+  options: { value: string; label: string; description?: string; icon?: React.ReactNode }[]
+  value: string
+  onChange: (value: string) => void
+}) {
+  return (
+    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(130px, 1fr))', gap: 10 }}>
+      {options.map(option => (
+        <SelectionCard
+          key={option.value}
+          label={option.label}
+          description={option.description}
+          icon={option.icon}
+          active={value === option.value}
+          onClick={() => onChange(option.value)}
+        />
+      ))}
+    </div>
+  )
+}
+
+// ── Full Screen Flow ─────────────────────────────────────────────────────────
+export function FullScreenFlow({ open, title, onBack, onClose, step, totalSteps, children, footer }: {
+  open: boolean
+  title: string
+  onBack?: () => void
+  onClose: () => void
+  step?: number
+  totalSteps?: number
+  children: React.ReactNode
+  footer?: React.ReactNode
+}) {
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose() }
+    if (open) document.addEventListener('keydown', handler)
+    return () => document.removeEventListener('keydown', handler)
+  }, [open, onClose])
+
+  if (!open) return null
+
+  return (
+    <div style={{ position: 'fixed', inset: 0, background: '#fff', zIndex: 1100, display: 'flex', flexDirection: 'column', animation: 'fullScreenIn 0.2s ease' }}>
+      <style>{`@keyframes fullScreenIn{from{opacity:0;transform:translateY(12px)}to{opacity:1;transform:translateY(0)}}`}</style>
+      <div style={{ padding: 'clamp(14px, 4vw, 20px) clamp(16px, 4vw, 24px)', borderBottom: '1px solid #e5e7eb', flexShrink: 0 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+          {onBack ? (
+            <button onClick={onBack} aria-label="Back" style={{ background: 'none', border: 'none', color: '#374151', padding: 4, borderRadius: 6, display: 'flex', alignItems: 'center', flexShrink: 0 }}>
+              <svg width="20" height="20" viewBox="0 0 20 20" fill="none"><path d="M12 4l-6 6 6 6" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"/></svg>
+            </button>
+          ) : <span style={{ width: 28, flexShrink: 0 }} />}
+          <h3 style={{ fontSize: 16, fontWeight: 700, flex: 1, minWidth: 0, overflowWrap: 'anywhere', textAlign: 'center' }}>{title}</h3>
+          <button onClick={onClose} aria-label="Close" style={{ background: 'none', border: 'none', color: '#9ca3af', padding: 4, borderRadius: 6, display: 'flex', alignItems: 'center', flexShrink: 0 }}>
+            <svg width="18" height="18" viewBox="0 0 18 18" fill="none"><path d="M4 4l10 10M14 4L4 14" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"/></svg>
+          </button>
+        </div>
+        {step !== undefined && totalSteps !== undefined && totalSteps > 1 && (
+          <div style={{ display: 'flex', gap: 4, marginTop: 12 }}>
+            {Array.from({ length: totalSteps }).map((_, index) => (
+              <span key={index} style={{ flex: 1, height: 3, borderRadius: 999, background: index <= step ? '#1a6fd4' : '#e5e7eb' }} />
+            ))}
+          </div>
+        )}
+      </div>
+      <div style={{ flex: 1, overflowY: 'auto', padding: 'clamp(16px, 4vw, 24px)' }}>{children}</div>
+      {footer && (
+        <div style={{ borderTop: '1px solid #e5e7eb', padding: 'clamp(12px, 4vw, 20px) clamp(16px, 4vw, 24px)', display: 'flex', gap: 12, justifyContent: 'flex-end', flexShrink: 0 }}>
+          {footer}
+        </div>
+      )}
     </div>
   )
 }

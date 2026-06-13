@@ -73,7 +73,7 @@ export function HomeDashboard({ patient, records, healthEvents, activeGrants, lo
   }, [records])
 
   return (
-    <div style={{ display: 'grid', gap: 24 }}>
+    <div style={{ display: 'grid', gap: 'clamp(14px, 4vw, 24px)' }}>
       <PatientOverviewCard
         patient={patient}
         onOpenShare={() => setShareModalOpen(true)}
@@ -122,7 +122,7 @@ function PatientOverviewCard({ patient, onOpenShare, onAddHealthInfo }: {
           </div>
         )}
         <div style={{ minWidth: 0 }}>
-          <div style={{ fontSize: 'clamp(18px, 4vw, 22px)', fontWeight: 700, color: '#111827' }}>{patient.full_name}</div>
+          <div style={{ fontSize: 'clamp(16px, 4vw, 20px)', fontWeight: 700, color: '#111827' }}>{patient.full_name}</div>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 4, flexWrap: 'wrap' }}>
             <span style={{ fontSize: 13, color: '#6b7280' }}>{patient.hid_code}</span>
             <Badge color={patient.nin_verified ? 'green' : 'gray'}>{patient.nin_verified ? 'NIN Verified' : 'Not Verified'}</Badge>
@@ -130,7 +130,7 @@ function PatientOverviewCard({ patient, onOpenShare, onAddHealthInfo }: {
         </div>
       </div>
 
-      <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', marginTop: 20 }}>
+      <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', marginTop: 'clamp(12px, 4vw, 20px)' }}>
         <Button size="sm" onClick={onOpenShare}>Share Records</Button>
         <Button size="sm" variant="secondary" onClick={onAddHealthInfo}>Add Health Information</Button>
       </div>
@@ -152,10 +152,10 @@ function HealthSnapshotGrid({ totalRecords, healthEventCount, activeShareCount, 
   ]
 
   return (
-    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(160px, 100%), 1fr))', gap: 16 }}>
+    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(160px, 100%), 1fr))', gap: 'clamp(10px, 3vw, 16px)' }}>
       {tiles.map(tile => (
         <Card key={tile.label} style={{ borderRadius: 12 }}>
-          <div style={{ fontSize: 'clamp(20px, 6vw, 28px)', fontWeight: 700, color: '#111827' }}>{tile.value}</div>
+          <div style={{ fontSize: 'clamp(18px, 5vw, 24px)', fontWeight: 700, color: '#111827' }}>{tile.value}</div>
           <div style={{ fontSize: 13, color: '#6b7280', marginTop: 4 }}>{tile.label}</div>
         </Card>
       ))}

@@ -42,7 +42,7 @@ export function RecordSummaryCard({ record, attachments, onClick }: RecordSummar
           {getHealthInfoTypeIcon(typeConfig?.id, 20)}
         </div>
         <div style={{ minWidth: 0, overflowWrap: 'anywhere' }}>
-          <div style={{ fontWeight: 700, fontSize: 14, color: '#111827' }}>{record.title}</div>
+          <div style={{ fontWeight: 700, fontSize: 'clamp(13px, 3.5vw, 14px)', color: '#111827' }}>{record.title}</div>
           <div style={{ fontSize: 12, color: '#6b7280', marginTop: 2 }}>{typeLabel}</div>
         </div>
       </div>

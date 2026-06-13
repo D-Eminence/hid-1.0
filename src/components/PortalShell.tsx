@@ -278,7 +278,7 @@ export function PortalShell({
 
   return (
     <div style={{ minHeight: '100vh', background: '#fff' }}>
-      <div style={{ maxWidth: 1360, margin: '0 auto', padding: '36px clamp(18px, 3vw, 46px)' }}>
+      <div style={{ maxWidth: 1360, margin: '0 auto', padding: 'clamp(20px, 5vw, 36px) clamp(14px, 3vw, 46px)' }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 16, flexWrap: 'wrap' }}>
           <div
             style={{ cursor: 'pointer' }}
@@ -323,7 +323,7 @@ export function PortalShell({
           </div>
         </div>
 
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 16, marginTop: 32, paddingBottom: 14, borderBottom: '1px solid #edf1f5', flexWrap: 'wrap' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 16, marginTop: 'clamp(20px, 5vw, 32px)', paddingBottom: 14, borderBottom: '1px solid #edf1f5', flexWrap: 'wrap' }}>
           {isCompact ? (
             <div style={{ position: 'relative', width: '100%' }}>
               <button
@@ -349,7 +349,7 @@ export function PortalShell({
                         onClick={() => { navigate(item.path); setNavOpen(false) }}
                         onMouseEnter={() => warmPath(item.path)}
                         onFocus={() => warmPath(item.path)}
-                        style={{ width: '100%', textAlign: 'left', border: 'none', borderRadius: 10, padding: '11px 12px', background: active ? '#f0f7ff' : '#fff', color: active ? '#1a6fd4' : '#111827', fontSize: 14, fontWeight: active ? 600 : 500, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 10 }}
+                        style={{ width: '100%', textAlign: 'left', border: 'none', borderRadius: 10, padding: '11px 12px', background: active ? '#f0f7ff' : '#fff', color: active ? '#1a6fd4' : '#111827', fontSize: 13, fontWeight: active ? 600 : 500, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 10 }}
                       >
                         {getNavIcon(item.path)}
                         {item.label}
@@ -413,11 +413,11 @@ export function PortalShell({
           </div>
         </div>
 
-        <div style={{ marginTop: 28 }}>
+        <div style={{ marginTop: 'clamp(18px, 4vw, 28px)' }}>
           {notificationHidCode ? <PatientNotificationWatcher hidCode={notificationHidCode} /> : null}
           {(title || subtitle) && (
-            <div style={{ marginBottom: 20 }}>
-              <div style={{ fontSize: 'clamp(20px, 5vw, 28px)', fontWeight: 700, color: '#111827', letterSpacing: '-0.03em' }}>{title}</div>
+            <div style={{ marginBottom: 'clamp(14px, 4vw, 20px)' }}>
+              <div style={{ fontSize: 'clamp(18px, 4.5vw, 26px)', fontWeight: 700, color: '#111827', letterSpacing: '-0.03em' }}>{title}</div>
               {subtitle && <div style={{ marginTop: 6, color: '#8a95a6', fontSize: 13 }}>{subtitle}</div>}
             </div>
           )}

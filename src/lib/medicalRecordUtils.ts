@@ -24,7 +24,7 @@ export interface RecordDateSection {
   records: MedicalRecord[]
 }
 
-export type HealthInfoFieldKind = 'text' | 'date' | 'select' | 'textarea'
+export type HealthInfoFieldKind = 'text' | 'date' | 'select' | 'textarea' | 'chips' | 'cards'
 
 export interface HealthInfoField {
   key: string
@@ -34,14 +34,22 @@ export interface HealthInfoField {
   required?: boolean
 }
 
+export interface HealthInfoStep {
+  question: string
+  fieldKeys: string[]
+}
+
 export interface HealthInfoTypeConfig {
   id: string
   label: string
   description: string
   accent: BadgeColor
   fields: HealthInfoField[]
+  steps: HealthInfoStep[]
   supportsAttachments: boolean
   requiresAttachment: boolean
+  uploadFirst?: boolean
+  isVoiceEntry?: boolean
 }
 
 export type HealthInfoValues = Record<string, string>
@@ -62,13 +70,18 @@ export const HEALTH_INFO_TYPES: HealthInfoTypeConfig[] = [
     fields: [
       { key: 'condition_name', label: 'Condition', kind: 'text', required: true },
       { key: 'date_diagnosed', label: 'Date diagnosed', kind: 'date' },
-      { key: 'status', label: 'Status', kind: 'select', options: [
+      { key: 'status', label: 'Status', kind: 'chips', options: [
         { value: 'active', label: 'Active' },
         { value: 'resolved', label: 'Resolved' },
         { value: 'unsure', label: 'Unsure' },
       ] },
       { key: 'facility', label: 'Facility', kind: 'text' },
       { key: 'provider', label: 'Provider', kind: 'text' },
+    ],
+    steps: [
+      { question: 'What condition or diagnosis is this?', fieldKeys: ['condition_name'] },
+      { question: "What's the status?", fieldKeys: ['status', 'date_diagnosed'] },
+      { question: 'Where was it diagnosed?', fieldKeys: ['facility', 'provider'] },
     ],
   },
   {
@@ -78,10 +91,15 @@ export const HEALTH_INFO_TYPES: HealthInfoTypeConfig[] = [
     accent: 'green',
     supportsAttachments: true,
     requiresAttachment: false,
+    uploadFirst: true,
     fields: [
       { key: 'test_name', label: 'Test name', kind: 'text', required: true },
       { key: 'date', label: 'Date', kind: 'date' },
       { key: 'laboratory_name', label: 'Laboratory name', kind: 'text' },
+    ],
+    steps: [
+      { question: 'What test was this?', fieldKeys: ['test_name'] },
+      { question: 'When and where was it done?', fieldKeys: ['date', 'laboratory_name'] },
     ],
   },
   {
@@ -99,6 +117,11 @@ export const HEALTH_INFO_TYPES: HealthInfoTypeConfig[] = [
       { key: 'end_date', label: 'End date', kind: 'date' },
       { key: 'prescribing_provider', label: 'Prescribing provider', kind: 'text' },
     ],
+    steps: [
+      { question: 'What medication are you taking?', fieldKeys: ['medication_name'] },
+      { question: 'How often do you take it?', fieldKeys: ['dosage', 'frequency'] },
+      { question: 'When did you start, and who prescribed it?', fieldKeys: ['start_date', 'end_date', 'prescribing_provider'] },
+    ],
   },
   {
     id: 'allergy',
@@ -109,18 +132,23 @@ export const HEALTH_INFO_TYPES: HealthInfoTypeConfig[] = [
     requiresAttachment: false,
     fields: [
       { key: 'allergy_name', label: 'Allergy', kind: 'text', required: true },
-      { key: 'category', label: 'Category', kind: 'select', options: [
+      { key: 'category', label: 'Category', kind: 'chips', options: [
         { value: 'food', label: 'Food' },
         { value: 'medication', label: 'Medication' },
         { value: 'environmental', label: 'Environmental' },
         { value: 'other', label: 'Other' },
       ] },
-      { key: 'severity', label: 'Severity', kind: 'select', options: [
+      { key: 'severity', label: 'Severity', kind: 'chips', options: [
         { value: 'mild', label: 'Mild' },
         { value: 'moderate', label: 'Moderate' },
         { value: 'severe', label: 'Severe' },
       ] },
       { key: 'symptoms', label: 'Symptoms', kind: 'text' },
+    ],
+    steps: [
+      { question: 'What are you allergic to?', fieldKeys: ['allergy_name'] },
+      { question: 'What category and how severe?', fieldKeys: ['category', 'severity'] },
+      { question: 'Any symptoms? (optional)', fieldKeys: ['symptoms'] },
     ],
   },
   {
@@ -134,6 +162,10 @@ export const HEALTH_INFO_TYPES: HealthInfoTypeConfig[] = [
       { key: 'vaccine_name', label: 'Vaccine', kind: 'text', required: true },
       { key: 'date', label: 'Date', kind: 'date' },
       { key: 'provider', label: 'Provider', kind: 'text' },
+    ],
+    steps: [
+      { question: 'Which vaccine did you receive?', fieldKeys: ['vaccine_name'] },
+      { question: 'When and where was it given?', fieldKeys: ['date', 'provider'] },
     ],
   },
   {
@@ -149,6 +181,10 @@ export const HEALTH_INFO_TYPES: HealthInfoTypeConfig[] = [
       { key: 'facility', label: 'Facility', kind: 'text' },
       { key: 'provider', label: 'Provider', kind: 'text' },
     ],
+    steps: [
+      { question: 'What procedure did you have?', fieldKeys: ['procedure_name'] },
+      { question: 'When and where was it done?', fieldKeys: ['date', 'facility', 'provider'] },
+    ],
   },
   {
     id: 'hospital_visit',
@@ -158,10 +194,21 @@ export const HEALTH_INFO_TYPES: HealthInfoTypeConfig[] = [
     supportsAttachments: true,
     requiresAttachment: false,
     fields: [
+      { key: 'visit_type', label: 'Visit type', kind: 'cards', options: [
+        { value: 'consultation', label: 'Consultation' },
+        { value: 'emergency', label: 'Emergency' },
+        { value: 'admission', label: 'Admission' },
+        { value: 'follow_up', label: 'Follow-up' },
+      ] },
       { key: 'facility', label: 'Facility', kind: 'text', required: true },
       { key: 'date', label: 'Date', kind: 'date' },
       { key: 'reason', label: 'Reason for visit', kind: 'text' },
       { key: 'provider', label: 'Provider', kind: 'text' },
+    ],
+    steps: [
+      { question: 'What type of visit was this?', fieldKeys: ['visit_type'] },
+      { question: 'Where and when was the visit?', fieldKeys: ['facility', 'date'] },
+      { question: 'Why did you visit?', fieldKeys: ['reason', 'provider'] },
     ],
   },
   {
@@ -171,7 +218,20 @@ export const HEALTH_INFO_TYPES: HealthInfoTypeConfig[] = [
     accent: 'gray',
     supportsAttachments: true,
     requiresAttachment: true,
+    uploadFirst: true,
     fields: [],
+    steps: [],
+  },
+  {
+    id: 'voice_note',
+    label: 'Voice Entry',
+    description: 'Record a quick voice note about your health.',
+    accent: 'gray',
+    supportsAttachments: false,
+    requiresAttachment: false,
+    isVoiceEntry: true,
+    fields: [],
+    steps: [],
   },
 ]
 
