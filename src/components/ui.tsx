@@ -409,11 +409,12 @@ export function BottomSheet({ open, onClose, title, children }: {
 
   function handlePointerDown(event: React.PointerEvent) {
     dragRef.current = { startY: event.clientY }
+    if (sheetRef.current) sheetRef.current.style.transition = 'none'
   }
   function handlePointerMove(event: React.PointerEvent) {
     if (!dragRef.current || !sheetRef.current) return
-    const delta = event.clientY - dragRef.current.startY
-    if (delta > 0) sheetRef.current.style.transform = `translateY(${delta}px)`
+    const delta = Math.max(0, event.clientY - dragRef.current.startY)
+    sheetRef.current.style.transform = `translateY(${delta}px)`
   }
   function handlePointerUp(event: React.PointerEvent) {
     if (!dragRef.current || !sheetRef.current) return
@@ -422,6 +423,7 @@ export function BottomSheet({ open, onClose, title, children }: {
     if (delta > 80) {
       onClose()
     } else {
+      sheetRef.current.style.transition = 'transform 0.2s ease'
       sheetRef.current.style.transform = ''
     }
   }

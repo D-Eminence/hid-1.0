@@ -194,7 +194,7 @@ export const HEALTH_INFO_TYPES: HealthInfoTypeConfig[] = [
     supportsAttachments: true,
     requiresAttachment: false,
     fields: [
-      { key: 'visit_type', label: 'Visit type', kind: 'cards', options: [
+      { key: 'visit_type', label: 'Visit type', kind: 'cards', required: true, options: [
         { value: 'consultation', label: 'Consultation' },
         { value: 'emergency', label: 'Emergency' },
         { value: 'admission', label: 'Admission' },
