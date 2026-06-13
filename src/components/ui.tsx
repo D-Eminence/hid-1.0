@@ -134,7 +134,7 @@ export function Input({
             padding: `0 ${rightPadding}px 0 ${leftPadding}px`,
             border: `1.5px solid ${error ? '#dc2626' : '#e5e7eb'}`,
             borderRadius: 8,
-            fontSize: 14,
+            fontSize: 16,
             color: '#111827',
             background: '#fff',
             outline: 'none',
@@ -213,7 +213,7 @@ export function Select({ label, error, options, placeholder = 'Select...', style
         <select style={{
           width: '100%', height: 42, padding: '0 36px 0 12px',
           border: `1.5px solid ${error ? '#dc2626' : '#e5e7eb'}`,
-          borderRadius: 8, fontSize: 14, color: '#111827', background: '#fff',
+          borderRadius: 8, fontSize: 16, color: '#111827', background: '#fff',
           appearance: 'none', outline: 'none', cursor: 'pointer', boxSizing: 'border-box', ...style
         }}
           onFocus={e => e.currentTarget.style.borderColor = '#1a6fd4'}
@@ -249,7 +249,7 @@ export function Textarea({ label, error, style, ...rest }: TextareaProps) {
       <textarea style={{
         width: '100%', padding: '10px 12px', minHeight: 96,
         border: `1.5px solid ${error ? '#dc2626' : '#e5e7eb'}`,
-        borderRadius: 8, fontSize: 14, color: '#111827', background: '#fff',
+        borderRadius: 8, fontSize: 16, color: '#111827', background: '#fff',
         outline: 'none', resize: 'vertical', lineHeight: 1.6, boxSizing: 'border-box', ...style
       }}
         onFocus={e => e.currentTarget.style.borderColor = '#1a6fd4'}
@@ -413,6 +413,13 @@ export function BottomSheet({ open, onClose, title, onBack, step, totalSteps, fo
     if (open) document.addEventListener('keydown', handler)
     return () => document.removeEventListener('keydown', handler)
   }, [open, onClose])
+
+  useEffect(() => {
+    if (!open) return
+    const previousOverflow = document.body.style.overflow
+    document.body.style.overflow = 'hidden'
+    return () => { document.body.style.overflow = previousOverflow }
+  }, [open])
 
   if (!open) return null
 
