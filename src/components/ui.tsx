@@ -283,8 +283,8 @@ export function Card({ children, style, padding = 24, onClick }: CardProps) {
 }
 
 // ── Badge ─────────────────────────────────────────────────────────────────────
-type BadgeColor = 'blue' | 'green' | 'red' | 'amber' | 'gray'
-const badgeMap: Record<BadgeColor, { bg: string; text: string }> = {
+export type BadgeColor = 'blue' | 'green' | 'red' | 'amber' | 'gray'
+export const badgeMap: Record<BadgeColor, { bg: string; text: string }> = {
   blue:  { bg: '#e8f1fc', text: '#1254a8' },
   green: { bg: '#dcfce7', text: '#15803d' },
   red:   { bg: '#fee2e2', text: '#b91c1c' },

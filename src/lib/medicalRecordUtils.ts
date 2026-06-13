@@ -1,3 +1,4 @@
+import type { BadgeColor } from '../components/ui'
 import type { MedicalRecord, MedicalRecordFile, RecordCategory } from '../types/database'
 import { formatDate, formatDateTime } from './utils'
 
@@ -37,7 +38,7 @@ export interface HealthInfoTypeConfig {
   id: string
   label: string
   description: string
-  accent: string
+  accent: BadgeColor
   fields: HealthInfoField[]
   supportsAttachments: boolean
   requiresAttachment: boolean
@@ -45,11 +46,9 @@ export interface HealthInfoTypeConfig {
 
 export type HealthInfoValues = Record<string, string>
 
-export type RecordSourceBadgeColor = 'blue' | 'green' | 'red' | 'amber' | 'gray'
-
 export interface RecordSourceBadgeInfo {
   label: string
-  color: RecordSourceBadgeColor
+  color: BadgeColor
 }
 
 export const HEALTH_INFO_TYPES: HealthInfoTypeConfig[] = [
@@ -57,7 +56,7 @@ export const HEALTH_INFO_TYPES: HealthInfoTypeConfig[] = [
     id: 'condition',
     label: 'Condition / Diagnosis',
     description: 'A diagnosed condition, illness, or ongoing health issue.',
-    accent: '#1877e6',
+    accent: 'blue',
     supportsAttachments: true,
     requiresAttachment: false,
     fields: [
@@ -76,7 +75,7 @@ export const HEALTH_INFO_TYPES: HealthInfoTypeConfig[] = [
     id: 'lab_result',
     label: 'Laboratory Result',
     description: 'Results from a lab test, such as blood work or imaging.',
-    accent: '#15803d',
+    accent: 'green',
     supportsAttachments: true,
     requiresAttachment: false,
     fields: [
@@ -89,7 +88,7 @@ export const HEALTH_INFO_TYPES: HealthInfoTypeConfig[] = [
     id: 'medication',
     label: 'Medication',
     description: 'A medication you are taking or have taken.',
-    accent: '#b45309',
+    accent: 'amber',
     supportsAttachments: false,
     requiresAttachment: false,
     fields: [
@@ -105,7 +104,7 @@ export const HEALTH_INFO_TYPES: HealthInfoTypeConfig[] = [
     id: 'allergy',
     label: 'Allergy',
     description: 'An allergy or sensitivity to a food, medication, or substance.',
-    accent: '#dc2626',
+    accent: 'red',
     supportsAttachments: false,
     requiresAttachment: false,
     fields: [
@@ -128,7 +127,7 @@ export const HEALTH_INFO_TYPES: HealthInfoTypeConfig[] = [
     id: 'vaccination',
     label: 'Vaccination',
     description: 'A vaccine or immunization you have received.',
-    accent: '#0ea5e9',
+    accent: 'blue',
     supportsAttachments: false,
     requiresAttachment: false,
     fields: [
@@ -141,7 +140,7 @@ export const HEALTH_INFO_TYPES: HealthInfoTypeConfig[] = [
     id: 'procedure',
     label: 'Surgery / Procedure',
     description: 'A surgery or medical procedure you have had.',
-    accent: '#7c3aed',
+    accent: 'gray',
     supportsAttachments: true,
     requiresAttachment: false,
     fields: [
@@ -155,7 +154,7 @@ export const HEALTH_INFO_TYPES: HealthInfoTypeConfig[] = [
     id: 'hospital_visit',
     label: 'Hospital Visit',
     description: 'A hospital admission, emergency visit, or appointment.',
-    accent: '#0f766e',
+    accent: 'green',
     supportsAttachments: true,
     requiresAttachment: false,
     fields: [
@@ -169,7 +168,7 @@ export const HEALTH_INFO_TYPES: HealthInfoTypeConfig[] = [
     id: 'document',
     label: 'Upload Existing Report',
     description: 'Upload an existing medical report, letter, or scan.',
-    accent: '#6b7280',
+    accent: 'gray',
     supportsAttachments: true,
     requiresAttachment: true,
     fields: [],

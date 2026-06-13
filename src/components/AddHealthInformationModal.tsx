@@ -1,5 +1,5 @@
 import React, { useState } from 'react'
-import { Button, Input, Modal, Select, Textarea, showToast } from './ui'
+import { badgeMap, Button, Input, Modal, Select, Textarea, showToast } from './ui'
 import { FileAttachmentPreview } from './RecordMarkdownView'
 import { VoiceToTextButton } from './VoiceToTextButton'
 import {
@@ -111,49 +111,56 @@ export function AddHealthInformationModal({
     <Modal open={open} onClose={handleClose} title={modalTitle} width={780}>
       {!selectedType ? (
         <div>
-          <p style={{ color: '#6b7280', fontSize: 13, marginTop: -4, marginBottom: 18 }}>
+          <p style={{ color: '#6b7280', fontSize: 13, marginTop: -4, marginBottom: 14 }}>
             Choose the type of health information you want to add to your record.
           </p>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 14 }}>
-            {HEALTH_INFO_TYPES.map(type => (
-              <button
-                key={type.id}
-                type="button"
-                onClick={() => selectType(type)}
-                style={{
-                  textAlign: 'left',
-                  borderRadius: 16,
-                  border: '1px solid #edf1f5',
-                  borderTop: `4px solid ${type.accent}`,
-                  background: '#fff',
-                  boxShadow: '0 8px 24px rgba(15, 23, 42, 0.04)',
-                  padding: 16,
-                  cursor: 'pointer',
-                  display: 'flex',
-                  flexDirection: 'column',
-                  gap: 8,
-                }}
-              >
-                <span
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+            {HEALTH_INFO_TYPES.map(type => {
+              const colors = badgeMap[type.accent]
+              return (
+                <button
+                  key={type.id}
+                  type="button"
+                  onClick={() => selectType(type)}
                   style={{
-                    width: 32,
-                    height: 32,
-                    borderRadius: 10,
-                    background: `${type.accent}1a`,
-                    color: type.accent,
-                    display: 'inline-flex',
+                    textAlign: 'left',
+                    borderRadius: 14,
+                    border: '1px solid #edf1f5',
+                    background: '#fff',
+                    padding: '12px 14px',
+                    cursor: 'pointer',
+                    display: 'flex',
                     alignItems: 'center',
-                    justifyContent: 'center',
-                    fontWeight: 700,
-                    fontSize: 14,
+                    gap: 12,
                   }}
                 >
-                  {type.label.charAt(0)}
-                </span>
-                <div style={{ fontWeight: 700, fontSize: 14, color: '#111827' }}>{type.label}</div>
-                <div style={{ fontSize: 12, color: '#6b7280', lineHeight: 1.5 }}>{type.description}</div>
-              </button>
-            ))}
+                  <span
+                    style={{
+                      width: 36,
+                      height: 36,
+                      borderRadius: 10,
+                      background: colors.bg,
+                      color: colors.text,
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      fontWeight: 700,
+                      fontSize: 14,
+                      flexShrink: 0,
+                    }}
+                  >
+                    {type.label.charAt(0)}
+                  </span>
+                  <span style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ fontWeight: 600, fontSize: 14, color: '#111827' }}>{type.label}</div>
+                    <div style={{ fontSize: 12, color: '#6b7280', marginTop: 2 }}>{type.description}</div>
+                  </span>
+                  <svg width="16" height="16" viewBox="0 0 16 16" fill="none" style={{ flexShrink: 0, color: '#c7ccd4' }} aria-hidden="true">
+                    <path d="M6 3l5 5-5 5" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
+                  </svg>
+                </button>
+              )
+            })}
           </div>
         </div>
       ) : (
