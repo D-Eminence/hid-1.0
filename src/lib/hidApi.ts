@@ -11,8 +11,11 @@ import type {
   HidPatientProfileResponse,
   HidPatientRecordsResponse,
   HidSessionPayload,
+  HidShareDurationPreset,
+  HidSharePermissionTier,
   HidStaffAccount,
   HidStaffDashboardResponse,
+  HidStaffSearchResult,
 } from '../types/hid'
 import type { UploadDraft } from './medicalRecordUtils'
 import { clearAllPortalSessions } from './auth'
@@ -133,8 +136,14 @@ type TotpEnrollment = {
   uri: string
 }
 
+export type LegacyAccessRequestWithShare = AccessRequest & {
+  permission_tier: HidSharePermissionTier | null
+  share_target_type: 'profile' | 'record' | 'health_event'
+  duration_preset: HidShareDurationPreset | null
+}
+
 type HistoryView = {
-  activeGrants: AccessRequest[]
+  activeGrants: LegacyAccessRequestWithShare[]
   logs: AccessLog[]
 }
 
@@ -921,7 +930,7 @@ function inferLegacyAccessType(scope: string, breakGlass = false): 'standard' | 
 function toLegacyAccessRequest(
   hidCode: string,
   entry: HidHistoryPendingRequest | HidHistoryActiveGrant
-): AccessRequest {
+): LegacyAccessRequestWithShare {
   const startTime = 'starts_at' in entry ? entry.starts_at : entry.created_at
   const endTime = 'expires_at' in entry ? entry.expires_at : null
   const durationHours = endTime
@@ -942,6 +951,9 @@ function toLegacyAccessRequest(
     duration_hours: durationHours,
     access_expires_at: 'expires_at' in entry ? entry.expires_at : null,
     created_at: startTime,
+    permission_tier: 'permission_tier' in entry ? entry.permission_tier : null,
+    share_target_type: 'share_target_type' in entry ? entry.share_target_type : 'profile',
+    duration_preset: 'duration_preset' in entry ? entry.duration_preset : null,
   }
 }
 
@@ -1055,6 +1067,10 @@ async function fetchPatientHistoryFromTables(hidCode: string): Promise<HistoryVi
     starts_at: row.starts_at,
     expires_at: row.expires_at,
     break_glass: row.scope === 'break_glass',
+    permission_tier: null,
+    share_target_type: 'profile',
+    share_target_id: null,
+    duration_preset: null,
   }))
 
   const logs = ((eventResult.data ?? []) as RawPatientHistoryEvent[]).map(row => {
@@ -1739,6 +1755,37 @@ export async function revokeAccessGrant(grantId: string, reason?: string) {
   invalidateViewCache('history:')
   invalidateViewCache('staff-dashboard:')
   return response
+}
+
+export async function searchStaffForShare(query: string): Promise<HidStaffSearchResult[]> {
+  const response = await edgeRequest<{ data: HidStaffSearchResult[] }>('staff-search', {
+    query: { query },
+  })
+  return response.data ?? []
+}
+
+export async function createShare({
+  staffAccountId,
+  permissionTier,
+  durationPreset,
+  reason,
+}: {
+  staffAccountId: string
+  permissionTier: HidSharePermissionTier
+  durationPreset: HidShareDurationPreset
+  reason?: string
+}) {
+  const response = await edgeRequest<{ data: { grant_id: string } }>('share-create', {
+    method: 'POST',
+    body: {
+      staffAccountId,
+      permissionTier,
+      durationPreset,
+      reason: normalizeOptionalText(reason),
+    },
+  })
+  invalidateViewCache('history:')
+  return response.data
 }
 
 export async function patientSignUpWithPassword(params: PendingPatientSignup & { password: string; captchaToken?: string | null }): Promise<{

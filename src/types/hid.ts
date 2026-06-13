@@ -3,6 +3,9 @@ export type HidStaffRole = 'doctor' | 'nurse' | 'lab' | 'pharmacist' | 'admin'
 export type HidAccessScope = 'read_records' | 'write_records' | 'break_glass'
 export type HidRequestStatus = 'pending' | 'approved' | 'denied' | 'revoked' | 'expired'
 export type HidGrantStatus = 'active' | 'revoked' | 'expired'
+export type HidSharePermissionTier = 'view_only' | 'clinical_review' | 'clinical_collaboration'
+export type HidShareDurationPreset = '24h' | '7d' | '30d' | 'until_revoked'
+export type HidShareTargetType = 'profile' | 'record' | 'health_event'
 
 export interface HidPatient {
   id: string
@@ -198,6 +201,17 @@ export interface HidHistoryActiveGrant {
   starts_at: string
   expires_at: string
   break_glass: boolean
+  permission_tier: HidSharePermissionTier | null
+  share_target_type: HidShareTargetType
+  share_target_id: string | null
+  duration_preset: HidShareDurationPreset | null
+}
+
+export interface HidStaffSearchResult {
+  staff_account_id: string
+  full_name: string
+  hospital_name: string | null
+  role: HidStaffRole
 }
 
 export interface HidHistoryEvent {

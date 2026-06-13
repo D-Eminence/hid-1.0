@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { PortalShell } from '../../components/PortalShell'
 import { Badge, Button, Card, Input, Modal, PageLoader, Textarea, showToast } from '../../components/ui'
+import { ShareProfileModal } from '../../components/ShareProfileModal'
 import { getPatientSession, signOutAndClearSessions } from '../../lib/auth'
 import { subscribeToAccessChanges } from '../../lib/accessRealtime'
 import { readPatientHistorySnapshot, readPatientProfileSnapshot, seedPatientHistoryCache, seedPatientProfileCache } from '../../lib/experienceWarmup'
@@ -9,9 +10,11 @@ import {
   fetchMyPatient,
   fetchPatientHistory,
   revokeAccessGrant,
+  type LegacyAccessRequestWithShare,
 } from '../../lib/hidApi'
+import { getSharePermissionTierBadge, getSharePermissionTierLabel, getShareDurationLabel } from '../../lib/shareUtils'
 import { formatDateTime, getAccessLogLabel } from '../../lib/utils'
-import type { AccessLog, AccessRequest, Patient } from '../../types/database'
+import type { AccessLog, Patient } from '../../types/database'
 
 const patientNav = [
   { path: '/patient/profile', label: 'Home' },
@@ -30,25 +33,25 @@ function timeAgo(input: string) {
   return `${diffDays} days ago`
 }
 
-function getRequestDuration(request: AccessRequest) {
+function getRequestDuration(request: LegacyAccessRequestWithShare) {
   if (request.duration_hours && request.duration_hours > 0) {
     return `Up to ${request.duration_hours} hour${request.duration_hours === 1 ? '' : 's'}`
   }
   return 'Until you respond'
 }
 
-function getAccessLabel(request: AccessRequest) {
+function getAccessLabel(request: LegacyAccessRequestWithShare) {
   return request.request_type === 'emergency' ? 'Emergency Access' : 'Standard Access'
 }
 
 type ActiveAccessGroup = {
-  grants: AccessRequest[]
+  grants: LegacyAccessRequestWithShare[]
   id: string
-  primary: AccessRequest
+  primary: LegacyAccessRequestWithShare
 }
 
-function groupActiveAccess(grants: AccessRequest[]): ActiveAccessGroup[] {
-  const groups = new Map<string, AccessRequest[]>()
+function groupActiveAccess(grants: LegacyAccessRequestWithShare[]): ActiveAccessGroup[] {
+  const groups = new Map<string, LegacyAccessRequestWithShare[]>()
 
   grants.forEach(grant => {
     const key = [
@@ -67,7 +70,7 @@ function groupActiveAccess(grants: AccessRequest[]): ActiveAccessGroup[] {
         return rightTime - leftTime
       })
 
-      const primary = sorted[0] as AccessRequest
+      const primary = sorted[0] as LegacyAccessRequestWithShare
 
       return {
         grants: sorted,
@@ -89,13 +92,14 @@ export default function PatientHistory() {
   ), [session])
   const [logs, setLogs] = useState<AccessLog[]>(() => cachedHistory?.logs ?? [])
   const [patient, setPatient] = useState<Patient | null>(() => cachedPatient)
-  const [activeGrants, setActiveGrants] = useState<AccessRequest[]>(() => cachedHistory?.activeGrants ?? [])
+  const [activeGrants, setActiveGrants] = useState<LegacyAccessRequestWithShare[]>(() => cachedHistory?.activeGrants ?? [])
   const [loading, setLoading] = useState(!cachedHistory && !cachedPatient)
   const [actingId, setActingId] = useState('')
   const [logSearch, setLogSearch] = useState('')
   const [logDate, setLogDate] = useState('')
   const [revokeGroup, setRevokeGroup] = useState<ActiveAccessGroup | null>(null)
   const [customRevokeReason, setCustomRevokeReason] = useState('')
+  const [shareModalOpen, setShareModalOpen] = useState(false)
 
   useEffect(() => {
     if (!session) {
@@ -218,8 +222,13 @@ export default function PatientHistory() {
       notificationHidCode={session.hidCode}
     >
       <Card style={{ borderRadius: 24, marginBottom: 18 }}>
-        <div style={{ fontSize: 24, fontWeight: 700, color: '#111827' }}>Active access</div>
-        <div style={{ color: '#8a95a6', marginTop: 6, fontSize: 13 }}>Providers that currently have access to your records.</div>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 16, flexWrap: 'wrap' }}>
+          <div>
+            <div style={{ fontSize: 24, fontWeight: 700, color: '#111827' }}>Active access</div>
+            <div style={{ color: '#8a95a6', marginTop: 6, fontSize: 13 }}>Providers that currently have access to your records.</div>
+          </div>
+          <Button onClick={() => setShareModalOpen(true)}>Share my profile</Button>
+        </div>
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(248px, 1fr))', gap: 18, marginTop: 24 }}>
           {activeAccessGroups.map(group => {
             const request = group.primary
@@ -254,6 +263,13 @@ export default function PatientHistory() {
                   >
                     {getAccessLabel(request)}
                   </span>
+                  {request.permission_tier && (
+                    <span style={{ marginLeft: 8 }}>
+                      <Badge color={getSharePermissionTierBadge(request.permission_tier)}>
+                        {getSharePermissionTierLabel(request.permission_tier)}{request.duration_preset ? ` · ${getShareDurationLabel(request.duration_preset)}` : ''}
+                      </Badge>
+                    </span>
+                  )}
                   <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginTop: 14, paddingBottom: 12, borderBottom: '1px solid #f1f5f9' }}>
                     <span
                       style={{
@@ -408,6 +424,12 @@ export default function PatientHistory() {
           </div>
         )}
       </Modal>
+
+      <ShareProfileModal
+        open={shareModalOpen}
+        onClose={() => setShareModalOpen(false)}
+        onShared={() => void loadHistoryData(true)}
+      />
     </PortalShell>
   )
 }
