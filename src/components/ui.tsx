@@ -393,8 +393,9 @@ export function Modal({ open, onClose, title, children, width = 480 }: {
 }
 
 // ── Bottom Sheet ──────────────────────────────────────────────────────────────
-export function BottomSheet({ open, onClose, title, children }: {
-  open: boolean; onClose: () => void; title: string; children: React.ReactNode
+export function BottomSheet({ open, onClose, title, onBack, step, totalSteps, footer, children }: {
+  open: boolean; onClose: () => void; title: string; onBack?: () => void
+  step?: number; totalSteps?: number; footer?: React.ReactNode; children: React.ReactNode
 }) {
   const sheetRef = useRef<HTMLDivElement>(null)
   const dragRef = useRef<{ startY: number } | null>(null)
@@ -471,22 +472,53 @@ export function BottomSheet({ open, onClose, title, children }: {
             style={{ padding: 'clamp(10px, 3vw, 14px) clamp(16px, 4vw, 24px) 14px', cursor: 'grab', touchAction: 'none', flexShrink: 0 }}
           >
             <div style={{ width: 40, height: 4, borderRadius: 999, background: '#e5e7eb', margin: '0 auto 14px' }} />
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
-              <h3 style={{ fontSize: 16, fontWeight: 700, minWidth: 0, overflowWrap: 'anywhere' }}>{title}</h3>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+              {onBack && (
+                <button onClick={onBack} aria-label="Back" style={{ background: 'none', border: 'none', color: '#374151', padding: 4, borderRadius: 6, display: 'flex', alignItems: 'center', flexShrink: 0 }}>
+                  <svg width="20" height="20" viewBox="0 0 20 20" fill="none"><path d="M12 4l-6 6 6 6" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"/></svg>
+                </button>
+              )}
+              <h3 style={{ fontSize: 16, fontWeight: 700, flex: 1, minWidth: 0, overflowWrap: 'anywhere' }}>{title}</h3>
               <button onClick={onClose} aria-label="Close" style={{ background: 'none', border: 'none', color: '#9ca3af', padding: 4, borderRadius: 6, display: 'flex', alignItems: 'center', flexShrink: 0 }}>
                 <svg width="18" height="18" viewBox="0 0 18 18" fill="none"><path d="M4 4l10 10M14 4L4 14" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"/></svg>
               </button>
             </div>
+            {step !== undefined && totalSteps !== undefined && totalSteps > 1 && (
+              <div style={{ display: 'flex', gap: 4, marginTop: 12 }}>
+                {Array.from({ length: totalSteps }).map((_, index) => (
+                  <span key={index} style={{ flex: 1, height: 3, borderRadius: 999, background: index <= step ? '#1a6fd4' : '#e5e7eb' }} />
+                ))}
+              </div>
+            )}
           </div>
         ) : (
-          <div style={{ padding: '20px 24px', borderBottom: '1px solid #edf1f5', flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
-            <h3 style={{ fontSize: 16, fontWeight: 700, minWidth: 0, overflowWrap: 'anywhere' }}>{title}</h3>
-            <button onClick={onClose} aria-label="Close" style={{ background: 'none', border: 'none', color: '#9ca3af', padding: 4, borderRadius: 6, display: 'flex', alignItems: 'center', flexShrink: 0 }}>
-              <svg width="18" height="18" viewBox="0 0 18 18" fill="none"><path d="M4 4l10 10M14 4L4 14" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"/></svg>
-            </button>
+          <div style={{ padding: '20px 24px', borderBottom: '1px solid #edf1f5', flexShrink: 0 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+              {onBack && (
+                <button onClick={onBack} aria-label="Back" style={{ background: 'none', border: 'none', color: '#374151', padding: 4, borderRadius: 6, display: 'flex', alignItems: 'center', flexShrink: 0 }}>
+                  <svg width="20" height="20" viewBox="0 0 20 20" fill="none"><path d="M12 4l-6 6 6 6" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"/></svg>
+                </button>
+              )}
+              <h3 style={{ fontSize: 16, fontWeight: 700, flex: 1, minWidth: 0, overflowWrap: 'anywhere' }}>{title}</h3>
+              <button onClick={onClose} aria-label="Close" style={{ background: 'none', border: 'none', color: '#9ca3af', padding: 4, borderRadius: 6, display: 'flex', alignItems: 'center', flexShrink: 0 }}>
+                <svg width="18" height="18" viewBox="0 0 18 18" fill="none"><path d="M4 4l10 10M14 4L4 14" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"/></svg>
+              </button>
+            </div>
+            {step !== undefined && totalSteps !== undefined && totalSteps > 1 && (
+              <div style={{ display: 'flex', gap: 4, marginTop: 12 }}>
+                {Array.from({ length: totalSteps }).map((_, index) => (
+                  <span key={index} style={{ flex: 1, height: 3, borderRadius: 999, background: index <= step ? '#1a6fd4' : '#e5e7eb' }} />
+                ))}
+              </div>
+            )}
           </div>
         )}
         <div style={{ padding: isCompact ? '0 clamp(16px, 4vw, 24px) clamp(16px, 4vw, 24px)' : '0 24px 24px', overflowY: 'auto', flex: 1 }}>{children}</div>
+        {footer && (
+          <div style={{ borderTop: '1px solid #e5e7eb', padding: 'clamp(12px, 4vw, 20px) clamp(16px, 4vw, 24px)', display: 'flex', gap: 12, justifyContent: 'flex-end', flexShrink: 0 }}>
+            {footer}
+          </div>
+        )}
       </div>
     </div>
   )
@@ -581,54 +613,3 @@ export function SelectionCardGrid({ options, value, onChange }: {
   )
 }
 
-// ── Full Screen Flow ─────────────────────────────────────────────────────────
-export function FullScreenFlow({ open, title, onBack, onClose, step, totalSteps, children, footer }: {
-  open: boolean
-  title: string
-  onBack?: () => void
-  onClose: () => void
-  step?: number
-  totalSteps?: number
-  children: React.ReactNode
-  footer?: React.ReactNode
-}) {
-  useEffect(() => {
-    const handler = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose() }
-    if (open) document.addEventListener('keydown', handler)
-    return () => document.removeEventListener('keydown', handler)
-  }, [open, onClose])
-
-  if (!open) return null
-
-  return (
-    <div style={{ position: 'fixed', inset: 0, background: '#fff', zIndex: 1100, display: 'flex', flexDirection: 'column', animation: 'fullScreenIn 0.2s ease' }}>
-      <style>{`@keyframes fullScreenIn{from{opacity:0;transform:translateY(12px)}to{opacity:1;transform:translateY(0)}}`}</style>
-      <div style={{ padding: 'clamp(14px, 4vw, 20px) clamp(16px, 4vw, 24px)', borderBottom: '1px solid #e5e7eb', flexShrink: 0 }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-          {onBack ? (
-            <button onClick={onBack} aria-label="Back" style={{ background: 'none', border: 'none', color: '#374151', padding: 4, borderRadius: 6, display: 'flex', alignItems: 'center', flexShrink: 0 }}>
-              <svg width="20" height="20" viewBox="0 0 20 20" fill="none"><path d="M12 4l-6 6 6 6" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"/></svg>
-            </button>
-          ) : <span style={{ width: 28, flexShrink: 0 }} />}
-          <h3 style={{ fontSize: 16, fontWeight: 700, flex: 1, minWidth: 0, overflowWrap: 'anywhere', textAlign: 'center' }}>{title}</h3>
-          <button onClick={onClose} aria-label="Close" style={{ background: 'none', border: 'none', color: '#9ca3af', padding: 4, borderRadius: 6, display: 'flex', alignItems: 'center', flexShrink: 0 }}>
-            <svg width="18" height="18" viewBox="0 0 18 18" fill="none"><path d="M4 4l10 10M14 4L4 14" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"/></svg>
-          </button>
-        </div>
-        {step !== undefined && totalSteps !== undefined && totalSteps > 1 && (
-          <div style={{ display: 'flex', gap: 4, marginTop: 12 }}>
-            {Array.from({ length: totalSteps }).map((_, index) => (
-              <span key={index} style={{ flex: 1, height: 3, borderRadius: 999, background: index <= step ? '#1a6fd4' : '#e5e7eb' }} />
-            ))}
-          </div>
-        )}
-      </div>
-      <div style={{ flex: 1, overflowY: 'auto', padding: 'clamp(16px, 4vw, 24px)' }}>{children}</div>
-      {footer && (
-        <div style={{ borderTop: '1px solid #e5e7eb', padding: 'clamp(12px, 4vw, 20px) clamp(16px, 4vw, 24px)', display: 'flex', gap: 12, justifyContent: 'flex-end', flexShrink: 0 }}>
-          {footer}
-        </div>
-      )}
-    </div>
-  )
-}

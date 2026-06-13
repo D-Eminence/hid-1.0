@@ -1,5 +1,5 @@
 import React, { useMemo, useState } from 'react'
-import { Button, ChipGroup, FullScreenFlow, Input, Select, SelectionCardGrid, Textarea, showToast } from './ui'
+import { BottomSheet, Button, ChipGroup, Input, Select, SelectionCardGrid, Textarea, showToast } from './ui'
 import { FileAttachmentPreview } from './RecordMarkdownView'
 import { VoiceToTextButton } from './VoiceToTextButton'
 import {
@@ -374,7 +374,7 @@ export function HealthInfoFlow({
   }
 
   return (
-    <FullScreenFlow
+    <BottomSheet
       open={open}
       title={type.label}
       onBack={goBack}
@@ -401,6 +401,6 @@ export function HealthInfoFlow({
       {currentStep.kind === 'upload' && renderUploadStep()}
       {currentStep.kind === 'fields' && renderFieldsStep(currentStep.step)}
       {currentStep.kind === 'details' && renderDetailsStep()}
-    </FullScreenFlow>
+    </BottomSheet>
   )
 }
