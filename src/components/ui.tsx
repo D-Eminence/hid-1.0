@@ -398,6 +398,14 @@ export function BottomSheet({ open, onClose, title, children }: {
 }) {
   const sheetRef = useRef<HTMLDivElement>(null)
   const dragRef = useRef<{ startY: number } | null>(null)
+  const [isCompact, setIsCompact] = useState(() => (typeof window !== 'undefined' ? window.innerWidth < 720 : true))
+
+  useEffect(() => {
+    const handleResize = () => setIsCompact(window.innerWidth < 720)
+    handleResize()
+    window.addEventListener('resize', handleResize)
+    return () => window.removeEventListener('resize', handleResize)
+  }, [])
 
   useEffect(() => {
     const handler = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose() }
@@ -430,36 +438,55 @@ export function BottomSheet({ open, onClose, title, children }: {
 
   return (
     <div
-      style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.45)', zIndex: 1000, display: 'flex', alignItems: 'flex-end', justifyContent: 'center' }}
+      style={{
+        position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.45)', zIndex: 1000,
+        display: 'flex',
+        alignItems: isCompact ? 'flex-end' : 'stretch',
+        justifyContent: isCompact ? 'center' : 'flex-end',
+      }}
       onClick={e => { if (e.target === e.currentTarget) onClose() }}
     >
       <div
         ref={sheetRef}
-        style={{
+        style={isCompact ? {
           background: '#fff', width: '100%', maxWidth: 560,
-          borderRadius: '20px 20px 0 0', maxHeight: '92vh', minHeight: '40vh',
+          borderRadius: '20px 20px 0 0', height: '65vh', maxHeight: '65vh',
           display: 'flex', flexDirection: 'column',
           boxShadow: '0 -10px 40px rgba(0,0,0,0.15)',
           animation: 'sheetIn 0.25s ease', transition: 'transform 0.2s ease',
+        } : {
+          background: '#fff', width: 'min(420px, 100%)', height: '100vh',
+          display: 'flex', flexDirection: 'column',
+          boxShadow: '-10px 0 40px rgba(0,0,0,0.12)',
+          animation: 'drawerIn 0.25s ease',
         }}
       >
-        <style>{`@keyframes sheetIn{from{transform:translateY(100%)}to{transform:translateY(0)}}`}</style>
-        <div
-          onPointerDown={handlePointerDown}
-          onPointerMove={handlePointerMove}
-          onPointerUp={handlePointerUp}
-          onPointerCancel={handlePointerUp}
-          style={{ padding: 'clamp(10px, 3vw, 14px) clamp(16px, 4vw, 24px) 14px', cursor: 'grab', touchAction: 'none', flexShrink: 0 }}
-        >
-          <div style={{ width: 40, height: 4, borderRadius: 999, background: '#e5e7eb', margin: '0 auto 14px' }} />
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
+        <style>{`@keyframes sheetIn{from{transform:translateY(100%)}to{transform:translateY(0)}}@keyframes drawerIn{from{transform:translateX(100%)}to{transform:translateX(0)}}`}</style>
+        {isCompact ? (
+          <div
+            onPointerDown={handlePointerDown}
+            onPointerMove={handlePointerMove}
+            onPointerUp={handlePointerUp}
+            onPointerCancel={handlePointerUp}
+            style={{ padding: 'clamp(10px, 3vw, 14px) clamp(16px, 4vw, 24px) 14px', cursor: 'grab', touchAction: 'none', flexShrink: 0 }}
+          >
+            <div style={{ width: 40, height: 4, borderRadius: 999, background: '#e5e7eb', margin: '0 auto 14px' }} />
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
+              <h3 style={{ fontSize: 16, fontWeight: 700, minWidth: 0, overflowWrap: 'anywhere' }}>{title}</h3>
+              <button onClick={onClose} aria-label="Close" style={{ background: 'none', border: 'none', color: '#9ca3af', padding: 4, borderRadius: 6, display: 'flex', alignItems: 'center', flexShrink: 0 }}>
+                <svg width="18" height="18" viewBox="0 0 18 18" fill="none"><path d="M4 4l10 10M14 4L4 14" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"/></svg>
+              </button>
+            </div>
+          </div>
+        ) : (
+          <div style={{ padding: '20px 24px', borderBottom: '1px solid #edf1f5', flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
             <h3 style={{ fontSize: 16, fontWeight: 700, minWidth: 0, overflowWrap: 'anywhere' }}>{title}</h3>
             <button onClick={onClose} aria-label="Close" style={{ background: 'none', border: 'none', color: '#9ca3af', padding: 4, borderRadius: 6, display: 'flex', alignItems: 'center', flexShrink: 0 }}>
               <svg width="18" height="18" viewBox="0 0 18 18" fill="none"><path d="M4 4l10 10M14 4L4 14" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"/></svg>
             </button>
           </div>
-        </div>
-        <div style={{ padding: '0 clamp(16px, 4vw, 24px) clamp(16px, 4vw, 24px)', overflowY: 'auto', flex: 1 }}>{children}</div>
+        )}
+        <div style={{ padding: isCompact ? '0 clamp(16px, 4vw, 24px) clamp(16px, 4vw, 24px)' : '0 24px 24px', overflowY: 'auto', flex: 1 }}>{children}</div>
       </div>
     </div>
   )
