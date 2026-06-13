@@ -1,11 +1,11 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { PortalShell } from '../../components/PortalShell'
-import { Badge, Button, Card, EmptyState, Input, PageLoader, showToast } from '../../components/ui'
+import { Badge, Card, EmptyState, Input, Modal, PageLoader, showToast } from '../../components/ui'
 import { MedicalRecordMarkdownView } from '../../components/RecordMarkdownView'
+import { RecordSummaryCard } from '../../components/RecordSummaryCard'
 import { AddHealthInformationModal, type HealthInformationSubmission } from '../../components/AddHealthInformationModal'
 import { HealthEventTimeline } from '../../components/HealthEventTimeline'
-import { CreateHealthEventModal } from '../../components/CreateHealthEventModal'
 import { getPatientSession, signOutAndClearSessions } from '../../lib/auth'
 import { readPatientRecordsSnapshot, seedPatientProfileCache, seedPatientRecordsCache } from '../../lib/experienceWarmup'
 import {
@@ -13,9 +13,11 @@ import {
   buildOptimisticMedicalRecord,
   countAllRecordAttachments,
   filterRecordsByQuery,
+  filterRecordsWithDocuments,
   getInvalidRecordUploadNames,
   groupRecordsByDay,
   inferLegacyCategoryFromInfoType,
+  isMedicationRecord,
   type UploadDraft,
 } from '../../lib/medicalRecordUtils'
 import { sortHealthEvents } from '../../lib/healthEventUtils'
@@ -40,6 +42,14 @@ const patientNav = [
   { path: '/patient/notifications', label: 'Notifications' },
 ]
 
+type RecordsTab = 'history' | 'documents' | 'medication'
+
+const RECORDS_TABS: { id: RecordsTab; label: string }[] = [
+  { id: 'history', label: 'Medical History' },
+  { id: 'documents', label: 'Medical Documents' },
+  { id: 'medication', label: 'Medication' },
+]
+
 export default function PatientRecords() {
   const navigate = useNavigate()
   const session = useMemo(() => getPatientSession(), [])
@@ -56,7 +66,8 @@ export default function PatientRecords() {
   const [search, setSearch] = useState('')
   const [uploads, setUploads] = useState<UploadDraft[]>([])
   const [healthEvents, setHealthEvents] = useState<HidHealthEvent[]>([])
-  const [createEventOpen, setCreateEventOpen] = useState(false)
+  const [activeTab, setActiveTab] = useState<RecordsTab>('history')
+  const [selectedRecordId, setSelectedRecordId] = useState<string | null>(null)
   const saveLockRef = useRef(false)
 
   useEffect(() => {
@@ -93,14 +104,6 @@ export default function PatientRecords() {
     }
   }
 
-  async function handleCreateHealthEvent({ title, infoCategory, recordIds }: { title: string; infoCategory: string; recordIds: string[] }) {
-    if (!session) return
-    await createHealthEvent({ patientIdentifier: session.hidCode, title, infoCategory, recordIds })
-    const events = await fetchPatientHealthEvents(session.hidCode, { forceRefresh: true })
-    setHealthEvents(sortHealthEvents(events))
-    showToast('Health event created.', 'success')
-  }
-
   async function handleAddRecordToEvent(eventId: string, recordId: string) {
     if (!session) return
     await addRecordToHealthEvent(eventId, recordId)
@@ -122,7 +125,7 @@ export default function PatientRecords() {
     setHealthEvents(sortHealthEvents(events))
   }
 
-  async function handleToggleHealthEventStatus(eventId: string, status: HidHealthEventStatus) {
+  async function handleSetHealthEventStatus(eventId: string, status: HidHealthEventStatus) {
     if (!session) return
     await setHealthEventStatus(eventId, status)
     const events = await fetchPatientHealthEvents(session.hidCode, { forceRefresh: true })
@@ -195,7 +198,7 @@ export default function PatientRecords() {
     setOpen(false)
     setUploads([])
     try {
-      await createMedicalRecordWithUploads({
+      const created = await createMedicalRecordWithUploads({
         patientIdentifier: session.hidCode,
         title: submission.title,
         category,
@@ -207,6 +210,25 @@ export default function PatientRecords() {
       })
       await loadPageData(true)
       showToast('Health information saved.', 'success')
+
+      if (submission.healthEvent.mode !== 'none') {
+        try {
+          if (submission.healthEvent.mode === 'new') {
+            await createHealthEvent({
+              patientIdentifier: session.hidCode,
+              title: submission.healthEvent.title,
+              infoCategory: submission.healthEvent.infoCategory,
+              recordIds: [created.record_id],
+            })
+          } else {
+            await addRecordToHealthEvent(submission.healthEvent.eventId, created.record_id)
+          }
+          const events = await fetchPatientHealthEvents(session.hidCode, { forceRefresh: true })
+          setHealthEvents(sortHealthEvents(events))
+        } catch {
+          showToast('Health information saved, but adding it to the health event failed — you can add it manually.', 'error')
+        }
+      }
     } catch (error) {
       setRecords(current => current.filter(item => item.id !== optimisticEntry.record.id))
       setRecordFiles(current => {
@@ -227,7 +249,13 @@ export default function PatientRecords() {
   }
 
   const filteredRecords = useMemo(() => filterRecordsByQuery(records, search), [records, search])
-  const recordSections = useMemo(() => groupRecordsByDay(filteredRecords), [filteredRecords])
+  const tabRecords = useMemo(() => {
+    if (activeTab === 'documents') return filterRecordsWithDocuments(filteredRecords, recordFiles)
+    if (activeTab === 'medication') return filteredRecords.filter(isMedicationRecord)
+    return filteredRecords
+  }, [activeTab, filteredRecords, recordFiles])
+  const tabSections = useMemo(() => groupRecordsByDay(tabRecords), [tabRecords])
+  const selectedRecord = useMemo(() => records.find(record => record.id === selectedRecordId) ?? null, [records, selectedRecordId])
   const totalFiles = useMemo(() => countAllRecordAttachments(records, recordFiles), [recordFiles, records])
   const latestRecord = records[0]
   const resultSummary = `${filteredRecords.length} record${filteredRecords.length === 1 ? '' : 's'} shown in newest to oldest order.`
@@ -272,15 +300,12 @@ export default function PatientRecords() {
         </div>
       </div>
 
-      <Card style={{ borderRadius: 24, marginBottom: 18, background: 'linear-gradient(180deg, #fbfdff 0%, #f4f9ff 100%)', borderColor: '#dbe8f8' }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 16, flexWrap: 'wrap' }}>
-          <div>
-            <div style={{ fontSize: 24, fontWeight: 700, color: '#111827' }}>Saved medical records</div>
-            <div style={{ color: '#6b7280', fontSize: 13, marginTop: 8, maxWidth: 520 }}>
-              New records appear first. You can search by date, record title, or any keyword saved in a record.
-            </div>
+      <Card style={{ borderRadius: 16, marginBottom: 18, background: 'linear-gradient(180deg, #fbfdff 0%, #f4f9ff 100%)', borderColor: '#dbe8f8' }}>
+        <div>
+          <div style={{ fontSize: 24, fontWeight: 700, color: '#111827' }}>Saved medical records</div>
+          <div style={{ color: '#6b7280', fontSize: 13, marginTop: 8, maxWidth: 520 }}>
+            New records appear first. You can search by date, record title, or any keyword saved in a record.
           </div>
-          <Button onClick={() => setOpen(true)}>Add health information</Button>
         </div>
 
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 14, marginTop: 20 }}>
@@ -300,53 +325,121 @@ export default function PatientRecords() {
         </div>
       </Card>
 
-      <HealthEventTimeline
-        events={healthEvents}
-        records={records}
-        onCreateEvent={() => setCreateEventOpen(true)}
-        onAddRecord={handleAddRecordToEvent}
-        onRemoveRecord={handleRemoveRecordFromEvent}
-        onRename={handleRenameHealthEvent}
-        onToggleStatus={handleToggleHealthEventStatus}
-      />
+      <div style={{ marginBottom: 18 }}>
+        <div style={{ display: 'inline-flex', gap: 8, background: '#f6f7f8', borderRadius: 999, padding: 8 }}>
+          {RECORDS_TABS.map(tab => (
+            <button
+              key={tab.id}
+              type="button"
+              onClick={() => setActiveTab(tab.id)}
+              style={{
+                border: 'none',
+                borderRadius: 999,
+                padding: '8px 16px',
+                fontSize: 12,
+                fontWeight: 500,
+                cursor: 'pointer',
+                background: activeTab === tab.id ? '#fff' : 'transparent',
+                color: activeTab === tab.id ? '#1891ff' : '#484f58',
+                boxShadow: activeTab === tab.id ? '0px 2px 2px #fafafa' : 'none',
+              }}
+            >
+              {tab.label}
+            </button>
+          ))}
+        </div>
+      </div>
 
       {records.length === 0 ? (
-        <Card style={{ borderRadius: 24 }}>
+        <Card style={{ borderRadius: 16 }}>
           <EmptyState
             icon={<span style={{ fontSize: 28 }}>[]</span>}
             title="No medical records yet"
             description="Add your first piece of health information: a condition, lab result, medication, allergy, vaccination, procedure, hospital visit, or report."
-            action={<Button onClick={() => setOpen(true)}>Add health information</Button>}
-          />
-        </Card>
-      ) : recordSections.length === 0 ? (
-        <Card style={{ borderRadius: 24 }}>
-          <EmptyState
-            icon={<span style={{ fontSize: 28 }}>[]</span>}
-            title="No records match your search"
-            description="Try a different date, title, or keyword."
           />
         </Card>
       ) : (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>
-          {recordSections.map(section => (
-            <Card key={section.key} style={{ borderRadius: 24 }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12, marginBottom: 18, flexWrap: 'wrap' }}>
-                <div style={{ fontSize: 20, fontWeight: 700, color: '#111827' }}>{section.label}</div>
-                <Badge color="blue">{section.records.length} saved</Badge>
-              </div>
+        <>
+          {activeTab === 'history' && (
+            <HealthEventTimeline
+              events={healthEvents}
+              records={records}
+              onSelectRecord={recordId => setSelectedRecordId(recordId)}
+              onAddRecord={handleAddRecordToEvent}
+              onRemoveRecord={handleRemoveRecordFromEvent}
+              onRename={handleRenameHealthEvent}
+              onSetStatus={handleSetHealthEventStatus}
+            />
+          )}
 
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: 18 }}>
-                {section.records.map(record => (
-                  <div key={record.id} style={{ border: '1px solid #edf1f5', borderRadius: 18, padding: 14, background: '#fff' }}>
-                    <MedicalRecordMarkdownView record={record} attachments={recordFiles[record.id] ?? []} />
-                  </div>
-                ))}
-              </div>
+          {filteredRecords.length === 0 ? (
+            <Card style={{ borderRadius: 16 }}>
+              <EmptyState
+                icon={<span style={{ fontSize: 28 }}>[]</span>}
+                title="No records match your search"
+                description="Try a different date, title, or keyword."
+              />
             </Card>
-          ))}
-        </div>
+          ) : tabSections.length === 0 ? (
+            <Card style={{ borderRadius: 16 }}>
+              <EmptyState
+                icon={<span style={{ fontSize: 28 }}>[]</span>}
+                title={activeTab === 'documents' ? 'No medical documents yet' : 'No medication records yet'}
+                description={activeTab === 'documents'
+                  ? 'Records with attached files, like lab results or reports, will appear here.'
+                  : 'Medications you add will appear here.'}
+              />
+            </Card>
+          ) : (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>
+              {tabSections.map(section => (
+                <Card key={section.key} style={{ borderRadius: 16 }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12, marginBottom: 18, flexWrap: 'wrap' }}>
+                    <div style={{ fontSize: 20, fontWeight: 700, color: '#111827' }}>{section.label}</div>
+                    <Badge color="blue">{section.records.length} saved</Badge>
+                  </div>
+
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 18 }}>
+                    {section.records.map(record => (
+                      <RecordSummaryCard
+                        key={record.id}
+                        record={record}
+                        attachments={recordFiles[record.id] ?? []}
+                        onClick={() => setSelectedRecordId(record.id)}
+                      />
+                    ))}
+                  </div>
+                </Card>
+              ))}
+            </div>
+          )}
+        </>
       )}
+
+      <div style={{ position: 'sticky', bottom: 20, display: 'flex', justifyContent: 'flex-end', marginTop: 24, pointerEvents: 'none' }}>
+        <button
+          type="button"
+          onClick={() => setOpen(true)}
+          style={{
+            pointerEvents: 'auto',
+            display: 'inline-flex',
+            alignItems: 'center',
+            gap: 8,
+            background: '#1891ff',
+            color: '#fff',
+            border: 'none',
+            borderRadius: 999,
+            padding: '14px 22px',
+            fontSize: 14,
+            fontWeight: 600,
+            cursor: 'pointer',
+            boxShadow: '0 16px 32px rgba(24, 145, 255, 0.35)',
+          }}
+        >
+          <PlusCircleIcon />
+          New Health Record
+        </button>
+      </div>
 
       <AddHealthInformationModal
         open={open}
@@ -354,26 +447,35 @@ export default function PatientRecords() {
         saving={saving}
         preparingUploads={preparingUploads}
         uploads={uploads}
+        healthEvents={healthEvents}
         onAttachment={onAttachment}
         onRemoveUpload={removeUpload}
         onSubmit={saveHealthInformation}
       />
 
-      <CreateHealthEventModal
-        open={createEventOpen}
-        onClose={() => setCreateEventOpen(false)}
-        records={records}
-        onSubmit={handleCreateHealthEvent}
-      />
+      <Modal open={Boolean(selectedRecord)} onClose={() => setSelectedRecordId(null)} title={selectedRecord?.title ?? 'Record details'} width={640}>
+        {selectedRecord && (
+          <MedicalRecordMarkdownView record={selectedRecord} attachments={recordFiles[selectedRecord.id] ?? []} />
+        )}
+      </Modal>
     </PortalShell>
   )
 }
 
 function StatCard({ label, value }: { label: string; value: string }) {
   return (
-    <div style={{ borderRadius: 18, border: '1px solid #dbe8f8', background: '#fff', padding: 16 }}>
+    <div style={{ borderRadius: 12, border: '1px solid #dbe8f8', background: '#fff', padding: 16 }}>
       <div style={{ color: '#6b7280', fontSize: 12 }}>{label}</div>
       <div style={{ marginTop: 8, fontSize: 18, fontWeight: 700, color: '#111827' }}>{value}</div>
     </div>
+  )
+}
+
+function PlusCircleIcon() {
+  return (
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+      <circle cx="12" cy="12" r="9" stroke="currentColor" strokeWidth="1.8" />
+      <path d="M12 8v8M8 12h8" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
+    </svg>
   )
 }

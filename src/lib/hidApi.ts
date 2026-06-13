@@ -2,6 +2,7 @@ import type { Session } from '@supabase/supabase-js'
 import type { AccessLog, AccessRequest, MedicalRecord, MedicalRecordFile, Notification, Patient } from '../types/database'
 import type {
   HidHealthEvent,
+  HidHealthEventStatus,
   HidHistoryActiveGrant,
   HidHistoryEvent,
   HidHistoryPendingRequest,
@@ -1667,10 +1668,10 @@ export async function renameHealthEvent(healthEventId: string, title: string) {
   return result.data
 }
 
-export async function setHealthEventStatus(healthEventId: string, status: 'open' | 'closed') {
+export async function setHealthEventStatus(healthEventId: string, status: HidHealthEventStatus) {
   const result = await edgeRequest<{ data: { ok: boolean } }>('health-event-update', {
     method: 'POST',
-    body: { healthEventId, action: status === 'closed' ? 'close' : 'reopen' },
+    body: { healthEventId, action: 'set_status', status },
   })
 
   invalidateViewCache('health-events:')

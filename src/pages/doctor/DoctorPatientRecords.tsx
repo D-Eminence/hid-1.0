@@ -1,11 +1,10 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { HospitalLayout } from '../../components/HospitalLayout'
-import { Badge, Button, Card, EmptyState, Input, PageLoader, showToast } from '../../components/ui'
+import { Badge, Button, Card, EmptyState, Input, Modal, PageLoader, showToast } from '../../components/ui'
 import { MedicalRecordMarkdownView } from '../../components/RecordMarkdownView'
 import { AddHealthInformationModal, type HealthInformationSubmission } from '../../components/AddHealthInformationModal'
 import { HealthEventTimeline } from '../../components/HealthEventTimeline'
-import { CreateHealthEventModal } from '../../components/CreateHealthEventModal'
 import { getStaffSession, signOutAndClearSessions } from '../../lib/auth'
 import { subscribeToAccessChanges } from '../../lib/accessRealtime'
 import {
@@ -70,7 +69,7 @@ export default function DoctorPatientRecords() {
   const [preparingUploads, setPreparingUploads] = useState(false)
   const [uploads, setUploads] = useState<UploadDraft[]>([])
   const [healthEvents, setHealthEvents] = useState<HidHealthEvent[]>([])
-  const [createEventOpen, setCreateEventOpen] = useState(false)
+  const [selectedRecordId, setSelectedRecordId] = useState<string | null>(null)
   const saveLockRef = useRef(false)
 
   function handleRevokedAccess() {
@@ -199,14 +198,6 @@ export default function DoctorPatientRecords() {
     }
   }
 
-  async function handleCreateHealthEvent({ title, infoCategory, recordIds }: { title: string; infoCategory: string; recordIds: string[] }) {
-    if (!normalizedHidCode) return
-    await createHealthEvent({ patientIdentifier: normalizedHidCode, title, infoCategory, recordIds })
-    const events = await fetchPatientHealthEvents(normalizedHidCode, { forceRefresh: true })
-    setHealthEvents(sortHealthEvents(events))
-    showToast('Health event created.', 'success')
-  }
-
   async function handleAddRecordToEvent(eventId: string, recordId: string) {
     if (!normalizedHidCode) return
     await addRecordToHealthEvent(eventId, recordId)
@@ -228,7 +219,7 @@ export default function DoctorPatientRecords() {
     setHealthEvents(sortHealthEvents(events))
   }
 
-  async function handleToggleHealthEventStatus(eventId: string, status: HidHealthEventStatus) {
+  async function handleSetHealthEventStatus(eventId: string, status: HidHealthEventStatus) {
     if (!normalizedHidCode) return
     await setHealthEventStatus(eventId, status)
     const events = await fetchPatientHealthEvents(normalizedHidCode, { forceRefresh: true })
@@ -301,7 +292,7 @@ export default function DoctorPatientRecords() {
     setOpen(false)
     setUploads([])
     try {
-      await createMedicalRecordWithUploads({
+      const created = await createMedicalRecordWithUploads({
         patientIdentifier: patient.hid_code,
         title: submission.title,
         category,
@@ -313,6 +304,25 @@ export default function DoctorPatientRecords() {
       })
       await loadPageData(true, true)
       showToast('Health information saved.', 'success')
+
+      if (submission.healthEvent.mode !== 'none') {
+        try {
+          if (submission.healthEvent.mode === 'new') {
+            await createHealthEvent({
+              patientIdentifier: patient.hid_code,
+              title: submission.healthEvent.title,
+              infoCategory: submission.healthEvent.infoCategory,
+              recordIds: [created.record_id],
+            })
+          } else {
+            await addRecordToHealthEvent(submission.healthEvent.eventId, created.record_id)
+          }
+          const events = await fetchPatientHealthEvents(normalizedHidCode, { forceRefresh: true })
+          setHealthEvents(sortHealthEvents(events))
+        } catch {
+          showToast('Health information saved, but adding it to the health event failed — you can add it manually.', 'error')
+        }
+      }
     } catch (error) {
       setRecords(current => current.filter(item => item.id !== optimisticEntry.record.id))
       setRecordFiles(current => {
@@ -350,6 +360,7 @@ export default function DoctorPatientRecords() {
 
   const filteredRecords = useMemo(() => filterRecordsByQuery(records, search), [records, search])
   const recordSections = useMemo(() => groupRecordsByDay(filteredRecords), [filteredRecords])
+  const selectedRecord = useMemo(() => records.find(record => record.id === selectedRecordId) ?? null, [records, selectedRecordId])
   const totalFiles = useMemo(() => countAllRecordAttachments(records, recordFiles), [recordFiles, records])
   const latestRecord = records[0]
   const resultSummary = `${filteredRecords.length} record${filteredRecords.length === 1 ? '' : 's'} shown in newest to oldest order.`
@@ -411,11 +422,11 @@ export default function DoctorPatientRecords() {
       <HealthEventTimeline
         events={healthEvents}
         records={records}
-        onCreateEvent={() => setCreateEventOpen(true)}
+        onSelectRecord={recordId => setSelectedRecordId(recordId)}
         onAddRecord={handleAddRecordToEvent}
         onRemoveRecord={handleRemoveRecordFromEvent}
         onRename={handleRenameHealthEvent}
-        onToggleStatus={handleToggleHealthEventStatus}
+        onSetStatus={handleSetHealthEventStatus}
       />
 
       {records.length === 0 ? (
@@ -462,17 +473,17 @@ export default function DoctorPatientRecords() {
         saving={saving}
         preparingUploads={preparingUploads}
         uploads={uploads}
+        healthEvents={healthEvents}
         onAttachment={onAttachment}
         onRemoveUpload={removeUpload}
         onSubmit={saveHealthInformation}
       />
 
-      <CreateHealthEventModal
-        open={createEventOpen}
-        onClose={() => setCreateEventOpen(false)}
-        records={records}
-        onSubmit={handleCreateHealthEvent}
-      />
+      <Modal open={Boolean(selectedRecord)} onClose={() => setSelectedRecordId(null)} title={selectedRecord?.title ?? 'Record details'} width={640}>
+        {selectedRecord && (
+          <MedicalRecordMarkdownView record={selectedRecord} attachments={recordFiles[selectedRecord.id] ?? []} />
+        )}
+      </Modal>
     </HospitalLayout>
   )
 }

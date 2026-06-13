@@ -12,6 +12,13 @@ import {
   type HealthInfoValues,
   type UploadDraft,
 } from '../lib/medicalRecordUtils'
+import { HEALTH_EVENT_CATEGORIES, getHealthEventStatusBadge } from '../lib/healthEventUtils'
+import type { HidHealthEvent } from '../types/hid'
+
+export type HealthEventOrganizeChoice =
+  | { mode: 'none' }
+  | { mode: 'new'; title: string; infoCategory: string }
+  | { mode: 'existing'; eventId: string }
 
 export interface HealthInformationSubmission {
   infoType: string
@@ -20,6 +27,7 @@ export interface HealthInformationSubmission {
   notes: string
   transcriptionText: string
   uploads: UploadDraft[]
+  healthEvent: HealthEventOrganizeChoice
 }
 
 interface AddHealthInformationModalProps {
@@ -28,6 +36,7 @@ interface AddHealthInformationModalProps {
   saving: boolean
   preparingUploads: boolean
   uploads: UploadDraft[]
+  healthEvents: HidHealthEvent[]
   onAttachment: (files: FileList | null) => void | Promise<void>
   onRemoveUpload: (index: number) => void
   onSubmit: (submission: HealthInformationSubmission) => void | Promise<void>
@@ -39,6 +48,7 @@ export function AddHealthInformationModal({
   saving,
   preparingUploads,
   uploads,
+  healthEvents,
   onAttachment,
   onRemoveUpload,
   onSubmit,
@@ -47,12 +57,20 @@ export function AddHealthInformationModal({
   const [values, setValues] = useState<HealthInfoValues>({})
   const [notes, setNotes] = useState('')
   const [transcriptionText, setTranscriptionText] = useState('')
+  const [organizeMode, setOrganizeMode] = useState<HealthEventOrganizeChoice['mode']>('none')
+  const [newEventTitle, setNewEventTitle] = useState('')
+  const [newEventCategory, setNewEventCategory] = useState('general')
+  const [existingEventId, setExistingEventId] = useState('')
 
   function reset() {
     setSelectedType(null)
     setValues({})
     setNotes('')
     setTranscriptionText('')
+    setOrganizeMode('none')
+    setNewEventTitle('')
+    setNewEventCategory('general')
+    setExistingEventId('')
   }
 
   function handleClose() {
@@ -86,6 +104,22 @@ export function AddHealthInformationModal({
       return
     }
 
+    let healthEvent: HealthEventOrganizeChoice = { mode: 'none' }
+    if (organizeMode === 'new') {
+      const trimmedEventTitle = newEventTitle.trim()
+      if (!trimmedEventTitle) {
+        showToast('Enter a name for the new health event.', 'error')
+        return
+      }
+      healthEvent = { mode: 'new', title: trimmedEventTitle, infoCategory: newEventCategory }
+    } else if (organizeMode === 'existing') {
+      if (!existingEventId) {
+        showToast('Choose a health event to add this to.', 'error')
+        return
+      }
+      healthEvent = { mode: 'existing', eventId: existingEventId }
+    }
+
     const structuredData: Record<string, unknown> = {}
     selectedType.fields.forEach(field => {
       const value = (values[field.key] ?? '').trim()
@@ -101,6 +135,7 @@ export function AddHealthInformationModal({
       notes,
       transcriptionText,
       uploads,
+      healthEvent,
     })
     reset()
   }
@@ -203,6 +238,48 @@ export function AddHealthInformationModal({
             </div>
           )}
 
+          <div style={{ display: 'grid', gap: 10 }}>
+            <label style={{ fontSize: 13, fontWeight: 500, color: '#374151' }}>Add to a health event (optional)</label>
+            <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+              <OrganizeOption active={organizeMode === 'none'} onClick={() => setOrganizeMode('none')}>
+                Don&apos;t add to a health event
+              </OrganizeOption>
+              <OrganizeOption active={organizeMode === 'new'} onClick={() => setOrganizeMode('new')}>
+                Create a new health event
+              </OrganizeOption>
+              {healthEvents.length > 0 && (
+                <OrganizeOption active={organizeMode === 'existing'} onClick={() => setOrganizeMode('existing')}>
+                  Add to an existing health event
+                </OrganizeOption>
+              )}
+            </div>
+
+            {organizeMode === 'new' && (
+              <div style={{ display: 'grid', gap: 10 }}>
+                <Input
+                  placeholder="e.g. Typhoid Treatment"
+                  value={newEventTitle}
+                  onChange={e => setNewEventTitle(e.target.value)}
+                />
+                <Select
+                  value={newEventCategory}
+                  onChange={e => setNewEventCategory(e.target.value)}
+                  options={HEALTH_EVENT_CATEGORIES}
+                />
+              </div>
+            )}
+
+            {organizeMode === 'existing' && (
+              <Select
+                value={existingEventId}
+                onChange={e => setExistingEventId(e.target.value)}
+                options={healthEvents
+                  .filter(event => event.status !== 'archived')
+                  .map(event => ({ value: event.id, label: `${event.title} (${getHealthEventStatusBadge(event.status).label})` }))}
+              />
+            )}
+          </div>
+
           <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 12, marginTop: 4 }}>
             <Button variant="secondary" onClick={handleClose}>Cancel</Button>
             <Button loading={saving || preparingUploads} disabled={preparingUploads} onClick={() => void handleSubmit()}>
@@ -212,6 +289,27 @@ export function AddHealthInformationModal({
         </div>
       )}
     </Modal>
+  )
+}
+
+function OrganizeOption({ active, onClick, children }: { active: boolean; onClick: () => void; children: React.ReactNode }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      style={{
+        border: `1px solid ${active ? '#1891ff' : '#e5e7eb'}`,
+        borderRadius: 999,
+        padding: '6px 14px',
+        fontSize: 12,
+        fontWeight: 500,
+        cursor: 'pointer',
+        background: active ? '#e8f1fc' : '#fff',
+        color: active ? '#1891ff' : '#484f58',
+      }}
+    >
+      {children}
+    </button>
   )
 }
 

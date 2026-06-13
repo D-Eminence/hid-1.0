@@ -223,6 +223,15 @@ export function formatHealthInfoType(infoType: string | null | undefined, fallba
   return 'Other'
 }
 
+export function getRecordContributorLabel(record: MedicalRecord): string {
+  if (!record.added_by_role || record.added_by_role === 'patient') return 'You'
+  return record.created_by_org ?? record.created_by
+}
+
+export function isMedicationRecord(record: MedicalRecord): boolean {
+  return record.info_type === 'medication' || record.category === 'drug_prescription'
+}
+
 export function getRecordSourceBadge(record: MedicalRecord): RecordSourceBadgeInfo {
   const role = record.added_by_role ?? 'patient'
   const verified = record.created_by_verified ?? false

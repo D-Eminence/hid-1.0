@@ -157,7 +157,7 @@ export interface HidPatientRecordsResponse {
   records: HidPatientRecordBundle[]
 }
 
-export type HidHealthEventStatus = 'open' | 'closed'
+export type HidHealthEventStatus = 'active' | 'monitoring' | 'resolved' | 'archived'
 
 export interface HidHealthEvent {
   id: string
