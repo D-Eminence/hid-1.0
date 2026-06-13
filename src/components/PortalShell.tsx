@@ -291,8 +291,8 @@ export function PortalShell({
   }, [location.pathname])
 
   return (
-    <div style={{ minHeight: '100vh', background: '#f5f6fa', padding: '22px clamp(12px, 2vw, 24px)' }}>
-      <div style={{ maxWidth: 1360, margin: '0 auto', background: '#fff', borderRadius: 28, border: '1px solid #eef1f5', minHeight: 'calc(100vh - 44px)', padding: '36px clamp(18px, 3vw, 46px)', boxShadow: '0 18px 38px rgba(15, 23, 42, 0.04)' }}>
+    <div style={{ minHeight: '100vh', background: '#fff' }}>
+      <div style={{ maxWidth: 1360, margin: '0 auto', padding: '36px clamp(18px, 3vw, 46px)' }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 16, flexWrap: 'wrap' }}>
           <div
             style={{ cursor: 'pointer' }}
@@ -337,7 +337,7 @@ export function PortalShell({
           </div>
         </div>
 
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 16, marginTop: 26, paddingBottom: 14, borderBottom: '1px solid #edf1f5', flexWrap: 'wrap' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 16, marginTop: 32, paddingBottom: 14, borderBottom: '1px solid #edf1f5', flexWrap: 'wrap' }}>
           {isCompact ? (
             <div style={{ position: 'relative', width: '100%' }}>
               <button
@@ -435,7 +435,7 @@ export function PortalShell({
           {notificationHidCode ? <PatientNotificationWatcher hidCode={notificationHidCode} /> : null}
           {(title || subtitle) && (
             <div style={{ marginBottom: 20 }}>
-              <div style={{ fontSize: 28, fontWeight: 700, color: '#111827', letterSpacing: '-0.03em' }}>{title}</div>
+              <div style={{ fontSize: 'clamp(20px, 5vw, 28px)', fontWeight: 700, color: '#111827', letterSpacing: '-0.03em' }}>{title}</div>
               {subtitle && <div style={{ marginTop: 6, color: '#8a95a6', fontSize: 13 }}>{subtitle}</div>}
             </div>
           )}

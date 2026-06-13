@@ -272,7 +272,7 @@ export function Card({ children, style, padding = 24, onClick }: CardProps) {
   const resolvedPadding = typeof padding === 'number' ? `clamp(14px, 4vw, ${padding}px)` : padding
   return (
     <div onClick={onClick} style={{
-      background: '#fff', borderRadius: 14, border: '1px solid #e5e7eb',
+      background: '#fff', borderRadius: 12, border: '1px solid #e5e7eb',
       padding: resolvedPadding, boxShadow: '0 1px 4px rgba(0,0,0,0.06)',
       cursor: onClick ? 'pointer' : undefined,
       transition: onClick ? 'box-shadow 0.15s' : undefined,
@@ -351,7 +351,7 @@ export function SectionHeader({ title, subtitle, action }: {
   return (
     <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: 20, gap: 16, flexWrap: 'wrap', rowGap: 12 }}>
       <div style={{ minWidth: 0 }}>
-        <h2 style={{ fontSize: 18, fontWeight: 700, letterSpacing: '-0.3px' }}>{title}</h2>
+        <h2 style={{ fontSize: 'clamp(16px, 4vw, 18px)', fontWeight: 700, letterSpacing: '-0.3px' }}>{title}</h2>
         {subtitle && <p style={{ fontSize: 13, color: '#6b7280', marginTop: 4 }}>{subtitle}</p>}
       </div>
       {action}

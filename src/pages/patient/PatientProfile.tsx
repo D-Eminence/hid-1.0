@@ -2,16 +2,29 @@ import React, { useEffect, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { OtpInputs } from '../../components/OtpInputs'
 import { PortalShell } from '../../components/PortalShell'
+import { HomeDashboard } from '../../components/home/HomeDashboard'
 import { Button, Card, Input, Modal, PageLoader, Select, Textarea, showToast } from '../../components/ui'
 import { getPatientSession, setPatientSession, signOutAndClearSessions } from '../../lib/auth'
-import { readPatientProfileSnapshot, seedPatientProfileCache, warmPatientExperience } from '../../lib/experienceWarmup'
+import {
+  readPatientHistorySnapshot,
+  readPatientProfileSnapshot,
+  readPatientRecordsSnapshot,
+  seedPatientHistoryCache,
+  seedPatientProfileCache,
+  seedPatientRecordsCache,
+  warmPatientExperience,
+} from '../../lib/experienceWarmup'
 import {
   deleteMyAccount,
   fetchMyPatient,
+  fetchPatientHealthEvents,
+  fetchPatientHistory,
+  fetchPatientRecordsView,
   setMyPatientAccessPin,
   startAccountDeletion,
   updateMyPatientProfile,
   verifyAccountDeletionCode,
+  type LegacyAccessRequestWithShare,
 } from '../../lib/hidApi'
 import {
   BLOOD_GROUPS,
@@ -23,7 +36,9 @@ import {
   getPersonInitials,
   parseDisplayDate,
 } from '../../lib/utils'
-import type { Patient } from '../../types/database'
+import { sortHealthEvents } from '../../lib/healthEventUtils'
+import type { AccessLog, MedicalRecord, MedicalRecordFile, Patient } from '../../types/database'
+import type { HidHealthEvent, HidPendingShareInvite } from '../../types/hid'
 
 const patientNav = [
   { path: '/patient/profile', label: 'Home' },
@@ -68,6 +83,19 @@ export default function PatientProfile() {
     notes: false,
   })
 
+  const cachedRecordsView = useMemo(() => (
+    session ? readPatientRecordsSnapshot(session.hidCode) : null
+  ), [session])
+  const cachedHistory = useMemo(() => (
+    session ? readPatientHistorySnapshot(session.hidCode) : null
+  ), [session])
+  const [records, setRecords] = useState<MedicalRecord[]>(() => cachedRecordsView?.records ?? [])
+  const [recordFiles, setRecordFiles] = useState<Record<string, MedicalRecordFile[]>>(() => cachedRecordsView?.recordFiles ?? {})
+  const [healthEvents, setHealthEvents] = useState<HidHealthEvent[]>([])
+  const [activeGrants, setActiveGrants] = useState<LegacyAccessRequestWithShare[]>(() => cachedHistory?.activeGrants ?? [])
+  const [pendingInvites, setPendingInvites] = useState<HidPendingShareInvite[]>(() => cachedHistory?.pendingInvites ?? [])
+  const [logs, setLogs] = useState<AccessLog[]>(() => cachedHistory?.logs ?? [])
+
   useEffect(() => {
     if (!session) {
       navigate('/patient')
@@ -97,6 +125,44 @@ export default function PatientProfile() {
 
     return () => { active = false }
   }, [navigate, session])
+
+  useEffect(() => {
+    if (!session) return
+    void loadDashboardData()
+  }, [session])
+
+  async function loadDashboardData() {
+    if (!session) return
+
+    try {
+      const recordsView = await fetchPatientRecordsView(session.hidCode)
+      seedPatientRecordsCache(session.hidCode, recordsView)
+      setRecords(recordsView.records)
+      setRecordFiles(recordsView.recordFiles)
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Unable to load your records.'
+      showToast(message, 'error')
+    }
+
+    try {
+      const events = await fetchPatientHealthEvents(session.hidCode)
+      setHealthEvents(sortHealthEvents(events))
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Unable to load health events.'
+      showToast(message, 'error')
+    }
+
+    try {
+      const history = await fetchPatientHistory(session.hidCode)
+      seedPatientHistoryCache(session.hidCode, history)
+      setActiveGrants(history.activeGrants)
+      setPendingInvites(history.pendingInvites)
+      setLogs(history.logs)
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Unable to load your access history.'
+      showToast(message, 'error')
+    }
+  }
 
   const hasPendingProfileChanges = useMemo(() => {
     if (!patient) return false
@@ -327,6 +393,17 @@ export default function PatientProfile() {
       onAvatarUpload={file => { void uploadProfilePicture(file) }}
     >
       <div style={{ display: 'grid', gap: 24 }}>
+        <HomeDashboard
+          patient={patient}
+          records={records}
+          recordFiles={recordFiles}
+          healthEvents={healthEvents}
+          activeGrants={activeGrants}
+          pendingInvites={pendingInvites}
+          logs={logs}
+          onRefresh={() => void loadDashboardData()}
+        />
+
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(320px, 100%), 1fr))', gap: 28, alignItems: 'start' }}>
           <div style={{ display: 'grid', gap: 20 }}>
             <Card style={{ borderRadius: 24, padding: 22 }}>

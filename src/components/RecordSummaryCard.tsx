@@ -1,8 +1,8 @@
 import React from 'react'
 import { badgeMap } from './ui'
+import { RecordSourceBadge } from './RecordMarkdownView'
 import { getHealthInfoTypeIcon } from './HealthInfoTypeIcon'
-import { formatHealthInfoType, getHealthInfoTypeConfig, getRecordContributorLabel } from '../lib/medicalRecordUtils'
-import { formatDate } from '../lib/utils'
+import { formatHealthInfoType, getHealthInfoTypeConfig } from '../lib/medicalRecordUtils'
 import type { MedicalRecord, MedicalRecordFile } from '../types/database'
 
 interface RecordSummaryCardProps {
@@ -12,13 +12,9 @@ interface RecordSummaryCardProps {
 }
 
 export function RecordSummaryCard({ record, attachments, onClick }: RecordSummaryCardProps) {
-  const previewAttachment = attachments.length > 0
-    ? attachments[0]
-    : (record.attachment_data_url ? {
-        file_name: record.attachment_name ?? 'uploaded-file',
-        file_type: record.attachment_type,
-        file_data_url: record.attachment_data_url,
-      } : null)
+  const attachmentCount = attachments.length > 0
+    ? attachments.length
+    : (record.attachment_data_url ? 1 : 0)
 
   const typeConfig = getHealthInfoTypeConfig(record.info_type)
   const accentColors = badgeMap[typeConfig?.accent ?? 'gray']
@@ -32,38 +28,32 @@ export function RecordSummaryCard({ record, attachments, onClick }: RecordSummar
         textAlign: 'left',
         display: 'flex',
         flexDirection: 'column',
-        gap: 0,
+        gap: 10,
         background: '#fff',
         border: '1px solid #f2f2f2',
-        borderRadius: 8,
+        borderRadius: 12,
         padding: 12,
         cursor: 'pointer',
         boxShadow: '0 1px 24px rgba(194, 201, 205, 0.08)',
       }}
     >
-      <div style={{ height: 180, borderRadius: 6, border: '1px solid #f2f2f2', overflow: 'hidden', background: '#f6f7f8', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-        {previewAttachment && (previewAttachment.file_type ?? '').startsWith('image/') ? (
-          <img
-            src={previewAttachment.file_data_url}
-            alt={previewAttachment.file_name}
-            style={{ width: '100%', height: '100%', objectFit: 'cover' }}
-          />
-        ) : previewAttachment ? (
-          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8, color: '#9ca3af' }}>
-            <span style={{ fontSize: 12, fontWeight: 600 }}>PDF</span>
-          </div>
-        ) : (
-          <div style={{ width: 48, height: 48, borderRadius: 0, background: accentColors.bg, color: accentColors.text, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-            {getHealthInfoTypeIcon(typeConfig?.id, 24)}
-          </div>
-        )}
+      <div style={{ display: 'flex', alignItems: 'flex-start', gap: 10 }}>
+        <div style={{ width: 40, height: 40, flexShrink: 0, borderRadius: 8, background: accentColors.bg, color: accentColors.text, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+          {getHealthInfoTypeIcon(typeConfig?.id, 20)}
+        </div>
+        <div style={{ minWidth: 0, overflowWrap: 'anywhere' }}>
+          <div style={{ fontWeight: 700, fontSize: 14, color: '#111827' }}>{record.title}</div>
+          <div style={{ fontSize: 12, color: '#6b7280', marginTop: 2 }}>{typeLabel}</div>
+        </div>
       </div>
 
-      <div style={{ marginTop: 12, display: 'flex', flexDirection: 'column', fontSize: 13, color: '#484f58', lineHeight: 1.6 }}>
-        <span>• {typeLabel}</span>
-        <span>• Added by {getRecordContributorLabel(record)}</span>
-        <span>• {formatDate(record.created_at)}</span>
-      </div>
+      <RecordSourceBadge record={record} />
+
+      {attachmentCount > 0 && (
+        <span style={{ fontSize: 12, color: '#9ca3af' }}>
+          {attachmentCount} attachment{attachmentCount === 1 ? '' : 's'}
+        </span>
+      )}
     </button>
   )
 }

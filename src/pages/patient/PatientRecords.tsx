@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useLocation, useNavigate } from 'react-router-dom'
 import { PortalShell } from '../../components/PortalShell'
 import { Badge, Card, EmptyState, Input, Modal, PageLoader, showToast } from '../../components/ui'
 import { MedicalRecordMarkdownView } from '../../components/RecordMarkdownView'
@@ -51,6 +51,7 @@ const RECORDS_TABS: { id: RecordsTab; label: string }[] = [
 
 export default function PatientRecords() {
   const navigate = useNavigate()
+  const location = useLocation()
   const session = useMemo(() => getPatientSession(), [])
   const cachedView = useMemo(() => (
     session ? readPatientRecordsSnapshot(session.hidCode) : null
@@ -76,6 +77,13 @@ export default function PatientRecords() {
     }
     void loadPageData(Boolean(cachedView))
   }, [cachedView, navigate, session])
+
+  useEffect(() => {
+    if (location.state?.openAddHealthInfo) {
+      setOpen(true)
+      navigate(location.pathname, { replace: true, state: {} })
+    }
+  }, [location, navigate])
 
   async function loadPageData(silent = false) {
     if (!session) return
@@ -418,7 +426,7 @@ export default function PatientRecords() {
           }}
         >
           <PlusCircleIcon />
-          New Health Record
+          Add Health Information
         </button>
       </div>
 
