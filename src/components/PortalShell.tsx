@@ -2,6 +2,8 @@ import React, { useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate, useLocation } from 'react-router-dom'
 import { HIDLogo } from './HIDLogo'
 import { PatientNotificationWatcher } from './PatientNotificationWatcher'
+import { ShareProfileModal } from './ShareProfileModal'
+import { Button } from './ui'
 import { countUnreadNotifications } from '../lib/hidApi'
 import { getPersonInitials } from '../lib/utils'
 import { preloadPath } from '../lib/routePreload'
@@ -69,6 +71,90 @@ function ProfilePill({
   )
 }
 
+function HomeIcon({ size = 18 }: { size?: number }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" aria-hidden="true">
+      <path d="M4 11.5 12 4l8 7.5" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
+      <path d="M6 10.5V19a1 1 0 0 0 1 1h3v-5h4v5h3a1 1 0 0 0 1-1v-8.5" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  )
+}
+
+function RecordsIcon({ size = 18 }: { size?: number }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" aria-hidden="true">
+      <path d="M4 7a2 2 0 0 1 2-2h3.5l2 2H18a2 2 0 0 1 2 2v7a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V7Z" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  )
+}
+
+function HistoryIcon({ size = 18 }: { size?: number }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" aria-hidden="true">
+      <circle cx="12" cy="12" r="8" stroke="currentColor" strokeWidth="1.6" />
+      <path d="M12 8v4l2.5 2.5" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  )
+}
+
+function NotificationsIcon({ size = 18 }: { size?: number }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" aria-hidden="true">
+      <path d="M12 4a4 4 0 0 0-4 4v2.1c0 .7-.2 1.4-.6 2L6 14.5h12l-1.4-2.4c-.4-.6-.6-1.3-.6-2V8a4 4 0 0 0-4-4Z" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
+      <path d="M10 18a2 2 0 0 0 4 0" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
+    </svg>
+  )
+}
+
+function ShareIcon({ size = 14 }: { size?: number }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" aria-hidden="true">
+      <path d="M12 14V3" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
+      <path d="M8 7l4-4 4 4" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
+      <path d="M5 12v6a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-6" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  )
+}
+
+function EditIcon({ size = 14 }: { size?: number }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" aria-hidden="true">
+      <path d="M4 20h4l10.5-10.5a2.1 2.1 0 0 0-3-3L5 17v3Z" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
+      <path d="M13 6.5l3.5 3.5" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  )
+}
+
+function ToggleSwitch({ checked, onClick }: { checked: boolean; onClick?: () => void }) {
+  return (
+    <button
+      type="button"
+      role="switch"
+      aria-checked={checked}
+      onClick={onClick}
+      style={{
+        width: 36, height: 20, borderRadius: 999, border: 'none', padding: 2,
+        background: checked ? '#1a6fd4' : '#d1d5db', position: 'relative',
+        cursor: onClick ? 'pointer' : 'default', flexShrink: 0,
+        transition: 'background 0.15s ease',
+      }}
+    >
+      <span style={{
+        display: 'block', width: 16, height: 16, borderRadius: '50%', background: '#fff',
+        transform: checked ? 'translateX(16px)' : 'translateX(0)',
+        transition: 'transform 0.15s ease', boxShadow: '0 1px 2px rgba(0,0,0,0.15)',
+      }} />
+    </button>
+  )
+}
+
+function getNavIcon(path: string) {
+  if (path.includes('/notifications')) return <NotificationsIcon />
+  if (path.includes('/records')) return <RecordsIcon />
+  if (path.includes('/history')) return <HistoryIcon />
+  return <HomeIcon />
+}
+
 export function PortalShell({
   title,
   subtitle,
@@ -80,6 +166,7 @@ export function PortalShell({
   notificationPath,
   notificationHidCode,
   onAvatarUpload,
+  onShareSuccess,
   children,
 }: {
   title: string
@@ -92,6 +179,7 @@ export function PortalShell({
   notificationPath?: string
   notificationHidCode?: string
   onAvatarUpload?: (file: File) => void
+  onShareSuccess?: () => void
   children: React.ReactNode
 }) {
   const navigate = useNavigate()
@@ -106,6 +194,8 @@ export function PortalShell({
   const [hasUnreadNotifications, setHasUnreadNotifications] = useState(false)
   const [isCompact, setIsCompact] = useState(() => (typeof window !== 'undefined' ? window.innerWidth < 720 : false))
   const [navOpen, setNavOpen] = useState(false)
+  const [shareModalOpen, setShareModalOpen] = useState(false)
+  const [profileLive, setProfileLive] = useState(true)
   const activeLabel = items.find(item => item.path === location.pathname)?.label ?? 'Menu'
   const likelyWarmPaths = useMemo(() => {
     const currentIndex = items.findIndex(item => item.path === location.pathname)
@@ -273,8 +363,9 @@ export function PortalShell({
                         onClick={() => { navigate(item.path); setNavOpen(false) }}
                         onMouseEnter={() => warmPath(item.path)}
                         onFocus={() => warmPath(item.path)}
-                        style={{ width: '100%', textAlign: 'left', border: 'none', borderRadius: 10, padding: '11px 12px', background: active ? '#f0f7ff' : '#fff', color: active ? '#1a6fd4' : '#111827', fontSize: 14, fontWeight: active ? 600 : 500, cursor: 'pointer' }}
+                        style={{ width: '100%', textAlign: 'left', border: 'none', borderRadius: 10, padding: '11px 12px', background: active ? '#f0f7ff' : '#fff', color: active ? '#1a6fd4' : '#111827', fontSize: 14, fontWeight: active ? 600 : 500, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 10 }}
                       >
+                        {getNavIcon(item.path)}
                         {item.label}
                       </button>
                     )
@@ -283,7 +374,7 @@ export function PortalShell({
               )}
             </div>
           ) : (
-            <nav style={{ display: 'flex', alignItems: 'center', gap: 24, flexWrap: 'wrap' }}>
+            <nav style={{ display: 'flex', alignItems: 'center', gap: 28, flexWrap: 'wrap' }}>
               {items.map(item => {
                 const active = location.pathname === item.path
                 return (
@@ -302,14 +393,42 @@ export function PortalShell({
                       borderBottom: active ? '2px solid #111827' : '2px solid transparent',
                       display: 'inline-flex',
                       alignItems: 'center',
+                      gap: 8,
+                      cursor: 'pointer',
                     }}
                   >
+                    {getNavIcon(item.path)}
                     {item.label}
                   </button>
                 )
               })}
             </nav>
           )}
+
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap', width: isCompact ? '100%' : undefined, marginTop: isCompact ? 12 : 0 }}>
+            <Button
+              size="sm"
+              icon={<ShareIcon />}
+              onClick={() => setShareModalOpen(true)}
+              style={{ borderRadius: 999 }}
+            >
+              Share Records
+            </Button>
+            <Button
+              size="sm"
+              variant="outline"
+              icon={<EditIcon />}
+              onClick={() => navigate('/patient/profile')}
+              onMouseEnter={() => warmPath('/patient/profile')}
+              style={{ borderRadius: 999, borderColor: '#e5e7eb', color: '#374151' }}
+            >
+              Edit Profile
+            </Button>
+            <div style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}>
+              <span style={{ fontSize: 12, fontWeight: 600, color: '#111827', whiteSpace: 'nowrap' }}>Profile is live</span>
+              <ToggleSwitch checked={profileLive} onClick={() => setProfileLive(value => !value)} />
+            </div>
+          </div>
         </div>
 
         <div style={{ marginTop: 28 }}>
@@ -323,6 +442,12 @@ export function PortalShell({
           {children}
         </div>
       </div>
+
+      <ShareProfileModal
+        open={shareModalOpen}
+        onClose={() => setShareModalOpen(false)}
+        onShared={() => onShareSuccess?.()}
+      />
     </div>
   )
 }

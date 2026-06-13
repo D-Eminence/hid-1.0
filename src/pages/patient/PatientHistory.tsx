@@ -2,7 +2,6 @@ import React, { useEffect, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { PortalShell } from '../../components/PortalShell'
 import { Badge, Button, Card, Input, Modal, PageLoader, Textarea, showToast } from '../../components/ui'
-import { ShareProfileModal } from '../../components/ShareProfileModal'
 import { getPatientSession, signOutAndClearSessions } from '../../lib/auth'
 import { subscribeToAccessChanges } from '../../lib/accessRealtime'
 import { readPatientHistorySnapshot, readPatientProfileSnapshot, seedPatientHistoryCache, seedPatientProfileCache } from '../../lib/experienceWarmup'
@@ -103,7 +102,6 @@ export default function PatientHistory() {
   const [logDate, setLogDate] = useState('')
   const [revokeGroup, setRevokeGroup] = useState<ActiveAccessGroup | null>(null)
   const [customRevokeReason, setCustomRevokeReason] = useState('')
-  const [shareModalOpen, setShareModalOpen] = useState(false)
 
   useEffect(() => {
     if (!session) {
@@ -225,6 +223,7 @@ export default function PatientHistory() {
         avatarUrl={patient?.photo_url}
         notificationPath="/patient/notifications"
         notificationHidCode={session.hidCode}
+        onShareSuccess={() => void loadHistoryData(true)}
       >
         <PageLoader label="Loading your access history..." />
       </PortalShell>
@@ -241,6 +240,7 @@ export default function PatientHistory() {
       avatarUrl={patient?.photo_url}
       notificationPath="/patient/notifications"
       notificationHidCode={session.hidCode}
+      onShareSuccess={() => void loadHistoryData(true)}
     >
       <Card style={{ borderRadius: 24, marginBottom: 18 }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 16, flexWrap: 'wrap' }}>
@@ -248,7 +248,6 @@ export default function PatientHistory() {
             <div style={{ fontSize: 24, fontWeight: 700, color: '#111827' }}>Active access</div>
             <div style={{ color: '#8a95a6', marginTop: 6, fontSize: 13 }}>Providers that currently have access to your records.</div>
           </div>
-          <Button onClick={() => setShareModalOpen(true)}>Share my profile</Button>
         </div>
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(248px, 100%), 1fr))', gap: 18, marginTop: 24 }}>
           {activeAccessGroups.map(group => {
@@ -486,12 +485,6 @@ export default function PatientHistory() {
           </div>
         )}
       </Modal>
-
-      <ShareProfileModal
-        open={shareModalOpen}
-        onClose={() => setShareModalOpen(false)}
-        onShared={() => void loadHistoryData(true)}
-      />
     </PortalShell>
   )
 }
