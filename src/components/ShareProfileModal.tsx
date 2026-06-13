@@ -145,13 +145,7 @@ export function ShareProfileModal({ open, onClose, onShared }: ShareProfileModal
             {!searching && query.trim().length >= 2 && results.length === 0 && (
               <>
                 <p style={{ fontSize: 13, color: '#9ca3af' }}>No matching providers found.</p>
-                <button
-                  type="button"
-                  onClick={openInviteMode}
-                  style={{ border: 'none', background: 'none', color: '#1a6fd4', fontWeight: 600, cursor: 'pointer', fontSize: 13, padding: 0, textAlign: 'left' }}
-                >
-                  Can't find this provider? Invite them to HID by email.
-                </button>
+                <p style={{ fontSize: 13, color: '#6b7280' }}>Invite this provider to HID by email.</p>
               </>
             )}
 
@@ -282,6 +276,9 @@ export function ShareProfileModal({ open, onClose, onShared }: ShareProfileModal
           <Button variant="secondary" onClick={handleClose} disabled={saving}>Cancel</Button>
           {(selected || inviteMode) && (
             <Button loading={saving} onClick={() => void handleSubmit()}>{inviteMode ? 'Send invite' : 'Share profile'}</Button>
+          )}
+          {!selected && !inviteMode && !searching && query.trim().length >= 2 && results.length === 0 && (
+            <Button onClick={openInviteMode}>Invite by email</Button>
           )}
         </div>
       </div>
