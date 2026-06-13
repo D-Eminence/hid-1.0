@@ -380,9 +380,9 @@ export default function DoctorPatientRecords() {
     >
       <Card style={{ borderRadius: 24, marginBottom: 18, background: 'linear-gradient(180deg, #ffffff 0%, #f7fbff 100%)', borderColor: '#dbe8f8' }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', gap: 16, flexWrap: 'wrap', alignItems: 'flex-start' }}>
-          <div>
+          <div style={{ minWidth: 0 }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
-              <div style={{ fontSize: 24, fontWeight: 700, color: '#111827' }}>{patient?.full_name ?? hidCode}</div>
+              <div style={{ fontSize: 24, fontWeight: 700, color: '#111827', overflowWrap: 'anywhere' }}>{patient?.full_name ?? hidCode}</div>
               <Badge color={activeRequest?.break_glass ? 'red' : 'green'}>
                 {activeRequest?.break_glass ? 'Emergency access active' : 'Approved access active'}
               </Badge>
@@ -455,9 +455,9 @@ export default function DoctorPatientRecords() {
                 <Badge color="blue">{section.records.length} saved</Badge>
               </div>
 
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: 18 }}>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 18 }}>
                 {section.records.map(record => (
-                  <div key={record.id} style={{ border: '1px solid #edf1f5', borderRadius: 18, padding: 14 }}>
+                  <div key={record.id} style={{ border: '1px solid #edf1f5', borderRadius: 18, padding: 14, minWidth: 0 }}>
                     <MedicalRecordMarkdownView record={record} attachments={recordFiles[record.id] ?? []} />
                   </div>
                 ))}
@@ -490,9 +490,9 @@ export default function DoctorPatientRecords() {
 
 function StatCard({ label, value }: { label: string; value: string }) {
   return (
-    <div style={{ borderRadius: 18, border: '1px solid #dbe8f8', background: '#fff', padding: 16 }}>
+    <div style={{ borderRadius: 18, border: '1px solid #dbe8f8', background: '#fff', padding: 16, minWidth: 0 }}>
       <div style={{ color: '#6b7280', fontSize: 12 }}>{label}</div>
-      <div style={{ marginTop: 8, fontSize: 18, fontWeight: 700, color: '#111827' }}>{value}</div>
+      <div style={{ marginTop: 8, fontSize: 18, fontWeight: 700, color: '#111827', overflowWrap: 'anywhere' }}>{value}</div>
     </div>
   )
 }

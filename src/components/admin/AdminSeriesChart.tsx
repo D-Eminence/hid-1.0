@@ -70,7 +70,7 @@ export function AdminSeriesChart({
             </div>
           ))}
         </div>
-        <div style={{ display: 'flex', justifyContent: 'space-between', gap: 10, marginTop: 10, fontSize: 10.5, color: 'var(--admin-muted)' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', flexWrap: 'wrap', gap: 6, rowGap: 4, marginTop: 10, fontSize: 10.5, color: 'var(--admin-muted)' }}>
           {labels.map(point => (
             <span key={`${point.timestamp}-label`}>{formatAxisLabel(point.timestamp)}</span>
           ))}
@@ -122,7 +122,7 @@ export function AdminSeriesChart({
         <polygon points={areaPath} fill="url(#hid-admin-line-fill)" />
         <polyline fill="none" stroke={tone} strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round" points={pointsPath} />
       </svg>
-      <div style={{ display: 'flex', justifyContent: 'space-between', gap: 10, marginTop: 6, fontSize: 10.5, color: 'var(--admin-muted)' }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', flexWrap: 'wrap', gap: 6, rowGap: 4, marginTop: 6, fontSize: 10.5, color: 'var(--admin-muted)' }}>
         {labels.map(point => (
           <span key={`${point.timestamp}-label`}>{formatAxisLabel(point.timestamp)}</span>
         ))}

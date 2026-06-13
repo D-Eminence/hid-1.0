@@ -269,12 +269,14 @@ interface CardProps {
   onClick?: () => void
 }
 export function Card({ children, style, padding = 24, onClick }: CardProps) {
+  const resolvedPadding = typeof padding === 'number' ? `clamp(14px, 4vw, ${padding}px)` : padding
   return (
     <div onClick={onClick} style={{
       background: '#fff', borderRadius: 14, border: '1px solid #e5e7eb',
-      padding, boxShadow: '0 1px 4px rgba(0,0,0,0.06)',
+      padding: resolvedPadding, boxShadow: '0 1px 4px rgba(0,0,0,0.06)',
       cursor: onClick ? 'pointer' : undefined,
       transition: onClick ? 'box-shadow 0.15s' : undefined,
+      minWidth: 0,
       ...style
     }}>
       {children}
@@ -347,8 +349,8 @@ export function SectionHeader({ title, subtitle, action }: {
   title: string; subtitle?: string; action?: React.ReactNode
 }) {
   return (
-    <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: 20, gap: 16 }}>
-      <div>
+    <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: 20, gap: 16, flexWrap: 'wrap', rowGap: 12 }}>
+      <div style={{ minWidth: 0 }}>
         <h2 style={{ fontSize: 18, fontWeight: 700, letterSpacing: '-0.3px' }}>{title}</h2>
         {subtitle && <p style={{ fontSize: 13, color: '#6b7280', marginTop: 4 }}>{subtitle}</p>}
       </div>
@@ -371,20 +373,20 @@ export function Modal({ open, onClose, title, children, width = 480 }: {
   return (
     <div style={{
       position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.45)',
-      display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000, padding: 24
+      display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000, padding: 'clamp(10px, 4vw, 24px)'
     }} onClick={e => { if (e.target === e.currentTarget) onClose() }}>
       <div style={{
         background: '#fff', borderRadius: 16, width: '100%', maxWidth: width,
         boxShadow: '0 20px 60px rgba(0,0,0,0.15)', animation: 'modalIn 0.2s ease', maxHeight: 'calc(100vh - 48px)', overflow: 'hidden'
       }}>
         <style>{`@keyframes modalIn{from{opacity:0;transform:scale(0.96)}to{opacity:1;transform:scale(1)}}`}</style>
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '20px 24px', borderBottom: '1px solid #e5e7eb' }}>
-          <h3 style={{ fontSize: 16, fontWeight: 700 }}>{title}</h3>
-          <button onClick={onClose} style={{ background: 'none', border: 'none', color: '#9ca3af', padding: 4, borderRadius: 6, display: 'flex', alignItems: 'center' }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, padding: 'clamp(14px, 4vw, 20px) clamp(16px, 4vw, 24px)', borderBottom: '1px solid #e5e7eb' }}>
+          <h3 style={{ fontSize: 16, fontWeight: 700, minWidth: 0, overflowWrap: 'anywhere' }}>{title}</h3>
+          <button onClick={onClose} style={{ background: 'none', border: 'none', color: '#9ca3af', padding: 4, borderRadius: 6, display: 'flex', alignItems: 'center', flexShrink: 0 }}>
             <svg width="18" height="18" viewBox="0 0 18 18" fill="none"><path d="M4 4l10 10M14 4L4 14" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"/></svg>
           </button>
         </div>
-        <div style={{ padding: 24, overflowY: 'auto', maxHeight: 'calc(100vh - 132px)' }}>{children}</div>
+        <div style={{ padding: 'clamp(16px, 4vw, 24px)', overflowY: 'auto', overflowX: 'hidden', maxHeight: 'calc(100vh - 132px)' }}>{children}</div>
       </div>
     </div>
   )

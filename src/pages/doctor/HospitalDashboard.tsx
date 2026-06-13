@@ -266,9 +266,9 @@ export default function HospitalDashboard() {
           </div>
         </Card>
 
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: 16 }}>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 16 }}>
           <Card>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16, gap: 8, flexWrap: 'wrap' }}>
               <h3 style={{ fontSize: 15, fontWeight: 700 }}>Recent Patients</h3>
               <Button variant="ghost" size="sm" onClick={() => navigate(HOSPITAL_ACCESS_PATH)}>Open access</Button>
             </div>
@@ -277,7 +277,7 @@ export default function HospitalDashboard() {
             ) : (
               <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
                 {recentPatients.map(patient => (
-                  <div key={patient.hid_code} style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                  <div key={patient.hid_code} style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
                     <div style={{ width: 36, height: 36, borderRadius: '50%', background: '#e8f1fc', color: '#1a6fd4', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 12, fontWeight: 700, flexShrink: 0 }}>
                       {(patient.patient_name ?? '?').split(' ').filter(Boolean).map(name => name[0]).join('').slice(0, 2).toUpperCase()}
                     </div>
@@ -295,7 +295,7 @@ export default function HospitalDashboard() {
           </Card>
 
           <Card>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16, gap: 8, flexWrap: 'wrap' }}>
               <h3 style={{ fontSize: 15, fontWeight: 700 }}>Recent Activity</h3>
               <Button variant="ghost" size="sm" onClick={() => navigate(HOSPITAL_HISTORY_PATH)}>View all</Button>
             </div>
@@ -322,7 +322,7 @@ export default function HospitalDashboard() {
         </div>
 
         <Card>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16, gap: 8, flexWrap: 'wrap' }}>
             <h3 style={{ fontSize: 15, fontWeight: 700 }}>Open Requests</h3>
             <Badge color="blue">{requests.length} tracked</Badge>
           </div>
@@ -335,10 +335,10 @@ export default function HospitalDashboard() {
                 const canOpen = isActiveGrant(item.grant_status, item.expires_at)
                 return (
                   <div key={item.request_id} style={{ border: '1px solid #e5e7eb', borderRadius: 10, padding: 14 }}>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 10 }}>
-                      <div>
-                        <div style={{ fontSize: 15, fontWeight: 700, color: '#111827' }}>{item.patient_name}</div>
-                        <div style={{ fontSize: 12, color: '#9ca3af', fontFamily: 'monospace', marginTop: 4 }}>{item.hid_code}</div>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 10, flexWrap: 'wrap' }}>
+                      <div style={{ minWidth: 0 }}>
+                        <div style={{ fontSize: 15, fontWeight: 700, color: '#111827', overflowWrap: 'anywhere' }}>{item.patient_name}</div>
+                        <div style={{ fontSize: 12, color: '#9ca3af', fontFamily: 'monospace', marginTop: 4, overflowWrap: 'anywhere' }}>{item.hid_code}</div>
                       </div>
                       <Badge color={isEmergency ? 'red' : canOpen ? 'green' : item.request_status === 'pending' ? 'amber' : 'blue'}>
                         {isEmergency ? 'Emergency' : canOpen ? 'Active' : item.request_status}

@@ -1,5 +1,6 @@
 import React from 'react'
 import { badgeMap } from './ui'
+import { getHealthInfoTypeIcon } from './HealthInfoTypeIcon'
 import { formatHealthInfoType, getHealthInfoTypeConfig, getRecordContributorLabel } from '../lib/medicalRecordUtils'
 import { formatDate } from '../lib/utils'
 import type { MedicalRecord, MedicalRecordFile } from '../types/database'
@@ -52,8 +53,8 @@ export function RecordSummaryCard({ record, attachments, onClick }: RecordSummar
             <span style={{ fontSize: 12, fontWeight: 600 }}>PDF</span>
           </div>
         ) : (
-          <div style={{ width: 48, height: 48, borderRadius: 12, background: accentColors.bg, color: accentColors.text, display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 700, fontSize: 18 }}>
-            {typeLabel.charAt(0)}
+          <div style={{ width: 48, height: 48, borderRadius: 0, background: accentColors.bg, color: accentColors.text, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+            {getHealthInfoTypeIcon(typeConfig?.id, 24)}
           </div>
         )}
       </div>

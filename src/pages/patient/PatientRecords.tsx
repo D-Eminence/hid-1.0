@@ -11,7 +11,6 @@ import { readPatientRecordsSnapshot, seedPatientProfileCache, seedPatientRecords
 import {
   buildHealthInfoRecordBody,
   buildOptimisticMedicalRecord,
-  countAllRecordAttachments,
   filterRecordsByQuery,
   filterRecordsWithDocuments,
   getInvalidRecordUploadNames,
@@ -31,7 +30,7 @@ import {
   renameHealthEvent,
   setHealthEventStatus,
 } from '../../lib/hidApi'
-import { formatDateTime, getPersonInitials } from '../../lib/utils'
+import { getPersonInitials } from '../../lib/utils'
 import type { MedicalRecord, MedicalRecordFile, Patient } from '../../types/database'
 import type { HidHealthEvent, HidHealthEventStatus } from '../../types/hid'
 
@@ -256,9 +255,6 @@ export default function PatientRecords() {
   }, [activeTab, filteredRecords, recordFiles])
   const tabSections = useMemo(() => groupRecordsByDay(tabRecords), [tabRecords])
   const selectedRecord = useMemo(() => records.find(record => record.id === selectedRecordId) ?? null, [records, selectedRecordId])
-  const totalFiles = useMemo(() => countAllRecordAttachments(records, recordFiles), [recordFiles, records])
-  const latestRecord = records[0]
-  const resultSummary = `${filteredRecords.length} record${filteredRecords.length === 1 ? '' : 's'} shown in newest to oldest order.`
   const patientInitials = getPersonInitials(patient?.full_name ?? session?.fullName ?? '')
 
   if (!session) return null
@@ -291,41 +287,24 @@ export default function PatientRecords() {
       notificationHidCode={session.hidCode}
     >
       <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 20 }}>
-        <div style={{ width: 44, height: 44, borderRadius: '50%', overflow: 'hidden', background: 'linear-gradient(180deg, #f4f7fb 0%, #dfe8f4 100%)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 700, color: '#68758b' }}>
+        <div style={{ width: 44, height: 44, borderRadius: '50%', overflow: 'hidden', background: 'linear-gradient(180deg, #f4f7fb 0%, #dfe8f4 100%)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 700, color: '#68758b', flexShrink: 0 }}>
           {patient?.photo_url ? <img src={patient.photo_url} alt={session.fullName} style={{ width: '100%', height: '100%', objectFit: 'cover' }} /> : patientInitials}
         </div>
-        <div>
+        <div style={{ minWidth: 0, overflowWrap: 'anywhere' }}>
           <div style={{ fontWeight: 700, fontSize: 14, color: '#111827' }}>{session.fullName}</div>
           <div style={{ color: '#8da031', fontSize: 11 }}>{session.hidCode}</div>
         </div>
       </div>
 
-      <Card style={{ borderRadius: 16, marginBottom: 18, background: 'linear-gradient(180deg, #fbfdff 0%, #f4f9ff 100%)', borderColor: '#dbe8f8' }}>
-        <div>
-          <div style={{ fontSize: 24, fontWeight: 700, color: '#111827' }}>Saved medical records</div>
-          <div style={{ color: '#6b7280', fontSize: 13, marginTop: 8, maxWidth: 520 }}>
-            New records appear first. You can search by date, record title, or any keyword saved in a record.
-          </div>
-        </div>
-
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 14, marginTop: 20 }}>
-          <StatCard label="Total records" value={`${records.length}`} />
-          <StatCard label="Attached files" value={`${totalFiles}`} />
-          <StatCard label="Latest update" value={latestRecord ? formatDateTime(latestRecord.created_at) : 'No records yet'} />
-        </div>
-
-        <div style={{ marginTop: 18 }}>
-          <Input
-            label="Search saved records"
-            placeholder="Search by date, title, or keyword"
-            value={search}
-            onChange={event => setSearch(event.target.value)}
-          />
-          <div style={{ marginTop: 8, color: '#6b7280', fontSize: 12 }}>{resultSummary}</div>
-        </div>
-      </Card>
-
       <div style={{ marginBottom: 18 }}>
+        <Input
+          placeholder="Search by date, title, or keyword"
+          value={search}
+          onChange={event => setSearch(event.target.value)}
+        />
+      </div>
+
+      <div style={{ marginBottom: 18, maxWidth: '100%', overflowX: 'auto' }}>
         <div style={{ display: 'inline-flex', gap: 8, background: '#f6f7f8', borderRadius: 999, padding: 8 }}>
           {RECORDS_TABS.map(tab => (
             <button
@@ -339,6 +318,8 @@ export default function PatientRecords() {
                 fontSize: 12,
                 fontWeight: 500,
                 cursor: 'pointer',
+                whiteSpace: 'nowrap',
+                flexShrink: 0,
                 background: activeTab === tab.id ? '#fff' : 'transparent',
                 color: activeTab === tab.id ? '#1891ff' : '#484f58',
                 boxShadow: activeTab === tab.id ? '0px 2px 2px #fafafa' : 'none',
@@ -459,15 +440,6 @@ export default function PatientRecords() {
         )}
       </Modal>
     </PortalShell>
-  )
-}
-
-function StatCard({ label, value }: { label: string; value: string }) {
-  return (
-    <div style={{ borderRadius: 12, border: '1px solid #dbe8f8', background: '#fff', padding: 16 }}>
-      <div style={{ color: '#6b7280', fontSize: 12 }}>{label}</div>
-      <div style={{ marginTop: 8, fontSize: 18, fontWeight: 700, color: '#111827' }}>{value}</div>
-    </div>
   )
 }
 

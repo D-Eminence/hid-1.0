@@ -11,6 +11,7 @@ import type {
   HidPatientHistoryResponse,
   HidPatientProfileResponse,
   HidPatientRecordsResponse,
+  HidPendingShareInvite,
   HidSessionPayload,
   HidShareDurationPreset,
   HidSharePermissionTier,
@@ -145,6 +146,7 @@ export type LegacyAccessRequestWithShare = AccessRequest & {
 
 type HistoryView = {
   activeGrants: LegacyAccessRequestWithShare[]
+  pendingInvites: HidPendingShareInvite[]
   logs: AccessLog[]
 }
 
@@ -1095,6 +1097,7 @@ async function fetchPatientHistoryFromTables(hidCode: string): Promise<HistoryVi
 
   return {
     activeGrants,
+    pendingInvites: [],
     logs,
   }
 }
@@ -1740,6 +1743,7 @@ export async function fetchPatientHistory(hidCode: string, options: { forceRefre
 
     return {
       activeGrants: history.active_grants.map(item => toLegacyAccessRequest(hidCode, item)),
+      pendingInvites: history.pending_invites ?? [],
       logs: history.events.map(item => toLegacyAccessLog(hidCode, item)),
     }
   })
@@ -1784,6 +1788,42 @@ export async function createShare({
       durationPreset,
       reason: normalizeOptionalText(reason),
     },
+  })
+  invalidateViewCache('history:')
+  return response.data
+}
+
+export async function createShareInvite({
+  email,
+  fullName,
+  permissionTier,
+  durationPreset,
+  reason,
+}: {
+  email: string
+  fullName?: string
+  permissionTier: HidSharePermissionTier
+  durationPreset: HidShareDurationPreset
+  reason?: string
+}) {
+  const response = await edgeRequest<{ data: { mode: 'connected' | 'invited'; grant_id?: string; invite_id?: string } }>('share-invite-create', {
+    method: 'POST',
+    body: {
+      email,
+      fullName: normalizeOptionalText(fullName),
+      permissionTier,
+      durationPreset,
+      reason: normalizeOptionalText(reason),
+    },
+  })
+  invalidateViewCache('history:')
+  return response.data
+}
+
+export async function cancelShareInvite(inviteId: string) {
+  const response = await edgeRequest<{ data: { invite_id: string } }>('share-invite-cancel', {
+    method: 'POST',
+    body: { inviteId },
   })
   invalidateViewCache('history:')
   return response.data

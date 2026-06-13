@@ -459,7 +459,7 @@ export default function DoctorEmergency() {
       <Modal open={showAddRecord} onClose={() => { setShowAddRecord(false); setRecordForm(createEmptyRecordForm()) }} title="Add Emergency Record">
         <form onSubmit={handleAddRecord} style={{ display: 'grid', gap: 14 }}>
           {data && (
-            <div style={{ background: '#f9fafb', borderRadius: 8, padding: '10px 14px', fontSize: 13 }}>
+            <div style={{ background: '#f9fafb', borderRadius: 8, padding: '10px 14px', fontSize: 13, overflowWrap: 'anywhere' }}>
               <span style={{ color: '#9ca3af' }}>Patient: </span>
               <strong>{data.patient.full_name}</strong>
               <span style={{ fontFamily: 'monospace', color: '#dc2626', marginLeft: 8, fontSize: 12 }}>{data.patient.hid_code}</span>
@@ -510,13 +510,13 @@ function EmergencyProfileSection({
 }) {
   return (
     <div style={{ border: '1px solid #edf1f5', borderRadius: 12, overflow: 'hidden', background: '#fff' }}>
-      <div style={{ background: '#f5f5f5', padding: '12px 14px', fontSize: 15, fontWeight: 700, color: '#1f2937' }}>{title}</div>
+      <div style={{ background: '#f5f5f5', padding: '12px 14px', fontSize: 16, fontWeight: 700, color: '#1f2937' }}>{title}</div>
       <div style={{ padding: '18px 14px' }}>
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(190px, 1fr))', gap: 24 }}>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: 16 }}>
           {fields.map(field => (
-            <div key={field.label}>
+            <div key={field.label} style={{ minWidth: 0 }}>
               <div style={{ fontSize: 12, color: '#6b7280', marginBottom: 4 }}>{field.label}</div>
-              <div style={{ fontSize: 16, fontWeight: 600, color: '#111827', lineHeight: 1.45, whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>{field.value}</div>
+              <div style={{ fontSize: 14, fontWeight: 600, color: '#111827', lineHeight: 1.45, whiteSpace: 'pre-wrap', overflowWrap: 'anywhere' }}>{field.value}</div>
             </div>
           ))}
         </div>

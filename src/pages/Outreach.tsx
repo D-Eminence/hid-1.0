@@ -110,17 +110,17 @@ export default function OutreachPage() {
   return (
     <Layout title="Outreach" subtitle={outreach.activeCampaign?.name ?? 'No active outreach campaign selected'}>
       <div style={{ display: 'grid', gap: 24 }}>
-        <div style={{ display: 'grid', gap: 18, gridTemplateColumns: '1fr 320px' }}>
+        <div style={{ display: 'grid', gap: 18, gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))' }}>
           <Card style={{ padding: 24 }}>
             <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', justifyContent: 'space-between', gap: 16 }}>
-              <div>
+              <div style={{ minWidth: 0, overflowWrap: 'anywhere' }}>
                 <p style={{ margin: 0, fontSize: 13, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.12em', color: '#1a6fd4' }}>Outreach workspace</p>
                 <h2 style={{ margin: '10px 0 0', fontSize: 26 }}>{outreach.activeCampaign?.name ?? 'No campaign selected'}</h2>
                 <p style={{ margin: '10px 0 0', color: '#6b7280' }}>{outreach.activeCampaign?.org} · {outreach.activeCampaign?.location}</p>
               </div>
               <Badge color={outreach.activeCampaign?.status === 'active' ? 'green' : outreach.activeCampaign?.status === 'planned' ? 'blue' : 'gray'}>{outreach.activeCampaign?.status ?? 'unavailable'}</Badge>
             </div>
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(140px, 1fr))', gap: 12, marginTop: 24 }}>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(110px, 1fr))', gap: 12, marginTop: 24 }}>
               <div style={{ padding: 16, borderRadius: 14, background: '#f8fafc' }}>
                 <p style={{ margin: 0, color: '#6b7280', fontSize: 12 }}>Encounters</p>
                 <p style={{ margin: '8px 0 0', fontSize: 24, fontWeight: 700 }}>{outreach.metrics.registered}</p>
@@ -174,7 +174,7 @@ export default function OutreachPage() {
           </Card>
         </div>
 
-        <div style={{ display: 'grid', gap: 24, gridTemplateColumns: '1.3fr 0.7fr' }}>
+        <div style={{ display: 'grid', gap: 24, gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))' }}>
           <Card style={{ padding: 24 }}>
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, marginBottom: 20 }}>
               <div>
@@ -184,7 +184,7 @@ export default function OutreachPage() {
             </div>
             <form onSubmit={handleSubmit} style={{ display: 'grid', gap: 16 }}>
               <Input label="Full name" value={form.full_name} onChange={(event) => setForm({ ...form, full_name: event.target.value })} />
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: 16 }}>
                 <Select label="Sex" options={sexOptions} value={form.sex} onChange={(event) => setForm({ ...form, sex: event.target.value })} />
                 <Input label="Age" type="number" value={form.age_years} onChange={(event) => setForm({ ...form, age_years: Number(event.target.value) })} />
               </div>
@@ -206,8 +206,8 @@ export default function OutreachPage() {
                 <div style={{ display: 'grid', gap: 12 }}>
                   {recentEncounters.map((item) => (
                     <div key={item.id} style={{ padding: 16, borderRadius: 14, border: '1px solid #e5e7eb', background: '#fff' }}>
-                      <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12 }}>
-                        <div>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap' }}>
+                        <div style={{ minWidth: 0, overflowWrap: 'anywhere' }}>
                           <strong>{item.full_name}</strong>
                           <p style={{ margin: '6px 0 0', color: '#6b7280', fontSize: 13 }}>{item.service_type}</p>
                         </div>
@@ -227,8 +227,8 @@ export default function OutreachPage() {
                 <div style={{ display: 'grid', gap: 12 }}>
                   {outreach.syncQueue.slice(0, 6).map((item) => (
                     <div key={item.id} style={{ padding: 14, borderRadius: 14, border: '1px solid #e5e7eb', background: '#fff' }}>
-                      <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12 }}>
-                        <div style={{ fontSize: 13, fontWeight: 600 }}>{item.entity}</div>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap' }}>
+                        <div style={{ fontSize: 13, fontWeight: 600, minWidth: 0, overflowWrap: 'anywhere' }}>{item.entity}</div>
                         <Badge color={item.status === 'failed' ? 'red' : item.status === 'queued' ? 'amber' : 'green'}>{item.status}</Badge>
                       </div>
                       {item.error && <p style={{ margin: '8px 0 0', color: '#dc2626', fontSize: 13 }}>{item.error}</p>}

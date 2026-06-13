@@ -327,7 +327,7 @@ export default function PatientProfile() {
       onAvatarUpload={file => { void uploadProfilePicture(file) }}
     >
       <div style={{ display: 'grid', gap: 24 }}>
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: 28, alignItems: 'start' }}>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(320px, 100%), 1fr))', gap: 28, alignItems: 'start' }}>
           <div style={{ display: 'grid', gap: 20 }}>
             <Card style={{ borderRadius: 24, padding: 22 }}>
               <div style={{ color: '#4b5563', fontSize: 15, fontWeight: 700 }}>Profile completion</div>
@@ -338,7 +338,7 @@ export default function PatientProfile() {
 
             <Card style={{ borderRadius: 28, padding: 22 }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
-                <div style={{ position: 'relative' }}>
+                <div style={{ position: 'relative', flexShrink: 0 }}>
                   {patient.photo_url ? (
                     <img src={patient.photo_url} alt={patient.full_name} style={{ width: 66, height: 66, borderRadius: '50%', objectFit: 'cover' }} />
                   ) : (
@@ -348,7 +348,7 @@ export default function PatientProfile() {
                   )}
                   <span style={{ position: 'absolute', right: 2, bottom: 2, width: 11, height: 11, borderRadius: '50%', background: '#22c55e', border: '2px solid #fff' }} />
                 </div>
-                <div>
+                <div style={{ minWidth: 0, overflowWrap: 'anywhere' }}>
                   <div style={{ fontWeight: 700, color: '#111827', fontSize: 16 }}>{patient.full_name}</div>
                   <div style={{ marginTop: 4, color: '#1f8cff', fontSize: 12, fontWeight: 600 }}>{patient.hid_code}</div>
                 </div>
@@ -460,7 +460,7 @@ export default function PatientProfile() {
                   <Select label="Blood Group" value={patient.blood_group ?? ''} onChange={e => updatePatientDraft(current => ({ ...current, blood_group: e.target.value }))} options={BLOOD_GROUPS.map(value => ({ value, label: value }))} />
                   <Select label="Genotype" value={patient.genotype ?? ''} onChange={e => updatePatientDraft(current => ({ ...current, genotype: e.target.value }))} options={GENOTYPES.map(value => ({ value, label: value }))} />
                 </div>
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: 14, marginTop: 14 }}>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(240px, 100%), 1fr))', gap: 14, marginTop: 14 }}>
                   <Textarea label="Allergies" value={patient.allergies ?? ''} onChange={e => updatePatientDraft(current => ({ ...current, allergies: e.target.value }))} />
                   <Textarea label="Current Medications" value={patient.current_medications ?? ''} onChange={e => updatePatientDraft(current => ({ ...current, current_medications: e.target.value }))} />
                   <Textarea label="Chronic Conditions" value={patient.chronic_conditions ?? ''} onChange={e => updatePatientDraft(current => ({ ...current, chronic_conditions: e.target.value }))} />

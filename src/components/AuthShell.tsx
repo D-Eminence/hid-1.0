@@ -38,7 +38,7 @@ export function AuthShell({
   return (
     <div style={{ minHeight: '100vh', background: '#f5f6fa', padding: 'clamp(14px, 4vw, 28px)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
       <div style={{ width: '100%', maxWidth: 560, background: '#fff', borderRadius: 24, border: '1px solid #eef1f6', boxShadow: '0 18px 40px rgba(25, 46, 86, 0.06)', padding: 'clamp(18px, 5vw, 30px)' }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 12 }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 12, flexWrap: 'wrap', rowGap: 8 }}>
           <HIDLogo size="xs" />
           {providerLink && (
             <button

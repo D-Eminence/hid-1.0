@@ -545,7 +545,7 @@ export default function DoctorAuth() {
                 <OtpInputs value={forgot.otp} onChange={value => setForgot(current => ({ ...current, otp: value }))} onComplete={verifyForgotCode} />
               </div>
               <Button loading={loading} onClick={() => void verifyForgotCode()} style={actionButtonStyle(forgot.otp.length === 6)}>Verify code</Button>
-              <button onClick={() => void resendForgotPasswordCode()} style={{ marginTop: 12, border: 'none', background: 'none', color: '#1f8cff', fontSize: 10 }}>
+              <button onClick={() => void resendForgotPasswordCode()} style={{ marginTop: 12, border: 'none', background: 'none', color: '#1f8cff', fontSize: 11 }}>
                 Send code again
               </button>
             </>
@@ -595,7 +595,7 @@ export default function DoctorAuth() {
           <Button loading={loading} onClick={() => void verifySignupCode()} style={actionButtonStyle(signupVerification.code.length === 6)}>
             Verify code
           </Button>
-          <button onClick={() => void resendSignupCode()} style={{ marginTop: 12, border: 'none', background: 'none', color: '#1f8cff', fontSize: 10 }}>
+          <button onClick={() => void resendSignupCode()} style={{ marginTop: 12, border: 'none', background: 'none', color: '#1f8cff', fontSize: 11 }}>
             Send code again
           </button>
           <button onClick={() => setStep('signup')} style={{ marginTop: 12, border: 'none', background: 'none', color: '#1f8cff', fontSize: 11 }}>
@@ -629,7 +629,7 @@ export default function DoctorAuth() {
     <AuthShell mode="provider">
       <div style={{ flex: 1, display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
         <div style={{ textAlign: 'center', marginBottom: 18 }}>
-          <div style={{ fontSize: 32, fontWeight: 700, color: '#111827', lineHeight: 1.15 }}>Hospital Portal</div>
+          <div style={{ fontSize: 30, fontWeight: 700, color: '#111827', lineHeight: 1.15 }}>Hospital Portal</div>
           <p style={{ color: '#7d8797', marginTop: 8, fontSize: 12 }}>
             Secure access for hospitals and care teams to patient medical records.
           </p>
@@ -659,7 +659,7 @@ export default function DoctorAuth() {
             <p style={{ marginTop: 14, color: '#7d8797', fontSize: 11, lineHeight: 1.7 }}>
               Sign in with your hospital name, email address, and password.
             </p>
-            <button onClick={() => setStep('forgot')} style={{ marginTop: 12, border: 'none', background: 'none', color: '#1f8cff', fontSize: 10 }}>
+            <button onClick={() => setStep('forgot')} style={{ marginTop: 12, border: 'none', background: 'none', color: '#1f8cff', fontSize: 11 }}>
               Forgotten Password
             </button>
           </>

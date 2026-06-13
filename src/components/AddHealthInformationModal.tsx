@@ -1,6 +1,7 @@
 import React, { useState } from 'react'
 import { badgeMap, Button, Input, Modal, Select, Textarea, showToast } from './ui'
 import { FileAttachmentPreview } from './RecordMarkdownView'
+import { getHealthInfoTypeIcon } from './HealthInfoTypeIcon'
 import { VoiceToTextButton } from './VoiceToTextButton'
 import {
   HEALTH_INFO_TYPES,
@@ -173,18 +174,16 @@ export function AddHealthInformationModal({
                     style={{
                       width: 36,
                       height: 36,
-                      borderRadius: 10,
+                      borderRadius: 0,
                       background: colors.bg,
                       color: colors.text,
                       display: 'inline-flex',
                       alignItems: 'center',
                       justifyContent: 'center',
-                      fontWeight: 700,
-                      fontSize: 14,
                       flexShrink: 0,
                     }}
                   >
-                    {type.label.charAt(0)}
+                    {getHealthInfoTypeIcon(type.id)}
                   </span>
                   <span style={{ flex: 1, minWidth: 0 }}>
                     <div style={{ fontWeight: 600, fontSize: 14, color: '#111827' }}>{type.label}</div>

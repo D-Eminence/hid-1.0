@@ -898,7 +898,7 @@ export default function Landing() {
       <section id="security" style={{ padding: responsiveSectionPadding, background: '#f8f9fb' }}>
         <div style={{ maxWidth: 900, margin: '0 auto' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', marginBottom: isNarrow ? 26 : 36, flexWrap: 'wrap', gap: 16 }}>
-            <div>
+            <div style={{ minWidth: 0 }}>
               <h2 style={{ fontSize: isNarrow ? 24 : 28, fontWeight: 800, letterSpacing: isNarrow ? 0 : '-0.5px', maxWidth: 420 }}>Security & Compliance</h2>
               <p style={{ fontSize: 14, color: '#6b7280', marginTop: 10, maxWidth: 400, lineHeight: 1.7 }}>
                 From a single patient record to an entire hospital network, HID is built with enterprise-grade protection, strict consent controls, and healthcare compliance at every layer, keeping every record secure, encrypted, and under the patient&apos;s control.
@@ -994,7 +994,7 @@ export default function Landing() {
                     color: '#111827',
                   }}
                 >
-                  {q}
+                  <span style={{ minWidth: 0, overflowWrap: 'anywhere' }}>{q}</span>
                   <span style={{ width: 22, height: 22, borderRadius: '50%', border: '1.5px solid #e5e7eb', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, color: '#6b7280', transition: 'all 0.2s', background: openFaq === index ? '#1a6fd4' : 'transparent', borderColor: openFaq === index ? '#1a6fd4' : '#e5e7eb' }}>
                     <svg width="10" height="10" viewBox="0 0 10 10" fill="none" style={{ transform: openFaq === index ? 'rotate(45deg)' : 'none', transition: 'transform 0.2s' }}>
                       <path d="M5 2v6M2 5h6" stroke={openFaq === index ? 'white' : 'currentColor'} strokeWidth="1.5" strokeLinecap="round" />

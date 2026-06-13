@@ -134,7 +134,7 @@ export default function PatientNotifications() {
           {notifications.map(item => (
             <div key={item.id} style={{ border: '1px solid #e5e7eb', borderRadius: 10, padding: 14, background: item.is_read ? '#fff' : '#eff6ff' }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap' }}>
-                <div>
+                <div style={{ minWidth: 0, overflowWrap: 'anywhere' }}>
                   <div style={{ fontWeight: 700 }}>{item.title}</div>
                   <div style={{ color: '#374151', marginTop: 6 }}>{item.message}</div>
                   <div style={{ color: '#6b7280', fontSize: 13, marginTop: 6 }}>{formatDateTime(item.created_at)}</div>

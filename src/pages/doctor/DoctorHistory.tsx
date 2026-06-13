@@ -188,7 +188,7 @@ export default function DoctorHistory() {
                 aria-label="Filter access logs by date"
               />
             </div>
-            <div style={{ display: 'flex', gap: 8 }}>
+            <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
               {(['all', 'standard', 'emergency'] as const).map(value => (
                 <button
                   key={value}
@@ -253,8 +253,8 @@ export default function DoctorHistory() {
                 >
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 10 }}>
                     <div style={{ minWidth: 0 }}>
-                      <div style={{ fontFamily: 'monospace', fontSize: 13, color: '#1a6fd4', fontWeight: 600 }}>{log.hid_code}</div>
-                      <div style={{ fontSize: 13, fontWeight: 600, color: '#111827', marginTop: 4 }}>{log.patient_name ?? 'Unknown patient'}</div>
+                      <div style={{ fontFamily: 'monospace', fontSize: 13, color: '#1a6fd4', fontWeight: 600, overflowWrap: 'anywhere' }}>{log.hid_code}</div>
+                      <div style={{ fontSize: 13, fontWeight: 600, color: '#111827', marginTop: 4, overflowWrap: 'anywhere' }}>{log.patient_name ?? 'Unknown patient'}</div>
                     </div>
                     <Badge color={log.access_type === 'emergency' ? 'red' : 'blue'}>
                       {log.access_type === 'emergency' ? 'Emergency' : 'Standard'}
@@ -350,7 +350,7 @@ export default function DoctorHistory() {
                 {selected.access_type === 'emergency' ? 'Emergency Access' : 'Standard Access'}
               </Badge>
             </div>
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 14, background: '#f9fafb', borderRadius: 10, padding: 16 }}>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: 14, background: '#f9fafb', borderRadius: 10, padding: 16 }}>
               {[
                 { label: 'Patient HID', value: selected.hid_code, mono: true },
                 { label: 'Patient Name', value: selected.patient_name ?? '-' },
@@ -359,9 +359,9 @@ export default function DoctorHistory() {
                 { label: 'Access Time', value: formatDateTime(selected.access_time) },
                 { label: 'Access Type', value: selected.access_type },
               ].map(item => (
-                <div key={item.label}>
+                <div key={item.label} style={{ minWidth: 0 }}>
                   <div style={{ fontSize: 11, color: '#9ca3af', marginBottom: 2, textTransform: 'uppercase', letterSpacing: '0.4px' }}>{item.label}</div>
-                  <div style={{ fontSize: 14, fontWeight: 500, fontFamily: item.mono ? 'monospace' : undefined, color: item.mono ? '#1a6fd4' : undefined, textTransform: item.label === 'Access Type' ? 'capitalize' : undefined }}>
+                  <div style={{ fontSize: 14, fontWeight: 500, fontFamily: item.mono ? 'monospace' : undefined, color: item.mono ? '#1a6fd4' : undefined, textTransform: item.label === 'Access Type' ? 'capitalize' : undefined, overflowWrap: 'anywhere' }}>
                     {item.value}
                   </div>
                 </div>

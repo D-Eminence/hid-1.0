@@ -192,7 +192,7 @@ export default function OutreachVerify() {
               </p>
 
               <form onSubmit={handleVerify}>
-                <div style={{ display: 'flex', gap: 8, justifyContent: 'center', marginBottom: 24 }} onPaste={handlePaste}>
+                <div style={{ display: 'flex', gap: 'clamp(6px, 2vw, 8px)', justifyContent: 'center', marginBottom: 24 }} onPaste={handlePaste}>
                   {digits.map((d, i) => (
                     <input
                       key={i}
@@ -205,11 +205,12 @@ export default function OutreachVerify() {
                       onKeyDown={e => handleKeyDown(i, e)}
                       disabled={submitting || expired}
                       style={{
-                        width: 48, height: 56, textAlign: 'center', fontSize: 24, fontWeight: 700,
+                        width: 'clamp(32px, 9vw, 48px)', height: 'clamp(40px, 11vw, 56px)', textAlign: 'center', fontSize: 'clamp(18px, 5vw, 24px)', fontWeight: 700,
                         border: `2px solid ${error ? '#fca5a5' : d ? '#1a6fd4' : '#e5e7eb'}`,
                         borderRadius: 10, outline: 'none', fontFamily: 'monospace',
                         background: expired ? '#f9fafb' : '#fff', color: '#111827',
                         transition: 'border-color 0.15s',
+                        boxSizing: 'border-box',
                       }}
                     />
                   ))}

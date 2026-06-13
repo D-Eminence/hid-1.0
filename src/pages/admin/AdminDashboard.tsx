@@ -189,7 +189,7 @@ function metricIcon(path: 'users' | 'plus' | 'activity' | 'check' | 'records' | 
 
 function sectionLabel(label: string) {
   return (
-    <div style={{ fontSize: 10, fontWeight: 800, letterSpacing: '0.06em', color: '#93a1b4', textTransform: 'uppercase', marginBottom: 8 }}>
+    <div style={{ fontSize: 10, fontWeight: 800, letterSpacing: '0.06em', color: 'var(--admin-muted)', textTransform: 'uppercase', marginBottom: 8 }}>
       {label}
     </div>
   )
@@ -215,7 +215,7 @@ function panelStyle(): React.CSSProperties {
 
 function tableHeaderCell(label: string) {
   return (
-    <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.05em', textTransform: 'uppercase', color: '#98a6b7' }}>
+    <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.05em', textTransform: 'uppercase', color: 'var(--admin-muted)' }}>
       {label}
     </div>
   )
@@ -811,7 +811,7 @@ export default function AdminDashboard() {
                 style={{
                   border: '1px solid var(--admin-border)',
                   background: option.key === windowKey && !activeOverviewDate ? 'rgba(26, 111, 212, 0.08)' : '#fff',
-                  color: option.key === windowKey && !activeOverviewDate ? 'var(--admin-accent)' : '#7a8899',
+                  color: option.key === windowKey && !activeOverviewDate ? 'var(--admin-accent)' : 'var(--admin-muted)',
                   borderRadius: 8,
                   padding: '6px 10px',
                   fontSize: 10.5,
@@ -964,7 +964,7 @@ export default function AdminDashboard() {
                       >
                         <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 10 }}>
                           <div style={{ minWidth: 0 }}>
-                            <div style={{ fontSize: 12.5, fontWeight: 700, color: 'var(--admin-text)' }}>{primaryLabel}</div>
+                            <div style={{ fontSize: 12.5, fontWeight: 700, color: 'var(--admin-text)', wordBreak: 'break-word' }}>{primaryLabel}</div>
                             <div style={{ fontSize: 11, color: 'var(--admin-muted)', marginTop: 2, wordBreak: 'break-word' }}>{secondaryLabel}</div>
                           </div>
                           <Badge color={item.flags.deleted ? 'amber' : item.flags.locked ? 'red' : 'green'}>
@@ -1015,7 +1015,7 @@ export default function AdminDashboard() {
                         >
                           <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 10 }}>
                             <div style={{ minWidth: 0 }}>
-                              <div style={{ fontSize: 12.5, fontWeight: 700, color: 'var(--admin-text)' }}>{primaryLabel}</div>
+                              <div style={{ fontSize: 12.5, fontWeight: 700, color: 'var(--admin-text)', wordBreak: 'break-word' }}>{primaryLabel}</div>
                               <div style={{ fontSize: 11, color: 'var(--admin-muted)', marginTop: 2, wordBreak: 'break-word' }}>
                                 {item.patient?.hidCode ?? item.email ?? 'No email'}{deletedAt ? ` • deleted ${formatRelativeTime(deletedAt)}` : ''}
                               </div>
@@ -1044,11 +1044,11 @@ export default function AdminDashboard() {
                 ) : (
                   <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
                     <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap' }}>
-                      <div>
-                        <div style={{ fontSize: 17, fontWeight: 800, color: 'var(--admin-text)' }}>
+                      <div style={{ minWidth: 0 }}>
+                        <div style={{ fontSize: 16, fontWeight: 800, color: 'var(--admin-text)', overflowWrap: 'anywhere' }}>
                           {selectedDirectoryUser.patient?.fullName ?? selectedDirectoryUser.staff?.fullName ?? selectedDirectoryUser.profile?.displayName ?? selectedDirectoryUser.email ?? 'Unknown user'}
                         </div>
-                        <div style={{ fontSize: 12, color: 'var(--admin-muted)', marginTop: 4 }}>
+                        <div style={{ fontSize: 12, color: 'var(--admin-muted)', marginTop: 4, overflowWrap: 'anywhere' }}>
                           {selectedDirectoryUser.patient?.hidCode ? `${selectedDirectoryUser.patient.hidCode} • ` : ''}
                           {selectedDirectoryUser.email ?? 'No email available'}
                         </div>
@@ -1084,40 +1084,40 @@ export default function AdminDashboard() {
                     <div style={{ display: 'grid', gridTemplateColumns: viewportWidth < 1180 ? '1fr' : 'minmax(0, 1fr) minmax(0, 1fr)', gap: 12 }}>
                       <div style={{ border: '1px solid var(--admin-border)', borderRadius: 10, padding: '12px 14px' }}>
                         <div style={{ fontSize: 12, fontWeight: 700, marginBottom: 10 }}>Profile</div>
-                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
-                          <div><div style={{ fontSize: 10.5, color: 'var(--admin-muted)' }}>Role</div><div style={{ fontSize: 12.5, fontWeight: 700 }}>{formatLabelValue(selectedDirectoryUser.profile?.appRole)}</div></div>
-                          <div><div style={{ fontSize: 10.5, color: 'var(--admin-muted)' }}>Deleted</div><div style={{ fontSize: 12.5, fontWeight: 700 }}>{selectedDirectoryUser.profile?.deletedAt ? formatRelativeTime(selectedDirectoryUser.profile.deletedAt) : 'No'}</div></div>
-                          <div><div style={{ fontSize: 10.5, color: 'var(--admin-muted)' }}>MFA Required</div><div style={{ fontSize: 12.5, fontWeight: 700 }}>{selectedDirectoryUser.profile ? formatBool(selectedDirectoryUser.profile.mfaRequired) : 'Not available'}</div></div>
-                          <div><div style={{ fontSize: 10.5, color: 'var(--admin-muted)' }}>Email Confirmed</div><div style={{ fontSize: 12.5, fontWeight: 700 }}>{selectedDirectoryUser.emailConfirmedAt ? formatRelativeTime(selectedDirectoryUser.emailConfirmedAt) : 'No'}</div></div>
-                          <div><div style={{ fontSize: 10.5, color: 'var(--admin-muted)' }}>Last Sign In</div><div style={{ fontSize: 12.5, fontWeight: 700 }}>{formatRelativeTime(selectedDirectoryUser.lastSignInAt)}</div></div>
-                          <div><div style={{ fontSize: 10.5, color: 'var(--admin-muted)' }}>Created</div><div style={{ fontSize: 12.5, fontWeight: 700 }}>{formatRelativeTime(selectedDirectoryUser.profile?.createdAt ?? null)}</div></div>
-                          <div><div style={{ fontSize: 10.5, color: 'var(--admin-muted)' }}>Updated</div><div style={{ fontSize: 12.5, fontWeight: 700 }}>{formatRelativeTime(selectedDirectoryUser.profile?.updatedAt ?? null)}</div></div>
-                          <div><div style={{ fontSize: 10.5, color: 'var(--admin-muted)' }}>Delete Reason</div><div style={{ fontSize: 12.5, fontWeight: 700 }}>{formatLabelValue(selectedDirectoryUser.profile?.deletedReason)}</div></div>
-                          <div><div style={{ fontSize: 10.5, color: 'var(--admin-muted)' }}>Restored</div><div style={{ fontSize: 12.5, fontWeight: 700 }}>{selectedDirectoryUser.profile?.restoredAt ? formatRelativeTime(selectedDirectoryUser.profile.restoredAt) : 'Not yet'}</div></div>
+                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: 10 }}>
+                          <div style={{ minWidth: 0 }}><div style={{ fontSize: 10.5, color: 'var(--admin-muted)' }}>Role</div><div style={{ fontSize: 12.5, fontWeight: 700, overflowWrap: 'anywhere' }}>{formatLabelValue(selectedDirectoryUser.profile?.appRole)}</div></div>
+                          <div style={{ minWidth: 0 }}><div style={{ fontSize: 10.5, color: 'var(--admin-muted)' }}>Deleted</div><div style={{ fontSize: 12.5, fontWeight: 700, overflowWrap: 'anywhere' }}>{selectedDirectoryUser.profile?.deletedAt ? formatRelativeTime(selectedDirectoryUser.profile.deletedAt) : 'No'}</div></div>
+                          <div style={{ minWidth: 0 }}><div style={{ fontSize: 10.5, color: 'var(--admin-muted)' }}>MFA Required</div><div style={{ fontSize: 12.5, fontWeight: 700, overflowWrap: 'anywhere' }}>{selectedDirectoryUser.profile ? formatBool(selectedDirectoryUser.profile.mfaRequired) : 'Not available'}</div></div>
+                          <div style={{ minWidth: 0 }}><div style={{ fontSize: 10.5, color: 'var(--admin-muted)' }}>Email Confirmed</div><div style={{ fontSize: 12.5, fontWeight: 700, overflowWrap: 'anywhere' }}>{selectedDirectoryUser.emailConfirmedAt ? formatRelativeTime(selectedDirectoryUser.emailConfirmedAt) : 'No'}</div></div>
+                          <div style={{ minWidth: 0 }}><div style={{ fontSize: 10.5, color: 'var(--admin-muted)' }}>Last Sign In</div><div style={{ fontSize: 12.5, fontWeight: 700, overflowWrap: 'anywhere' }}>{formatRelativeTime(selectedDirectoryUser.lastSignInAt)}</div></div>
+                          <div style={{ minWidth: 0 }}><div style={{ fontSize: 10.5, color: 'var(--admin-muted)' }}>Created</div><div style={{ fontSize: 12.5, fontWeight: 700, overflowWrap: 'anywhere' }}>{formatRelativeTime(selectedDirectoryUser.profile?.createdAt ?? null)}</div></div>
+                          <div style={{ minWidth: 0 }}><div style={{ fontSize: 10.5, color: 'var(--admin-muted)' }}>Updated</div><div style={{ fontSize: 12.5, fontWeight: 700, overflowWrap: 'anywhere' }}>{formatRelativeTime(selectedDirectoryUser.profile?.updatedAt ?? null)}</div></div>
+                          <div style={{ minWidth: 0 }}><div style={{ fontSize: 10.5, color: 'var(--admin-muted)' }}>Delete Reason</div><div style={{ fontSize: 12.5, fontWeight: 700, overflowWrap: 'anywhere' }}>{formatLabelValue(selectedDirectoryUser.profile?.deletedReason)}</div></div>
+                          <div style={{ minWidth: 0 }}><div style={{ fontSize: 10.5, color: 'var(--admin-muted)' }}>Restored</div><div style={{ fontSize: 12.5, fontWeight: 700, overflowWrap: 'anywhere' }}>{selectedDirectoryUser.profile?.restoredAt ? formatRelativeTime(selectedDirectoryUser.profile.restoredAt) : 'Not yet'}</div></div>
                         </div>
                       </div>
 
                       <div style={{ border: '1px solid var(--admin-border)', borderRadius: 10, padding: '12px 14px' }}>
                         <div style={{ fontSize: 12, fontWeight: 700, marginBottom: 10 }}>{selectedDirectoryUser.patient ? 'Patient Details' : selectedDirectoryUser.staff ? 'Staff Details' : 'Account Details'}</div>
                         {selectedDirectoryUser.patient ? (
-                          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
-                            <div><div style={{ fontSize: 10.5, color: 'var(--admin-muted)' }}>Phone</div><div style={{ fontSize: 12.5, fontWeight: 700 }}>{formatLabelValue(selectedDirectoryUser.patient.phone)}</div></div>
-                            <div><div style={{ fontSize: 10.5, color: 'var(--admin-muted)' }}>Gender</div><div style={{ fontSize: 12.5, fontWeight: 700 }}>{formatLabelValue(selectedDirectoryUser.patient.gender)}</div></div>
-                            <div><div style={{ fontSize: 10.5, color: 'var(--admin-muted)' }}>Date of Birth</div><div style={{ fontSize: 12.5, fontWeight: 700 }}>{formatLabelValue(selectedDirectoryUser.patient.dateOfBirth)}</div></div>
-                            <div><div style={{ fontSize: 10.5, color: 'var(--admin-muted)' }}>Profile Completion</div><div style={{ fontSize: 12.5, fontWeight: 700 }}>{selectedDirectoryUser.patient.profilePercent}%</div></div>
-                            <div><div style={{ fontSize: 10.5, color: 'var(--admin-muted)' }}>Country</div><div style={{ fontSize: 12.5, fontWeight: 700 }}>{formatLabelValue(selectedDirectoryUser.patient.country)}</div></div>
-                            <div><div style={{ fontSize: 10.5, color: 'var(--admin-muted)' }}>State</div><div style={{ fontSize: 12.5, fontWeight: 700 }}>{formatLabelValue(selectedDirectoryUser.patient.state)}</div></div>
-                            <div><div style={{ fontSize: 10.5, color: 'var(--admin-muted)' }}>Emergency Contact</div><div style={{ fontSize: 12.5, fontWeight: 700 }}>{formatLabelValue(selectedDirectoryUser.patient.emergencyContactName)}</div></div>
-                            <div><div style={{ fontSize: 10.5, color: 'var(--admin-muted)' }}>Emergency Phone</div><div style={{ fontSize: 12.5, fontWeight: 700 }}>{formatLabelValue(selectedDirectoryUser.patient.emergencyContactPhone)}</div></div>
+                          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: 10 }}>
+                            <div style={{ minWidth: 0 }}><div style={{ fontSize: 10.5, color: 'var(--admin-muted)' }}>Phone</div><div style={{ fontSize: 12.5, fontWeight: 700, overflowWrap: 'anywhere' }}>{formatLabelValue(selectedDirectoryUser.patient.phone)}</div></div>
+                            <div style={{ minWidth: 0 }}><div style={{ fontSize: 10.5, color: 'var(--admin-muted)' }}>Gender</div><div style={{ fontSize: 12.5, fontWeight: 700, overflowWrap: 'anywhere' }}>{formatLabelValue(selectedDirectoryUser.patient.gender)}</div></div>
+                            <div style={{ minWidth: 0 }}><div style={{ fontSize: 10.5, color: 'var(--admin-muted)' }}>Date of Birth</div><div style={{ fontSize: 12.5, fontWeight: 700, overflowWrap: 'anywhere' }}>{formatLabelValue(selectedDirectoryUser.patient.dateOfBirth)}</div></div>
+                            <div style={{ minWidth: 0 }}><div style={{ fontSize: 10.5, color: 'var(--admin-muted)' }}>Profile Completion</div><div style={{ fontSize: 12.5, fontWeight: 700, overflowWrap: 'anywhere' }}>{selectedDirectoryUser.patient.profilePercent}%</div></div>
+                            <div style={{ minWidth: 0 }}><div style={{ fontSize: 10.5, color: 'var(--admin-muted)' }}>Country</div><div style={{ fontSize: 12.5, fontWeight: 700, overflowWrap: 'anywhere' }}>{formatLabelValue(selectedDirectoryUser.patient.country)}</div></div>
+                            <div style={{ minWidth: 0 }}><div style={{ fontSize: 10.5, color: 'var(--admin-muted)' }}>State</div><div style={{ fontSize: 12.5, fontWeight: 700, overflowWrap: 'anywhere' }}>{formatLabelValue(selectedDirectoryUser.patient.state)}</div></div>
+                            <div style={{ minWidth: 0 }}><div style={{ fontSize: 10.5, color: 'var(--admin-muted)' }}>Emergency Contact</div><div style={{ fontSize: 12.5, fontWeight: 700, overflowWrap: 'anywhere' }}>{formatLabelValue(selectedDirectoryUser.patient.emergencyContactName)}</div></div>
+                            <div style={{ minWidth: 0 }}><div style={{ fontSize: 10.5, color: 'var(--admin-muted)' }}>Emergency Phone</div><div style={{ fontSize: 12.5, fontWeight: 700, overflowWrap: 'anywhere' }}>{formatLabelValue(selectedDirectoryUser.patient.emergencyContactPhone)}</div></div>
                           </div>
                         ) : selectedDirectoryUser.staff ? (
-                          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
-                            <div><div style={{ fontSize: 10.5, color: 'var(--admin-muted)' }}>Hospital Name</div><div style={{ fontSize: 12.5, fontWeight: 700 }}>{formatLabelValue(selectedDirectoryUser.staff.hospitalName)}</div></div>
-                            <div><div style={{ fontSize: 10.5, color: 'var(--admin-muted)' }}>Role</div><div style={{ fontSize: 12.5, fontWeight: 700 }}>{formatLabelValue(selectedDirectoryUser.staff.role)}</div></div>
-                            <div><div style={{ fontSize: 10.5, color: 'var(--admin-muted)' }}>Phone</div><div style={{ fontSize: 12.5, fontWeight: 700 }}>{formatLabelValue(selectedDirectoryUser.staff.phone)}</div></div>
-                            <div><div style={{ fontSize: 10.5, color: 'var(--admin-muted)' }}>Verification</div><div style={{ fontSize: 12.5, fontWeight: 700 }}>{formatLabelValue(selectedDirectoryUser.staff.verificationStatus)}</div></div>
-                            <div><div style={{ fontSize: 10.5, color: 'var(--admin-muted)' }}>License</div><div style={{ fontSize: 12.5, fontWeight: 700 }}>{formatLabelValue(selectedDirectoryUser.staff.licenseNumber)}</div></div>
-                            <div><div style={{ fontSize: 10.5, color: 'var(--admin-muted)' }}>Memberships</div><div style={{ fontSize: 12.5, fontWeight: 700 }}>{selectedDirectoryUser.staff.activeMembershipCount} active / {selectedDirectoryUser.staff.inactiveMembershipCount} inactive</div></div>
+                          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: 10 }}>
+                            <div style={{ minWidth: 0 }}><div style={{ fontSize: 10.5, color: 'var(--admin-muted)' }}>Hospital Name</div><div style={{ fontSize: 12.5, fontWeight: 700, overflowWrap: 'anywhere' }}>{formatLabelValue(selectedDirectoryUser.staff.hospitalName)}</div></div>
+                            <div style={{ minWidth: 0 }}><div style={{ fontSize: 10.5, color: 'var(--admin-muted)' }}>Role</div><div style={{ fontSize: 12.5, fontWeight: 700, overflowWrap: 'anywhere' }}>{formatLabelValue(selectedDirectoryUser.staff.role)}</div></div>
+                            <div style={{ minWidth: 0 }}><div style={{ fontSize: 10.5, color: 'var(--admin-muted)' }}>Phone</div><div style={{ fontSize: 12.5, fontWeight: 700, overflowWrap: 'anywhere' }}>{formatLabelValue(selectedDirectoryUser.staff.phone)}</div></div>
+                            <div style={{ minWidth: 0 }}><div style={{ fontSize: 10.5, color: 'var(--admin-muted)' }}>Verification</div><div style={{ fontSize: 12.5, fontWeight: 700, overflowWrap: 'anywhere' }}>{formatLabelValue(selectedDirectoryUser.staff.verificationStatus)}</div></div>
+                            <div style={{ minWidth: 0 }}><div style={{ fontSize: 10.5, color: 'var(--admin-muted)' }}>License</div><div style={{ fontSize: 12.5, fontWeight: 700, overflowWrap: 'anywhere' }}>{formatLabelValue(selectedDirectoryUser.staff.licenseNumber)}</div></div>
+                            <div style={{ minWidth: 0 }}><div style={{ fontSize: 10.5, color: 'var(--admin-muted)' }}>Memberships</div><div style={{ fontSize: 12.5, fontWeight: 700, overflowWrap: 'anywhere' }}>{selectedDirectoryUser.staff.activeMembershipCount} active / {selectedDirectoryUser.staff.inactiveMembershipCount} inactive</div></div>
                           </div>
                         ) : (
                           <div style={{ fontSize: 11.5, color: 'var(--admin-muted)' }}>
@@ -1132,9 +1132,9 @@ export default function AdminDashboard() {
                         <div style={{ fontSize: 12, fontWeight: 700, marginBottom: 10 }}>Hospital Memberships</div>
                         <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
                           {selectedDirectoryUser.staff.memberships.map(membership => (
-                            <div key={membership.id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, border: '1px solid #eef2f7', borderRadius: 10, padding: '10px 12px' }}>
-                              <div>
-                                <div style={{ fontSize: 12, fontWeight: 700 }}>{membership.organizationName ?? 'Unknown organization'}</div>
+                            <div key={membership.id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, border: '1px solid #eef2f7', borderRadius: 10, padding: '10px 12px', flexWrap: 'wrap' }}>
+                              <div style={{ minWidth: 0 }}>
+                                <div style={{ fontSize: 12, fontWeight: 700, overflowWrap: 'anywhere' }}>{membership.organizationName ?? 'Unknown organization'}</div>
                                 <div style={{ fontSize: 10.5, color: 'var(--admin-muted)' }}>
                                   {membership.membershipRole} • {membership.appRole}{membership.isPrimary ? ' • primary' : ''}
                                 </div>
@@ -1268,9 +1268,9 @@ export default function AdminDashboard() {
                   <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
                     {platformAdmins.map(admin => (
                       <div key={admin.authUserId} style={{ border: '1px solid #eef2f7', borderRadius: 10, padding: '10px 12px', display: 'grid', gap: 6 }}>
-                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10 }}>
-                          <div>
-                            <div style={{ fontSize: 12.5, fontWeight: 700 }}>{admin.displayName ?? admin.email ?? 'Platform Admin'}</div>
+                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, flexWrap: 'wrap' }}>
+                          <div style={{ minWidth: 0 }}>
+                            <div style={{ fontSize: 12.5, fontWeight: 700, wordBreak: 'break-word' }}>{admin.displayName ?? admin.email ?? 'Platform Admin'}</div>
                             <div style={{ fontSize: 11, color: 'var(--admin-muted)', wordBreak: 'break-word' }}>{admin.email ?? 'No email'}</div>
                           </div>
                           <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', justifyContent: 'flex-end' }}>
@@ -1331,11 +1331,11 @@ export default function AdminDashboard() {
               <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
                 {filteredAlerts.map(alert => (
                   <div key={alert.id} style={{ ...alertToneStyle(alert.level), borderRadius: 10, padding: '10px 12px' }}>
-                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, marginBottom: 4 }}>
-                      <div style={{ fontSize: 12, fontWeight: 700 }}>{alert.title}</div>
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, marginBottom: 4, flexWrap: 'wrap' }}>
+                      <div style={{ fontSize: 12, fontWeight: 700, minWidth: 0, overflowWrap: 'anywhere' }}>{alert.title}</div>
                       <Badge color={alert.level === 'critical' ? 'red' : alert.level === 'warning' ? 'amber' : 'blue'}>{alert.level}</Badge>
                     </div>
-                    <div style={{ fontSize: 11.5, lineHeight: 1.6 }}>{alert.message}</div>
+                    <div style={{ fontSize: 11.5, lineHeight: 1.6, overflowWrap: 'anywhere' }}>{alert.message}</div>
                   </div>
                 ))}
               </div>
@@ -1354,23 +1354,26 @@ export default function AdminDashboard() {
               />
             ) : (
               <div style={{ display: 'flex', flexDirection: 'column' }}>
-                <div style={{ display: 'grid', gridTemplateColumns: viewportWidth < 1320 ? '1fr 1fr 1fr' : '1.2fr 1.1fr 0.7fr 0.9fr', gap: 10, padding: '0 0 8px', borderBottom: '1px solid var(--admin-border)' }}>
-                  {tableHeaderCell('Name')}
-                  {tableHeaderCell('Email')}
-                  {tableHeaderCell('Status')}
-                  {tableHeaderCell('Time')}
-                </div>
+                {viewportWidth >= 480 && (
+                  <div style={{ display: 'grid', gridTemplateColumns: viewportWidth < 1320 ? '1fr 1fr 1fr' : '1.2fr 1.1fr 0.7fr 0.9fr', gap: 10, padding: '0 0 8px', borderBottom: '1px solid var(--admin-border)' }}>
+                    {tableHeaderCell('Name')}
+                    {tableHeaderCell('Email')}
+                    {tableHeaderCell('Status')}
+                    {viewportWidth >= 1320 && tableHeaderCell('Time')}
+                  </div>
+                )}
                 {filteredUsers.map(user => (
-                  <div key={user.id} style={{ display: 'grid', gridTemplateColumns: viewportWidth < 1320 ? '1fr 1fr 1fr' : '1.2fr 1.1fr 0.7fr 0.9fr', gap: 10, padding: '10px 0', borderBottom: '1px solid #f0f4f8', alignItems: 'center' }}>
-                    <div>
-                      <div style={{ fontSize: 12, fontWeight: 700 }}>{user.name ?? user.email ?? 'Unknown user'}</div>
-                      {viewportWidth < 1320 && <div style={{ fontSize: 10.5, color: 'var(--admin-muted)' }}>{user.role ?? 'patient'}</div>}
+                  <div key={user.id} style={{ display: 'grid', gridTemplateColumns: viewportWidth < 480 ? '1fr' : viewportWidth < 1320 ? '1fr 1fr 1fr' : '1.2fr 1.1fr 0.7fr 0.9fr', gap: viewportWidth < 480 ? 4 : 10, padding: '10px 0', borderBottom: '1px solid #f0f4f8', alignItems: viewportWidth < 480 ? 'flex-start' : 'center' }}>
+                    <div style={{ minWidth: 0 }}>
+                      <div style={{ fontSize: 12, fontWeight: 700, overflowWrap: 'anywhere' }}>{user.name ?? user.email ?? 'Unknown user'}</div>
+                      {viewportWidth < 1320 && <div style={{ fontSize: 10.5, color: 'var(--admin-muted)' }}>{user.role ?? 'patient'}{viewportWidth >= 480 ? ` • ${formatRelativeTime(user.createdAt)}` : ''}</div>}
                     </div>
-                    <div style={{ fontSize: 11.5, color: 'var(--admin-muted)', overflow: 'hidden', textOverflow: 'ellipsis' }}>{user.email ?? 'No email'}</div>
+                    <div style={{ fontSize: 11.5, color: 'var(--admin-muted)', minWidth: 0, overflowWrap: 'anywhere' }}>{user.email ?? 'No email'}</div>
                     <div>
                       <Badge color={statusBadgeColor(user.status)}>{user.status}</Badge>
                     </div>
-                    <div style={{ fontSize: 11.5, color: 'var(--admin-muted)' }}>{formatRelativeTime(user.createdAt)}</div>
+                    {viewportWidth < 480 && <div style={{ fontSize: 11.5, color: 'var(--admin-muted)' }}>{formatRelativeTime(user.createdAt)}</div>}
+                    {viewportWidth >= 1320 && <div style={{ fontSize: 11.5, color: 'var(--admin-muted)' }}>{formatRelativeTime(user.createdAt)}</div>}
                   </div>
                 ))}
               </div>
@@ -1387,21 +1390,24 @@ export default function AdminDashboard() {
               />
             ) : (
               <div style={{ display: 'flex', flexDirection: 'column' }}>
-                <div style={{ display: 'grid', gridTemplateColumns: viewportWidth < 1320 ? '1fr 1fr 1fr' : '1.1fr 0.8fr 0.8fr 0.7fr', gap: 10, padding: '0 0 8px', borderBottom: '1px solid var(--admin-border)' }}>
-                  {tableHeaderCell('User')}
-                  {tableHeaderCell('Type')}
-                  {tableHeaderCell('Provider')}
-                  {tableHeaderCell('Time')}
-                </div>
+                {viewportWidth >= 480 && (
+                  <div style={{ display: 'grid', gridTemplateColumns: viewportWidth < 1320 ? '1fr 1fr 1fr' : '1.1fr 0.8fr 0.8fr 0.7fr', gap: 10, padding: '0 0 8px', borderBottom: '1px solid var(--admin-border)' }}>
+                    {tableHeaderCell('User')}
+                    {tableHeaderCell('Type')}
+                    {tableHeaderCell('Provider')}
+                    {viewportWidth >= 1320 && tableHeaderCell('Time')}
+                  </div>
+                )}
                 {filteredUploads.map(upload => (
-                  <div key={upload.id} style={{ display: 'grid', gridTemplateColumns: viewportWidth < 1320 ? '1fr 1fr 1fr' : '1.1fr 0.8fr 0.8fr 0.7fr', gap: 10, padding: '10px 0', borderBottom: '1px solid #f0f4f8', alignItems: 'center' }}>
-                    <div>
-                      <div style={{ fontSize: 12, fontWeight: 700 }}>{upload.uploadedFor ?? 'Unknown patient'}</div>
-                      <div style={{ fontSize: 10.5, color: 'var(--admin-muted)' }}>{upload.fileName}</div>
+                  <div key={upload.id} style={{ display: 'grid', gridTemplateColumns: viewportWidth < 480 ? '1fr' : viewportWidth < 1320 ? '1fr 1fr 1fr' : '1.1fr 0.8fr 0.8fr 0.7fr', gap: viewportWidth < 480 ? 4 : 10, padding: '10px 0', borderBottom: '1px solid #f0f4f8', alignItems: viewportWidth < 480 ? 'flex-start' : 'center' }}>
+                    <div style={{ minWidth: 0 }}>
+                      <div style={{ fontSize: 12, fontWeight: 700, overflowWrap: 'anywhere' }}>{upload.uploadedFor ?? 'Unknown patient'}</div>
+                      <div style={{ fontSize: 10.5, color: 'var(--admin-muted)', overflowWrap: 'anywhere' }}>{upload.fileName}{viewportWidth >= 480 && viewportWidth < 1320 ? ` • ${formatRelativeTime(upload.createdAt)}` : ''}</div>
                     </div>
-                    <div style={{ fontSize: 11.5, color: 'var(--admin-muted)' }}>{upload.fileType ?? 'Unknown type'}</div>
-                    <div style={{ fontSize: 11.5, color: 'var(--admin-muted)' }}>{upload.uploadedBy ?? 'System user'}</div>
-                    <div style={{ fontSize: 11.5, color: 'var(--admin-muted)' }}>{formatRelativeTime(upload.createdAt)}</div>
+                    <div style={{ fontSize: 11.5, color: 'var(--admin-muted)', minWidth: 0, overflowWrap: 'anywhere' }}>{upload.fileType ?? 'Unknown type'}</div>
+                    <div style={{ fontSize: 11.5, color: 'var(--admin-muted)', minWidth: 0, overflowWrap: 'anywhere' }}>{upload.uploadedBy ?? 'System user'}</div>
+                    {viewportWidth < 480 && <div style={{ fontSize: 11.5, color: 'var(--admin-muted)' }}>{formatRelativeTime(upload.createdAt)}</div>}
+                    {viewportWidth >= 1320 && <div style={{ fontSize: 11.5, color: 'var(--admin-muted)' }}>{formatRelativeTime(upload.createdAt)}</div>}
                   </div>
                 ))}
               </div>
@@ -1432,10 +1438,10 @@ export default function AdminDashboard() {
                   <div style={{ fontSize: 11.5, color: 'var(--admin-muted)' }}>No matching severity data in this window.</div>
                 ) : (
                   sentryLevelSignals.map(item => (
-                    <div key={item.key} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, border: '1px solid var(--admin-border)', borderRadius: 10, padding: '10px 12px' }}>
-                      <div>
-                        <div style={{ fontSize: 12, fontWeight: 700 }}>{item.label}</div>
-                        <div style={{ fontSize: 10.5, color: 'var(--admin-muted)' }}>{item.helper ?? 'Observed issue groups'}</div>
+                    <div key={item.key} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, border: '1px solid var(--admin-border)', borderRadius: 10, padding: '10px 12px', flexWrap: 'wrap' }}>
+                      <div style={{ minWidth: 0 }}>
+                        <div style={{ fontSize: 12, fontWeight: 700, overflowWrap: 'anywhere' }}>{item.label}</div>
+                        <div style={{ fontSize: 10.5, color: 'var(--admin-muted)', overflowWrap: 'anywhere' }}>{item.helper ?? 'Observed issue groups'}</div>
                       </div>
                       <Badge color={item.label === 'Fatal' || item.label === 'Error' ? 'red' : item.label === 'Warning' ? 'amber' : 'blue'}>{formatCompact(item.value)}</Badge>
                     </div>
@@ -1446,10 +1452,10 @@ export default function AdminDashboard() {
                   <div style={{ fontSize: 11.5, color: 'var(--admin-muted)' }}>No matching issue status data in this window.</div>
                 ) : (
                   sentryStatusSignals.map(item => (
-                    <div key={item.key} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, border: '1px solid var(--admin-border)', borderRadius: 10, padding: '10px 12px' }}>
-                      <div>
-                        <div style={{ fontSize: 12, fontWeight: 700 }}>{item.label}</div>
-                        <div style={{ fontSize: 10.5, color: 'var(--admin-muted)' }}>{item.helper ?? 'Observed issue groups'}</div>
+                    <div key={item.key} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, border: '1px solid var(--admin-border)', borderRadius: 10, padding: '10px 12px', flexWrap: 'wrap' }}>
+                      <div style={{ minWidth: 0 }}>
+                        <div style={{ fontSize: 12, fontWeight: 700, overflowWrap: 'anywhere' }}>{item.label}</div>
+                        <div style={{ fontSize: 10.5, color: 'var(--admin-muted)', overflowWrap: 'anywhere' }}>{item.helper ?? 'Observed issue groups'}</div>
                       </div>
                       <Badge color={item.label === 'Unresolved' ? 'red' : item.label === 'Resolved' ? 'green' : 'amber'}>{formatCompact(item.value)}</Badge>
                     </div>
@@ -1462,10 +1468,10 @@ export default function AdminDashboard() {
                   <div style={{ fontSize: 11.5, color: 'var(--admin-muted)' }}>No matching Sentry hotspots in this window.</div>
                 ) : (
                   sentryHotspots.map(item => (
-                    <div key={item.key} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, border: '1px solid var(--admin-border)', borderRadius: 10, padding: '10px 12px' }}>
+                    <div key={item.key} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, border: '1px solid var(--admin-border)', borderRadius: 10, padding: '10px 12px', flexWrap: 'wrap' }}>
                       <div style={{ minWidth: 0 }}>
                         <div style={{ fontSize: 12, fontWeight: 700, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{item.label}</div>
-                        <div style={{ fontSize: 10.5, color: 'var(--admin-muted)' }}>{item.helper ?? 'Observed issue groups'}</div>
+                        <div style={{ fontSize: 10.5, color: 'var(--admin-muted)', overflowWrap: 'anywhere' }}>{item.helper ?? 'Observed issue groups'}</div>
                       </div>
                       <Badge color="amber">{formatCompact(item.value)}</Badge>
                     </div>
@@ -1481,10 +1487,10 @@ export default function AdminDashboard() {
               ) : (
                 filteredIssues.slice(0, 5).map(issue => (
                   <div key={issue.id} style={{ border: '1px solid var(--admin-border)', borderRadius: 10, padding: '10px 12px' }}>
-                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10 }}>
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, flexWrap: 'wrap' }}>
                       <div style={{ minWidth: 0 }}>
-                        <div style={{ fontSize: 12, fontWeight: 700 }}>{issue.title}</div>
-                        <div style={{ fontSize: 10.5, color: 'var(--admin-muted)' }}>{issue.culprit ?? 'No culprit provided'}</div>
+                        <div style={{ fontSize: 12, fontWeight: 700, overflowWrap: 'anywhere' }}>{issue.title}</div>
+                        <div style={{ fontSize: 10.5, color: 'var(--admin-muted)', overflowWrap: 'anywhere' }}>{issue.culprit ?? 'No culprit provided'}</div>
                       </div>
                       <Badge color={issue.level === 'error' || issue.level === 'fatal' ? 'red' : 'amber'}>{issue.level ?? 'issue'}</Badge>
                     </div>
@@ -1537,9 +1543,9 @@ export default function AdminDashboard() {
                   <div style={{ fontSize: 11.5, color: 'var(--admin-muted)' }}>No matching custom PostHog events.</div>
                 ) : (
                   filteredEvents.slice(0, 6).map(event => (
-                    <div key={event.name} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, border: '1px solid var(--admin-border)', borderRadius: 10, padding: '10px 12px' }}>
-                      <div>
-                        <div style={{ fontSize: 12, fontWeight: 700 }}>{event.name}</div>
+                    <div key={event.name} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, border: '1px solid var(--admin-border)', borderRadius: 10, padding: '10px 12px', flexWrap: 'wrap' }}>
+                      <div style={{ minWidth: 0 }}>
+                        <div style={{ fontSize: 12, fontWeight: 700, overflowWrap: 'anywhere' }}>{event.name}</div>
                         <div style={{ fontSize: 10.5, color: 'var(--admin-muted)' }}>Observed in selected range</div>
                       </div>
                       <Badge color="green">{formatCompact(event.total)}</Badge>
@@ -1553,10 +1559,10 @@ export default function AdminDashboard() {
                   <div style={{ fontSize: 11.5, color: 'var(--admin-muted)' }}>No matching PostHog web analytics metrics.</div>
                 ) : (
                   posthogWebSignals.map(signal => (
-                    <div key={signal.key} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, border: '1px solid var(--admin-border)', borderRadius: 10, padding: '10px 12px' }}>
-                      <div>
-                        <div style={{ fontSize: 12, fontWeight: 700 }}>{signal.label}</div>
-                        <div style={{ fontSize: 10.5, color: 'var(--admin-muted)' }}>{signal.helper}</div>
+                    <div key={signal.key} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, border: '1px solid var(--admin-border)', borderRadius: 10, padding: '10px 12px', flexWrap: 'wrap' }}>
+                      <div style={{ minWidth: 0 }}>
+                        <div style={{ fontSize: 12, fontWeight: 700, overflowWrap: 'anywhere' }}>{signal.label}</div>
+                        <div style={{ fontSize: 10.5, color: 'var(--admin-muted)', overflowWrap: 'anywhere' }}>{signal.helper}</div>
                       </div>
                       <Badge color="blue">{formatCompact(signal.value)}</Badge>
                     </div>
@@ -1701,10 +1707,10 @@ export default function AdminDashboard() {
                 ) : (
                   <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
                     {platformControls?.outreach?.campaigns.slice(0, 4).map(campaign => (
-                      <div key={campaign.id} style={{ border: '1px solid #eef2f7', borderRadius: 10, padding: '10px 12px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10 }}>
+                      <div key={campaign.id} style={{ border: '1px solid #eef2f7', borderRadius: 10, padding: '10px 12px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, flexWrap: 'wrap' }}>
                         <div style={{ minWidth: 0 }}>
                           <div style={{ fontSize: 12.5, fontWeight: 700, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{campaign.name}</div>
-                          <div style={{ fontSize: 10.5, color: 'var(--admin-muted)' }}>{campaign.org} • {campaign.location} • {formatRelativeTime(campaign.createdAt)}</div>
+                          <div style={{ fontSize: 10.5, color: 'var(--admin-muted)', overflowWrap: 'anywhere' }}>{campaign.org} • {campaign.location} • {formatRelativeTime(campaign.createdAt)}</div>
                         </div>
                         <Badge color={campaign.status === 'active' ? 'green' : campaign.status === 'planned' ? 'blue' : 'gray'}>{campaign.status}</Badge>
                       </div>

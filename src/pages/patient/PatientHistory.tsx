@@ -7,6 +7,7 @@ import { getPatientSession, signOutAndClearSessions } from '../../lib/auth'
 import { subscribeToAccessChanges } from '../../lib/accessRealtime'
 import { readPatientHistorySnapshot, readPatientProfileSnapshot, seedPatientHistoryCache, seedPatientProfileCache } from '../../lib/experienceWarmup'
 import {
+  cancelShareInvite,
   fetchMyPatient,
   fetchPatientHistory,
   revokeAccessGrant,
@@ -15,6 +16,7 @@ import {
 import { getSharePermissionTierBadge, getSharePermissionTierLabel, getShareDurationLabel } from '../../lib/shareUtils'
 import { formatDateTime, getAccessLogLabel } from '../../lib/utils'
 import type { AccessLog, Patient } from '../../types/database'
+import type { HidPendingShareInvite } from '../../types/hid'
 
 const patientNav = [
   { path: '/patient/profile', label: 'Home' },
@@ -93,8 +95,10 @@ export default function PatientHistory() {
   const [logs, setLogs] = useState<AccessLog[]>(() => cachedHistory?.logs ?? [])
   const [patient, setPatient] = useState<Patient | null>(() => cachedPatient)
   const [activeGrants, setActiveGrants] = useState<LegacyAccessRequestWithShare[]>(() => cachedHistory?.activeGrants ?? [])
+  const [pendingInvites, setPendingInvites] = useState<HidPendingShareInvite[]>(() => cachedHistory?.pendingInvites ?? [])
   const [loading, setLoading] = useState(!cachedHistory && !cachedPatient)
   const [actingId, setActingId] = useState('')
+  const [cancelingInviteId, setCancelingInviteId] = useState('')
   const [logSearch, setLogSearch] = useState('')
   const [logDate, setLogDate] = useState('')
   const [revokeGroup, setRevokeGroup] = useState<ActiveAccessGroup | null>(null)
@@ -138,6 +142,7 @@ export default function PatientHistory() {
       seedPatientHistoryCache(session.hidCode, history)
       setPatient(nextPatient)
       setActiveGrants(history.activeGrants)
+      setPendingInvites(history.pendingInvites)
       setLogs(history.logs)
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Unable to load your access history.'
@@ -170,6 +175,22 @@ export default function PatientHistory() {
       showToast(message, 'error')
     } finally {
       setActingId('')
+    }
+  }
+
+  async function cancelInvite(invite: HidPendingShareInvite) {
+    setCancelingInviteId(invite.invite_id)
+    const previousInvites = pendingInvites
+    setPendingInvites(current => current.filter(item => item.invite_id !== invite.invite_id))
+    try {
+      await cancelShareInvite(invite.invite_id)
+      showToast('Invitation cancelled.', 'success')
+    } catch (error) {
+      setPendingInvites(previousInvites)
+      const message = error instanceof Error ? error.message : 'Unable to cancel this invitation.'
+      showToast(message, 'error')
+    } finally {
+      setCancelingInviteId('')
     }
   }
 
@@ -229,7 +250,7 @@ export default function PatientHistory() {
           </div>
           <Button onClick={() => setShareModalOpen(true)}>Share my profile</Button>
         </div>
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(248px, 1fr))', gap: 18, marginTop: 24 }}>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(248px, 100%), 1fr))', gap: 18, marginTop: 24 }}>
           {activeAccessGroups.map(group => {
             const request = group.primary
             const isEmergency = request.request_type === 'emergency'
@@ -290,7 +311,7 @@ export default function PatientHistory() {
                         <path d="M5.2 13.3V9.5h5.6v3.8M5 5.5h6M5 7.5h6" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" />
                       </svg>
                     </span>
-                    <div>
+                    <div style={{ minWidth: 0, overflowWrap: 'anywhere' }}>
                       <div style={{ fontSize: 18, fontWeight: 500, color: '#334155', lineHeight: 1.25 }}>{request.doctor_name}</div>
                       {group.grants.length > 1 && (
                         <div style={{ fontSize: 11, color: '#8a95a6', marginTop: 3 }}>{group.grants.length} active sessions grouped</div>
@@ -326,8 +347,8 @@ export default function PatientHistory() {
 
                   <div style={{ padding: '12px 0 10px' }}>
                     <div style={{ fontWeight: 700, color: '#111827' }}>Last Activity</div>
-                    <div style={{ marginTop: 4, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, fontSize: 12, color: '#334155' }}>
-                      <span>{request.reason || 'Access currently active'}</span>
+                    <div style={{ marginTop: 4, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap', fontSize: 12, color: '#334155' }}>
+                      <span style={{ minWidth: 0, overflowWrap: 'anywhere' }}>{request.reason || 'Access currently active'}</span>
                       <span style={{ fontWeight: 600, whiteSpace: 'nowrap' }}>{timeAgo(request.approved_at ?? request.created_at)}</span>
                     </div>
                   </div>
@@ -342,6 +363,47 @@ export default function PatientHistory() {
           {activeAccessGroups.length === 0 && <div style={{ color: '#6b7280' }}>No active provider access right now.</div>}
         </div>
       </Card>
+
+      {pendingInvites.length > 0 && (
+        <Card style={{ borderRadius: 24, marginBottom: 18 }}>
+          <div style={{ fontSize: 24, fontWeight: 700, color: '#111827' }}>Pending invitations</div>
+          <div style={{ color: '#8a95a6', marginTop: 6, fontSize: 13 }}>Providers you've invited who haven't joined HID yet.</div>
+          <div style={{ display: 'grid', gap: 12, marginTop: 18 }}>
+            {pendingInvites.map(invite => (
+              <div
+                key={invite.invite_id}
+                style={{
+                  borderRadius: 16,
+                  border: '1px solid #edf1f5',
+                  padding: 16,
+                  display: 'flex',
+                  justifyContent: 'space-between',
+                  alignItems: 'flex-start',
+                  gap: 12,
+                  flexWrap: 'wrap',
+                }}
+              >
+                <div style={{ minWidth: 0, overflowWrap: 'anywhere' }}>
+                  <div style={{ fontWeight: 600, fontSize: 14, color: '#111827' }}>{invite.invited_name || invite.invited_email}</div>
+                  {invite.invited_name && <div style={{ fontSize: 12, color: '#6b7280', marginTop: 2 }}>{invite.invited_email}</div>}
+                  <div style={{ marginTop: 8 }}>
+                    <Badge color={getSharePermissionTierBadge(invite.permission_tier)}>
+                      {getSharePermissionTierLabel(invite.permission_tier)} · {getShareDurationLabel(invite.duration_preset)}
+                    </Badge>
+                  </div>
+                  {invite.reason && <div style={{ fontSize: 12, color: '#6b7280', marginTop: 8 }}>{invite.reason}</div>}
+                  <div style={{ fontSize: 12, color: '#8a95a6', marginTop: 8 }}>
+                    Sent {formatDateTime(invite.created_at)} · Waiting for provider to join HID
+                  </div>
+                </div>
+                <Button size="sm" variant="danger" loading={cancelingInviteId === invite.invite_id} onClick={() => void cancelInvite(invite)}>
+                  Cancel
+                </Button>
+              </div>
+            ))}
+          </div>
+        </Card>
+      )}
 
       <Card style={{ borderRadius: 24 }}>
         <div style={{ fontSize: 24, fontWeight: 700, color: '#111827' }}>Access Logs</div>

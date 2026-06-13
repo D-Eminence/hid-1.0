@@ -343,7 +343,7 @@ export default function DoctorPortal() {
                   error={errors.staff}
                   hint="Shown before accessing HID"
                 />
-                <div style={{ display: 'flex', alignItems: 'flex-end', gap: 12 }}>
+                <div style={{ display: 'flex', alignItems: 'flex-end', gap: 12, flexWrap: 'wrap' }}>
                   <Button type="submit" loading={loading} size="lg" fullWidth>
                     Access HID
                   </Button>
@@ -364,13 +364,13 @@ export default function DoctorPortal() {
 
             <Card>
               <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: 20, gap: 16, flexWrap: 'wrap' }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
-                  <div style={{ width: 52, height: 52, borderRadius: '50%', background: '#e8f1fc', color: '#1a6fd4', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 18, fontWeight: 700 }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 16, minWidth: 0 }}>
+                  <div style={{ width: 52, height: 52, borderRadius: '50%', background: '#e8f1fc', color: '#1a6fd4', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 18, fontWeight: 700, flexShrink: 0 }}>
                     {(data.patient.full_name ?? '?').split(' ').filter(Boolean).map(name => name[0]).join('').slice(0, 2).toUpperCase()}
                   </div>
-                  <div>
-                    <h3 style={{ fontSize: 18, fontWeight: 700, letterSpacing: '-0.3px' }}>{data.patient.full_name}</h3>
-                    <div style={{ fontSize: 13, fontFamily: 'monospace', color: '#1a6fd4', marginTop: 2 }}>{data.patient.hid_code}</div>
+                  <div style={{ minWidth: 0 }}>
+                    <h3 style={{ fontSize: 18, fontWeight: 700, letterSpacing: '-0.3px', overflowWrap: 'anywhere' }}>{data.patient.full_name}</h3>
+                    <div style={{ fontSize: 13, fontFamily: 'monospace', color: '#1a6fd4', marginTop: 2, overflowWrap: 'anywhere' }}>{data.patient.hid_code}</div>
                   </div>
                 </div>
                 <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
@@ -396,7 +396,7 @@ export default function DoctorPortal() {
             </Card>
 
             <Card>
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 20 }}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 20, gap: 12, flexWrap: 'wrap' }}>
                 <div>
                   <h3 style={{ fontSize: 16, fontWeight: 700 }}>Medical Records</h3>
                   <p style={{ fontSize: 13, color: '#9ca3af', marginTop: 2 }}>{data.records.length} record{data.records.length !== 1 ? 's' : ''} found</p>
@@ -436,7 +436,7 @@ export default function DoctorPortal() {
       <Modal open={showAddRecord} onClose={() => { setShowAddRecord(false); setRecordForm(createEmptyRecordForm()) }} title="Add Medical Record">
         <form onSubmit={handleAddRecord} style={{ display: 'grid', gap: 14 }}>
           {data && (
-            <div style={{ background: '#f9fafb', borderRadius: 8, padding: '10px 14px', fontSize: 13 }}>
+            <div style={{ background: '#f9fafb', borderRadius: 8, padding: '10px 14px', fontSize: 13, overflowWrap: 'anywhere' }}>
               <span style={{ color: '#9ca3af' }}>Patient: </span>
               <strong>{data.patient.full_name}</strong>
               <span style={{ fontFamily: 'monospace', color: '#1a6fd4', marginLeft: 8, fontSize: 12 }}>{data.patient.hid_code}</span>

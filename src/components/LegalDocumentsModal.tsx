@@ -14,16 +14,16 @@ function AgreementSection({
 }) {
   return (
     <section style={{ display: 'grid', gap: 10 }}>
-      <div style={{ fontSize: 17, fontWeight: 700, color: '#111827' }}>{number}. {title}</div>
+      <div style={{ fontSize: 17, fontWeight: 700, color: '#111827', overflowWrap: 'anywhere' }}>{number}. {title}</div>
       {paragraphs?.map(paragraph => (
-        <p key={paragraph} style={{ color: '#4b5563', fontSize: 13, lineHeight: 1.7 }}>
+        <p key={paragraph} style={{ color: '#4b5563', fontSize: 13, lineHeight: 1.7, overflowWrap: 'anywhere' }}>
           {paragraph}
         </p>
       ))}
       {bullets.length > 0 && (
         <div style={{ display: 'grid', gap: 8 }}>
           {bullets.map(item => (
-            <div key={item} style={{ color: '#4b5563', fontSize: 13, lineHeight: 1.7 }}>
+            <div key={item} style={{ color: '#4b5563', fontSize: 13, lineHeight: 1.7, overflowWrap: 'anywhere' }}>
               - {item}
             </div>
           ))}

@@ -1,5 +1,5 @@
 import React, { useMemo, useState } from 'react'
-import { Badge, Button, Card, EmptyState, Input, Modal, Select, SectionHeader, showToast } from './ui'
+import { Badge, Button, Card, Input, Modal, Select, SectionHeader, showToast } from './ui'
 import {
   HEALTH_EVENT_STATUSES,
   getHealthEventCategoryLabel,
@@ -56,6 +56,8 @@ export function HealthEventTimeline({
     return records.filter(record => !used.has(record.id))
   }, [addRecordEvent, records])
 
+  if (events.length === 0) return null
+
   return (
     <Card style={{ borderRadius: 16, marginBottom: 18 }}>
       <SectionHeader
@@ -63,29 +65,21 @@ export function HealthEventTimeline({
         subtitle="Related records grouped into a healthcare journey, like a hospital visit or an ongoing condition."
       />
 
-      {events.length === 0 ? (
-        <EmptyState
-          icon={<span style={{ fontSize: 28 }}>[]</span>}
-          title="No health events yet"
-          description="When you add health information, you can group it into a health event, like a hospital visit or an illness."
-        />
-      ) : (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-          {events.map(event => (
-            <HealthEventFolderCard
-              key={event.id}
-              event={event}
-              records={records}
-              busy={busyKey?.startsWith(event.id) ?? false}
-              onSelectRecord={onSelectRecord}
-              onAddRecord={() => setAddRecordEventId(event.id)}
-              onRemoveRecord={recordId => void runAction(`${event.id}:remove:${recordId}`, () => onRemoveRecord(event.id, recordId))}
-              onRename={title => runAction(`${event.id}:rename`, () => onRename(event.id, title))}
-              onSetStatus={status => runAction(`${event.id}:status`, () => onSetStatus(event.id, status))}
-            />
-          ))}
-        </div>
-      )}
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+        {events.map(event => (
+          <HealthEventFolderCard
+            key={event.id}
+            event={event}
+            records={records}
+            busy={busyKey?.startsWith(event.id) ?? false}
+            onSelectRecord={onSelectRecord}
+            onAddRecord={() => setAddRecordEventId(event.id)}
+            onRemoveRecord={recordId => void runAction(`${event.id}:remove:${recordId}`, () => onRemoveRecord(event.id, recordId))}
+            onRename={title => runAction(`${event.id}:rename`, () => onRename(event.id, title))}
+            onSetStatus={status => runAction(`${event.id}:status`, () => onSetStatus(event.id, status))}
+          />
+        ))}
+      </div>
 
       <Modal open={Boolean(addRecordEvent)} onClose={() => setAddRecordEventId(null)} title="Add a record to this event" width={520}>
         {availableForAdd.length === 0 ? (
@@ -165,16 +159,16 @@ function HealthEventFolderCard({
   return (
     <div style={{ border: '1px solid #edf1f5', borderRadius: 12, padding: 16, background: '#fff' }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 12, flexWrap: 'wrap' }}>
-        <div style={{ flex: 1, minWidth: 200 }}>
+        <div style={{ flex: 1, minWidth: 'min(200px, 100%)' }}>
           {renaming ? (
-            <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+            <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
               <Input value={title} onChange={e => setTitle(e.target.value)} style={{ height: 36 }} />
               <Button size="sm" disabled={busy} onClick={() => void saveRename()}>Save</Button>
               <Button size="sm" variant="secondary" disabled={busy} onClick={() => { setTitle(event.title); setRenaming(false) }}>Cancel</Button>
             </div>
           ) : (
             <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
-              <span style={{ fontWeight: 700, fontSize: 16, color: '#111827' }}>{event.title}</span>
+              <span style={{ fontWeight: 700, fontSize: 16, color: '#111827', overflowWrap: 'anywhere' }}>{event.title}</span>
               <Badge color={statusBadge.color}>{statusBadge.label}</Badge>
               <Badge color="gray">{getHealthEventCategoryLabel(event.info_category)}</Badge>
               <button type="button" onClick={() => setRenaming(true)} style={{ border: 'none', background: 'none', color: '#1a6fd4', fontWeight: 600, cursor: 'pointer', fontSize: 12, padding: 0 }}>

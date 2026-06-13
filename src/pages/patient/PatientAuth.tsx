@@ -463,7 +463,7 @@ export default function PatientAuth() {
 
   const introBlock = (
     <div style={{ textAlign: 'center', marginBottom: 18 }}>
-      <div style={{ fontSize: 32, fontWeight: 700, color: '#111827', lineHeight: 1.15 }}>Create your Health ID</div>
+      <div style={{ fontSize: 30, fontWeight: 700, color: '#111827', lineHeight: 1.15 }}>Create your Health ID</div>
       <p style={{ color: '#7d8797', marginTop: 8, fontSize: 12, lineHeight: 1.6 }}>
         Your health data. Safely stored. Instantly accessible. Always in your control.
       </p>
@@ -538,7 +538,7 @@ export default function PatientAuth() {
           <p style={{ color: '#7d8797', marginTop: 10, fontSize: 12, lineHeight: 1.6 }}>
             Save this code. Use your HID code together with your password whenever you sign in.
           </p>
-          <div style={{ marginTop: 24, borderRadius: 18, border: '1px dashed #afd4ff', background: '#f6fbff', padding: '20px 18px', fontFamily: 'monospace', fontSize: 28, fontWeight: 700, color: '#1f8cff' }}>
+          <div style={{ marginTop: 24, borderRadius: 18, border: '1px dashed #afd4ff', background: '#f6fbff', padding: '20px 18px', fontFamily: 'monospace', fontSize: 28, fontWeight: 700, color: '#1f8cff', overflowWrap: 'anywhere', wordBreak: 'break-word' }}>
             {generatedHid}
           </div>
           <div style={{ display: 'flex', gap: 12, marginTop: 18, flexWrap: 'wrap' }}>
@@ -570,7 +570,7 @@ export default function PatientAuth() {
           <Button loading={loading} onClick={() => void verifySignupCode()} style={actionButtonStyle(signupVerification.code.length === 6)}>
             Verify code
           </Button>
-          <button onClick={() => void resendSignupCode()} style={{ marginTop: 12, border: 'none', background: 'none', color: '#1f8cff', fontSize: 10 }}>
+          <button onClick={() => void resendSignupCode()} style={{ marginTop: 12, border: 'none', background: 'none', color: '#1f8cff', fontSize: 11 }}>
             Send code again
           </button>
           <button onClick={() => setStep('signup')} style={{ marginTop: 12, border: 'none', background: 'none', color: '#1f8cff', fontSize: 11 }}>
@@ -603,7 +603,7 @@ export default function PatientAuth() {
         <p style={{ marginTop: 14, color: '#7d8797', fontSize: 11, lineHeight: 1.7 }}>
           Sign in with your HID code or your email address together with your password.
         </p>
-        <button onClick={() => setStep('forgot')} style={{ marginTop: 12, border: 'none', background: 'none', color: '#1f8cff', fontSize: 10 }}>
+        <button onClick={() => setStep('forgot')} style={{ marginTop: 12, border: 'none', background: 'none', color: '#1f8cff', fontSize: 11 }}>
           Forgotten Password
         </button>
       </AuthShell>
@@ -648,7 +648,7 @@ export default function PatientAuth() {
               <OtpInputs value={forgot.otp} onChange={value => setForgot(v => ({ ...v, otp: value }))} onComplete={verifyForgotOtp} />
             </div>
             <Button loading={loading} onClick={() => void verifyForgotOtp()} style={actionButtonStyle(forgot.otp.length === 6)}>Verify code</Button>
-            <button onClick={() => void resendForgotPasswordCode()} style={{ marginTop: 12, border: 'none', background: 'none', color: '#1f8cff', fontSize: 10 }}>
+            <button onClick={() => void resendForgotPasswordCode()} style={{ marginTop: 12, border: 'none', background: 'none', color: '#1f8cff', fontSize: 11 }}>
               Send code again
             </button>
           </>

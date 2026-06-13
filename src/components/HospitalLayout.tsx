@@ -236,7 +236,7 @@ export function HospitalLayout({
         {(!isCompact || menuOpen) && (
         <div style={{ borderTop: '1px solid #e5e7eb', paddingTop: 16, marginTop: 10 }}>
           {userName && (
-            <div style={{ fontSize: 11, color: '#6b7280', padding: '0 8px 10px', lineHeight: 1.6 }}>
+            <div style={{ fontSize: 11, color: '#6b7280', padding: '0 8px 10px', lineHeight: 1.6, overflowWrap: 'anywhere' }}>
               <strong style={{ color: '#374151' }}>{userName}</strong>
               {organizationName && organizationName !== userName && (
                 <>
@@ -291,9 +291,9 @@ export function HospitalLayout({
             flexWrap: 'wrap',
           }}
         >
-          <div>
-            <h1 style={{ fontSize: 17, fontWeight: 700, letterSpacing: '-0.3px' }}>{title}</h1>
-            {subtitle && <p style={{ fontSize: 12, color: '#9ca3af', marginTop: 1 }}>{subtitle}</p>}
+          <div style={{ minWidth: 0 }}>
+            <h1 style={{ fontSize: 17, fontWeight: 700, letterSpacing: '-0.3px', overflowWrap: 'anywhere' }}>{title}</h1>
+            {subtitle && <p style={{ fontSize: 12, color: '#9ca3af', marginTop: 1, overflowWrap: 'anywhere' }}>{subtitle}</p>}
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
             <HIDLogo size="xs" />

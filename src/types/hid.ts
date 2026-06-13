@@ -214,6 +214,19 @@ export interface HidStaffSearchResult {
   role: HidStaffRole
 }
 
+export type HidShareInviteStatus = 'pending' | 'activated' | 'cancelled' | 'expired'
+
+export interface HidPendingShareInvite {
+  invite_id: string
+  invited_email: string
+  invited_name: string | null
+  permission_tier: HidSharePermissionTier
+  duration_preset: HidShareDurationPreset
+  reason: string | null
+  status: HidShareInviteStatus
+  created_at: string
+}
+
 export interface HidHistoryEvent {
   event_id: string
   action: string
@@ -229,6 +242,7 @@ export interface HidHistoryEvent {
 export interface HidPatientHistoryResponse {
   pending_requests: HidHistoryPendingRequest[]
   active_grants: HidHistoryActiveGrant[]
+  pending_invites: HidPendingShareInvite[]
   events: HidHistoryEvent[]
 }
 
