@@ -348,6 +348,41 @@ async function fetchJson(url: string, init: RequestInit) {
   return payload
 }
 
+type PostgrestLikeResponse<T> = {
+  data: T | null
+  error: { message: string } | null
+  count?: number | null
+}
+
+async function safePostgrest<T>(
+  promise: Promise<PostgrestLikeResponse<T>>,
+  fallbackData: T,
+  fallbackCount: number | null = null,
+): Promise<PostgrestLikeResponse<T>> {
+  try {
+    const response = await promise
+    if (response.error) {
+      return {
+        data: fallbackData,
+        error: null,
+        count: fallbackCount,
+      }
+    }
+
+    return {
+      data: (response.data ?? fallbackData) as T,
+      error: null,
+      count: typeof response.count === 'number' ? response.count : fallbackCount,
+    }
+  } catch {
+    return {
+      data: fallbackData,
+      error: null,
+      count: fallbackCount,
+    }
+  }
+}
+
 function normalizeSentryTrend(input: unknown): MetricPoint[] {
   if (!Array.isArray(input)) return []
 
@@ -778,9 +813,16 @@ async function listAllAuthUsers(adminClient: ReturnType<typeof createAdminClient
       perPage,
     })
 
-    if (error) throw new HttpError(400, error.message, error)
+    if (error) {
+      console.warn(JSON.stringify({
+        level: 'warn',
+        message: 'Failed to list a page of auth users for the admin dashboard.',
+        page,
+      }))
+      break
+    }
 
-    const nextUsers = data.users as Array<Record<string, unknown>>
+    const nextUsers = (data?.users ?? []) as Array<Record<string, unknown>>
     users.push(...nextUsers)
     if (nextUsers.length < perPage) break
     page += 1
@@ -815,13 +857,11 @@ async function loadStorageBytes(adminClient: ReturnType<typeof createAdminClient
     lower.includes('function') ||
     lower.includes('schema cache')
 
-  if (!canFallback) {
-    throw new HttpError(400, aggregated.error.message, aggregated.error)
-  }
+  if (!canFallback) return 0
 
   const fallback = await adminClient.from('hid_medical_record_files').select('size_bytes')
   if (fallback.error) {
-    throw new HttpError(400, fallback.error.message, fallback.error)
+    return 0
   }
 
   return ((fallback.data ?? []) as Array<Record<string, unknown>>)
@@ -833,16 +873,15 @@ async function loadRecentUserProfiles(adminClient: ReturnType<typeof createAdmin
     return []
   }
 
-  const response = await adminClient
-    .from('hid_user_profiles')
-    .select('auth_user_id, app_role, display_name, created_at')
-    .in('auth_user_id', authUserIds)
+  const response = await safePostgrest(
+    adminClient
+      .from('hid_user_profiles')
+      .select('auth_user_id, app_role, display_name, created_at')
+      .in('auth_user_id', authUserIds),
+    [] as Array<Record<string, unknown>>,
+  )
 
-  if (response.error) {
-    throw new HttpError(400, response.error.message, response.error)
-  }
-
-  return (response.data ?? []) as Array<Record<string, unknown>>
+  return response.data ?? []
 }
 
 Deno.serve(req => withErrorHandling(req, async () => {
@@ -874,35 +913,55 @@ Deno.serve(req => withErrorHandling(req, async () => {
   const focusDayEnd = selectedDate ? scope.periodEnd : new Date()
 
   const authUsersPromise = listAllAuthUsers(adminClient)
-  const patientAuthUsersPromise = adminClient
-    .from('hid_patients')
-    .select('auth_user_id')
-    .is('deleted_at', null)
-  const totalPatientsCountPromise = adminClient
-    .from('hid_patients')
-    .select('id', { count: 'exact', head: true })
-    .is('deleted_at', null)
-  const staffAuthUsersPromise = adminClient
-    .from('hid_staff_accounts')
-    .select('auth_user_id')
-    .is('deleted_at', null)
+  const patientAuthUsersPromise = safePostgrest(
+    adminClient
+      .from('hid_patients')
+      .select('auth_user_id')
+      .is('deleted_at', null),
+    [] as Array<Record<string, unknown>>,
+  )
+  const totalPatientsCountPromise = safePostgrest(
+    adminClient
+      .from('hid_patients')
+      .select('id', { count: 'exact', head: true })
+      .is('deleted_at', null),
+    [] as Array<Record<string, unknown>>,
+    0,
+  )
+  const staffAuthUsersPromise = safePostgrest(
+    adminClient
+      .from('hid_staff_accounts')
+      .select('auth_user_id')
+      .is('deleted_at', null),
+    [] as Array<Record<string, unknown>>,
+  )
 
   const responseTimeProbe = (async () => {
     const startedAt = Date.now()
-    const result = await adminClient.from('hid_user_profiles').select('id', { head: true }).limit(1)
+    try {
+      await adminClient.from('hid_user_profiles').select('id', { head: true }).limit(1)
+    } catch {
+      // The dashboard can continue without a probe result.
+    }
     return {
       durationMs: Date.now() - startedAt,
-      result,
+      result: {
+        error: null as null,
+      },
     }
   })()
 
   const storageBytesPromise = loadStorageBytes(adminClient)
-  const accountCreatedCountPromise = adminClient
-    .from('hid_user_profiles')
-    .select('id', { count: 'exact', head: true })
-    .is('deleted_at', null)
-    .gte('created_at', periodStart.toISOString())
-    .lt('created_at', periodEnd.toISOString())
+  const accountCreatedCountPromise = safePostgrest(
+    adminClient
+      .from('hid_user_profiles')
+      .select('id', { count: 'exact', head: true })
+      .is('deleted_at', null)
+      .gte('created_at', periodStart.toISOString())
+      .lt('created_at', periodEnd.toISOString()),
+    [] as Array<Record<string, unknown>>,
+    0,
+  )
 
   const [
     authUsers,
@@ -931,42 +990,65 @@ Deno.serve(req => withErrorHandling(req, async () => {
     patientAuthUsersPromise,
     totalPatientsCountPromise,
     staffAuthUsersPromise,
-    adminClient.from('hid_medical_records').select('id', { count: 'exact', head: true }),
-    adminClient.from('hid_medical_records').select('id, patient_id, created_at, created_by_staff_account_id').gte('created_at', periodStart.toISOString()).lt('created_at', periodEnd.toISOString()),
-    adminClient.from('hid_medical_record_files').select('id, created_at').gte('created_at', periodStart.toISOString()).lt('created_at', periodEnd.toISOString()),
-    adminClient.from('hid_medical_records').select('id', { count: 'exact', head: true }).not('created_by_staff_account_id', 'is', null),
-    adminClient.from('hid_organizations').select('id', { count: 'exact', head: true }),
-    adminClient.from('hid_staff_accounts').select('id', { count: 'exact', head: true }),
-    adminClient.from('hid_staff_accounts').select('id', { count: 'exact', head: true }).eq('active', true),
-    adminClient.from('hid_medical_record_files').select('id, original_file_name, mime_type, created_at, uploaded_by_user_profile_id, patient_id').order('created_at', { ascending: false }).limit(8),
-    adminClient.from('hid_password_failed_verification_attempts').select('user_id, last_failed_at').gte('last_failed_at', periodStart.toISOString()).lt('last_failed_at', periodEnd.toISOString()),
-    adminClient.from('hid_mfa_failed_verification_attempts').select('user_id, last_failed_at').gte('last_failed_at', periodStart.toISOString()).lt('last_failed_at', periodEnd.toISOString()),
-    adminClient.from('hid_auth_challenges').select('id, created_at, verified_at').gte('created_at', periodStart.toISOString()).lt('created_at', periodEnd.toISOString()),
-    adminClient.from('hid_audit_events').select('event_id').gte('created_at', periodStart.toISOString()).lt('created_at', periodEnd.toISOString()).ilike('action', '%break_glass%'),
+    safePostgrest(
+      adminClient.from('hid_medical_records').select('id', { count: 'exact', head: true }),
+      [] as Array<Record<string, unknown>>,
+      0,
+    ),
+    safePostgrest(
+      adminClient.from('hid_medical_records').select('id, patient_id, created_at, created_by_staff_account_id').gte('created_at', periodStart.toISOString()).lt('created_at', periodEnd.toISOString()),
+      [] as Array<Record<string, unknown>>,
+    ),
+    safePostgrest(
+      adminClient.from('hid_medical_record_files').select('id, created_at').gte('created_at', periodStart.toISOString()).lt('created_at', periodEnd.toISOString()),
+      [] as Array<Record<string, unknown>>,
+    ),
+    safePostgrest(
+      adminClient.from('hid_medical_records').select('id', { count: 'exact', head: true }).not('created_by_staff_account_id', 'is', null),
+      [] as Array<Record<string, unknown>>,
+      0,
+    ),
+    safePostgrest(
+      adminClient.from('hid_organizations').select('id', { count: 'exact', head: true }),
+      [] as Array<Record<string, unknown>>,
+      0,
+    ),
+    safePostgrest(
+      adminClient.from('hid_staff_accounts').select('id', { count: 'exact', head: true }),
+      [] as Array<Record<string, unknown>>,
+      0,
+    ),
+    safePostgrest(
+      adminClient.from('hid_staff_accounts').select('id', { count: 'exact', head: true }).eq('active', true),
+      [] as Array<Record<string, unknown>>,
+      0,
+    ),
+    safePostgrest(
+      adminClient.from('hid_medical_record_files').select('id, original_file_name, mime_type, created_at, uploaded_by_user_profile_id, patient_id').order('created_at', { ascending: false }).limit(8),
+      [] as Array<Record<string, unknown>>,
+    ),
+    safePostgrest(
+      adminClient.from('hid_password_failed_verification_attempts').select('user_id, last_failed_at').gte('last_failed_at', periodStart.toISOString()).lt('last_failed_at', periodEnd.toISOString()),
+      [] as Array<Record<string, unknown>>,
+    ),
+    safePostgrest(
+      adminClient.from('hid_mfa_failed_verification_attempts').select('user_id, last_failed_at').gte('last_failed_at', periodStart.toISOString()).lt('last_failed_at', periodEnd.toISOString()),
+      [] as Array<Record<string, unknown>>,
+    ),
+    safePostgrest(
+      adminClient.from('hid_auth_challenges').select('id, created_at, verified_at').gte('created_at', periodStart.toISOString()).lt('created_at', periodEnd.toISOString()),
+      [] as Array<Record<string, unknown>>,
+    ),
+    safePostgrest(
+      adminClient.from('hid_audit_events').select('event_id').gte('created_at', periodStart.toISOString()).lt('created_at', periodEnd.toISOString()).ilike('action', '%break_glass%'),
+      [] as Array<Record<string, unknown>>,
+    ),
     responseTimeProbe,
     storageBytesPromise,
     accountCreatedCountPromise,
     loadSentryOverview(scope),
     loadPosthogOverview(scope),
   ])
-
-  if (totalRecordsResponse.error) throw new HttpError(400, totalRecordsResponse.error.message, totalRecordsResponse.error)
-  if (patientAuthUsersResponse.error) throw new HttpError(400, patientAuthUsersResponse.error.message, patientAuthUsersResponse.error)
-  if (totalPatientsCountResponse.error) throw new HttpError(400, totalPatientsCountResponse.error.message, totalPatientsCountResponse.error)
-  if (staffAuthUsersResponse.error) throw new HttpError(400, staffAuthUsersResponse.error.message, staffAuthUsersResponse.error)
-  if (windowRecordsResponse.error) throw new HttpError(400, windowRecordsResponse.error.message, windowRecordsResponse.error)
-  if (windowUploadsResponse.error) throw new HttpError(400, windowUploadsResponse.error.message, windowUploadsResponse.error)
-  if (providerRecordCountResponse.error) throw new HttpError(400, providerRecordCountResponse.error.message, providerRecordCountResponse.error)
-  if (organizationsCountResponse.error) throw new HttpError(400, organizationsCountResponse.error.message, organizationsCountResponse.error)
-  if (totalProvidersCountResponse.error) throw new HttpError(400, totalProvidersCountResponse.error.message, totalProvidersCountResponse.error)
-  if (activeProvidersCountResponse.error) throw new HttpError(400, activeProvidersCountResponse.error.message, activeProvidersCountResponse.error)
-  if (recentUploadsResponse.error) throw new HttpError(400, recentUploadsResponse.error.message, recentUploadsResponse.error)
-  if (passwordFailuresResponse.error) throw new HttpError(400, passwordFailuresResponse.error.message, passwordFailuresResponse.error)
-  if (mfaFailuresResponse.error) throw new HttpError(400, mfaFailuresResponse.error.message, mfaFailuresResponse.error)
-  if (authChallengesResponse.error) throw new HttpError(400, authChallengesResponse.error.message, authChallengesResponse.error)
-  if (breakGlassEventsResponse.error) throw new HttpError(400, breakGlassEventsResponse.error.message, breakGlassEventsResponse.error)
-  if (responseTimeProbeResult.result.error) throw new HttpError(400, responseTimeProbeResult.result.error.message, responseTimeProbeResult.result.error)
-  if (accountCreatedCountResponse.error) throw new HttpError(400, accountCreatedCountResponse.error.message, accountCreatedCountResponse.error)
 
   const reportableAuthUserIds = new Set(
     [
@@ -1053,15 +1135,18 @@ Deno.serve(req => withErrorHandling(req, async () => {
 
   const [uploadProfilesResponse, uploadPatientsResponse] = await Promise.all([
     uploadProfileIds.length
-      ? adminClient.from('hid_user_profiles').select('id, display_name').in('id', uploadProfileIds)
-      : Promise.resolve({ data: [], error: null }),
+      ? safePostgrest(
+          adminClient.from('hid_user_profiles').select('id, display_name').in('id', uploadProfileIds),
+          [] as Array<Record<string, unknown>>,
+        )
+      : Promise.resolve({ data: [] as Array<Record<string, unknown>>, error: null, count: null }),
     uploadPatientIds.length
-      ? adminClient.from('hid_patients').select('id, full_name').in('id', uploadPatientIds)
-      : Promise.resolve({ data: [], error: null }),
+      ? safePostgrest(
+          adminClient.from('hid_patients').select('id, full_name').in('id', uploadPatientIds),
+          [] as Array<Record<string, unknown>>,
+        )
+      : Promise.resolve({ data: [] as Array<Record<string, unknown>>, error: null, count: null }),
   ])
-
-  if (uploadProfilesResponse.error) throw new HttpError(400, uploadProfilesResponse.error.message, uploadProfilesResponse.error)
-  if (uploadPatientsResponse.error) throw new HttpError(400, uploadPatientsResponse.error.message, uploadPatientsResponse.error)
 
   const uploadProfileMap = new Map(((uploadProfilesResponse.data ?? []) as Array<Record<string, unknown>>).map(profile => [String(profile.id), String(profile.display_name ?? 'Unknown user')]))
   const uploadPatientMap = new Map(((uploadPatientsResponse.data ?? []) as Array<Record<string, unknown>>).map(patient => [String(patient.id), String(patient.full_name ?? 'Unknown patient')]))

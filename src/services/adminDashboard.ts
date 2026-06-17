@@ -110,7 +110,7 @@ function sanitizeAdminDashboardMessage(raw: string, status: number) {
     return 'This account has already been deleted.'
   }
   if (lower.includes('account has been deleted')) {
-    return 'This account has been deleted. Restore it before making changes.'
+    return 'This account is unavailable right now.'
   }
   if (lower.includes('sentry')) return 'Sentry data is not available right now.'
   if (lower.includes('posthog')) return 'PostHog data is not available right now.'

@@ -505,11 +505,11 @@ async function loadManagedUsersByAuthIds(
       flags: {
         deleted,
         locked: deleted ? false : profile ? !profile.active : false,
-        deletable: !deleted && profile?.app_role !== 'platform_admin',
-        lockable: !deleted && profile?.app_role !== 'platform_admin',
+        deletable: !deleted,
+        lockable: !deleted,
         patientAccessOpen: patient ? activeGrantCount > 0 || pendingRequestCount > 0 : null,
         restrictable: Boolean(staff) && !deleted,
-        restorable: deleted && profile?.app_role !== 'platform_admin',
+        restorable: deleted,
         staffAccessRestricted: staff ? (!deleted && (!staff.active || activeMembershipCount === 0)) : null,
       },
     } satisfies ManagedUser
@@ -668,15 +668,12 @@ async function performUserAction(
   if (!target.profile) throw new HttpError(404, 'We could not find this account.')
   const targetDeleted = Boolean(target.profile.deleted_at || target.patient?.deleted_at || target.staff?.deleted_at)
 
-  if (target.profile.app_role === 'platform_admin') {
-    if (action === 'delete_account') throw new HttpError(403, 'Platform admin accounts cannot be deleted from the dashboard.')
-    if (action === 'lock_profile' || action === 'unlock_profile') throw new HttpError(403, 'Platform admin accounts cannot be locked from the dashboard.')
-    if (action === 'restore_account') throw new HttpError(403, 'Platform admin accounts cannot be restored from the dashboard.')
-    throw new HttpError(403, 'Platform admin accounts cannot be modified from the dashboard.')
+  if (targetAuthUserId === actor.userId && ['lock_profile', 'unlock_profile', 'delete_account', 'restore_account'].includes(action)) {
+    throw new HttpError(403, 'You cannot modify your own admin account from the dashboard.')
   }
 
   if (targetDeleted && !['restore_account', 'delete_account'].includes(action)) {
-    throw new HttpError(409, 'This account has been deleted. Restore it before changing access or profile state.')
+    throw new HttpError(409, 'This account is unavailable right now.')
   }
 
   if (action === 'lock_profile') {

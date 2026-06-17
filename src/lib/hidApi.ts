@@ -119,6 +119,10 @@ type PrivilegedMfaRequirement = {
   required: boolean
 }
 
+function normalizeMfaAssuranceLevel(level: unknown): 'aal1' | 'aal2' | null {
+  return level === 'aal1' || level === 'aal2' ? level : null
+}
+
 type SignupAvailabilityResponse = {
   accountType: 'patient' | 'hospital'
   emailInUse: boolean
@@ -793,8 +797,8 @@ export async function getPrivilegedMfaRequirement(): Promise<PrivilegedMfaRequir
   }
 
   const verifiedTotp = (factors?.totp ?? []).find(factor => typeof factor?.id === 'string') ?? null
-  const currentLevel = assurance?.currentLevel ?? null
-  const nextLevel = assurance?.nextLevel ?? null
+  const currentLevel = normalizeMfaAssuranceLevel(assurance?.currentLevel)
+  const nextLevel = normalizeMfaAssuranceLevel(assurance?.nextLevel)
 
   return {
     challengeFactorId: typeof verifiedTotp?.id === 'string' ? verifiedTotp.id : null,
