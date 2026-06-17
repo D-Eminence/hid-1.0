@@ -3,7 +3,7 @@ import { AdminLayout, type AdminSidebarSection } from '../../components/AdminLay
 import { AdminFunnelChart } from '../../components/admin/AdminFunnelChart'
 import { AdminMetricCard } from '../../components/admin/AdminMetricCard'
 import { AdminSeriesChart } from '../../components/admin/AdminSeriesChart'
-import { Badge, Button, EmptyState, Input, PageLoader, showToast } from '../../components/ui'
+import { Badge, Button, EmptyState, Input, PageLoader, Select, showToast } from '../../components/ui'
 import { useAdminDashboard } from '../../hooks/useAdminDashboard'
 import { ADMIN_LOGIN_PATH } from '../../lib/adminRoutes'
 import { signOutAndClearSessions } from '../../lib/auth'
@@ -99,6 +99,10 @@ function formatDayLabel(value: string | null) {
 function formatLabelValue(value: string | number | null | undefined) {
   if (value == null || value === '') return 'Not available'
   return String(value)
+}
+
+function formatRoleLabel(role: string) {
+  return role.replace(/_/g, ' ').replace(/\b\w/g, letter => letter.toUpperCase())
 }
 
 function formatBool(value: boolean) {
@@ -322,6 +326,8 @@ export default function AdminDashboard() {
   const [savingOutreachRole, setSavingOutreachRole] = useState<string | null>(null)
   const [newAdminForm, setNewAdminForm] = useState({ fullName: '', email: '' })
   const [newAdminArtifact, setNewAdminArtifact] = useState<{ email: string; passwordSetupLink: string } | null>(null)
+  const [selectedStaffRole, setSelectedStaffRole] = useState('')
+  const [selectedOutreachRole, setSelectedOutreachRole] = useState('')
   const [activeSection, setActiveSection] = useState('dashboard')
   const [viewportWidth, setViewportWidth] = useState(() => (typeof window !== 'undefined' ? window.innerWidth : 1440))
   const { data, error, loading, refreshing, refresh } = useAdminDashboard(windowKey, selectedDate)
@@ -355,6 +361,26 @@ export default function AdminDashboard() {
     return () => window.removeEventListener('scroll', handleScroll)
   }, [])
 
+  useEffect(() => {
+    if (staffRolePolicies.length === 0) {
+      if (selectedStaffRole) setSelectedStaffRole('')
+      return
+    }
+    if (!selectedStaffRole || !staffRolePolicies.some(policy => policy.role === selectedStaffRole)) {
+      setSelectedStaffRole(staffRolePolicies[0].role)
+    }
+  }, [selectedStaffRole, staffRolePolicies])
+
+  useEffect(() => {
+    if (outreachRolePolicies.length === 0) {
+      if (selectedOutreachRole) setSelectedOutreachRole('')
+      return
+    }
+    if (!selectedOutreachRole || !outreachRolePolicies.some(policy => policy.role === selectedOutreachRole)) {
+      setSelectedOutreachRole(outreachRolePolicies[0].role)
+    }
+  }, [outreachRolePolicies, selectedOutreachRole])
+
   async function loadViewer() {
     const user = await getSafeUser()
     setViewerEmail(user?.email ?? null)
@@ -370,6 +396,12 @@ export default function AdminDashboard() {
     ?? deletedDirectoryResults.find(item => item.id === selectedDirectoryUserId)
     ?? null
   ), [deletedDirectoryResults, directoryResults, selectedDirectoryUserId])
+  const selectedStaffPolicy = useMemo(() => (
+    staffRolePolicies.find(policy => policy.role === selectedStaffRole) ?? null
+  ), [selectedStaffRole, staffRolePolicies])
+  const selectedOutreachPolicy = useMemo(() => (
+    outreachRolePolicies.find(policy => policy.role === selectedOutreachRole) ?? null
+  ), [outreachRolePolicies, selectedOutreachRole])
   const visibleDeletedDirectoryResults = useMemo(() => (
     deletedDirectoryResults.filter(item => !directoryResults.some(directoryItem => directoryItem.id === item.id))
   ), [deletedDirectoryResults, directoryResults])
@@ -732,11 +764,12 @@ export default function AdminDashboard() {
     return <PageLoader label="Preparing the admin dashboard..." />
   }
 
-  if (!loading && !data) {
-    const normalizedError = error?.toLowerCase() ?? ''
-    const unauthorized = normalizedError.includes('permission')
-    const authRequired = normalizedError.includes('sign in') || normalizedError.includes('401')
+  const normalizedError = error?.toLowerCase() ?? ''
+  const unauthorized = normalizedError.includes('permission')
+  const authRequired = normalizedError.includes('sign in') || normalizedError.includes('401')
+  const overviewUnavailable = Boolean(!data && error && !unauthorized && !authRequired)
 
+  if (!loading && !data && (unauthorized || authRequired)) {
     return (
       <AdminLayout
         activeSection={activeSection}
@@ -760,12 +793,10 @@ export default function AdminDashboard() {
                 <circle cx="20" cy="26" r="1.6" fill="currentColor" />
               </svg>
             )}
-            title={unauthorized ? 'Admin access is limited to platform admins.' : authRequired ? 'Sign in to open the admin dashboard.' : 'The admin dashboard could not be loaded right now.'}
+            title={unauthorized ? 'Admin access is limited to platform admins.' : 'Sign in to open the admin dashboard.'}
             description={unauthorized
               ? 'Promote your user profile to the platform_admin role, then refresh this page to continue.'
-              : authRequired
-                ? 'Sign in again and refresh this page to continue.'
-                : 'Refresh the page to try again. If the issue continues, check the connected analytics services.'}
+              : 'Sign in again and refresh this page to continue.'}
           />
           <div style={{ display: 'flex', justifyContent: 'center', gap: 12, marginTop: 18, flexWrap: 'wrap' }}>
             <Button onClick={() => { void refresh().catch(() => undefined) }}>Retry</Button>
@@ -793,6 +824,11 @@ export default function AdminDashboard() {
       userName={viewerEmail}
     >
       <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+        {overviewUnavailable && (
+          <div style={{ ...alertToneStyle('warning'), borderRadius: 12, padding: '12px 14px', fontSize: 11.5, lineHeight: 1.6 }}>
+            The admin overview could not be loaded right now, but admin controls below remain available. Refresh the overview when you want live metrics back.
+          </div>
+        )}
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap' }}>
           <div style={{ fontSize: 11, color: 'var(--admin-muted)' }}>
             Updated {formatRelativeTime(data?.checkedAt ?? null)}
@@ -1732,20 +1768,27 @@ export default function AdminDashboard() {
               </div>
             )}
             <div style={{ display: 'grid', gap: 10 }}>
-              {staffRolePolicies.map(policy => (
-                <div key={policy.role} style={{ border: '1px solid var(--admin-border)', borderRadius: 12, padding: '12px 14px', background: '#fff' }}>
+              <Select
+                label="Select a hospital role"
+                placeholder="Choose a role"
+                value={selectedStaffRole}
+                onChange={event => setSelectedStaffRole(event.target.value)}
+                options={staffRolePolicies.map(policy => ({ value: policy.role, label: formatRoleLabel(policy.role) }))}
+              />
+              {selectedStaffPolicy ? (
+                <div style={{ border: '1px solid var(--admin-border)', borderRadius: 12, padding: '12px 14px', background: '#fff' }}>
                   <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, marginBottom: 10, flexWrap: 'wrap' }}>
                     <div>
-                      <div style={{ fontSize: 12.5, fontWeight: 800, textTransform: 'capitalize' }}>{policy.role}</div>
+                      <div style={{ fontSize: 12.5, fontWeight: 800 }}>{formatRoleLabel(selectedStaffPolicy.role)}</div>
                       <div style={{ fontSize: 10.5, color: 'var(--admin-muted)' }}>
-                        Updated {formatRelativeTime(policy.updatedAt)}
+                        Updated {formatRelativeTime(selectedStaffPolicy.updatedAt)}
                       </div>
                     </div>
                     <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
                       <Button
                         size="sm"
-                        onClick={() => void saveStaffRolePolicy(policy.role)}
-                        loading={savingStaffRole === policy.role}
+                        onClick={() => void saveStaffRolePolicy(selectedStaffPolicy.role)}
+                        loading={savingStaffRole === selectedStaffPolicy.role}
                       >
                         Save Role
                       </Button>
@@ -1753,12 +1796,12 @@ export default function AdminDashboard() {
                   </div>
                   <div style={{ display: 'grid', gridTemplateColumns: viewportWidth < 1320 ? '1fr' : 'repeat(3, minmax(0, 1fr))', gap: 8 }}>
                     {staffRoleCapabilityFields.map(field => (
-                      <label key={`${policy.role}-${field.key}`} style={{ display: 'flex', alignItems: 'flex-start', gap: 10, border: '1px solid #eef2f7', borderRadius: 10, padding: '10px 12px', background: '#fbfdff' }}>
+                      <label key={`${selectedStaffPolicy.role}-${field.key}`} style={{ display: 'flex', alignItems: 'flex-start', gap: 10, border: '1px solid #eef2f7', borderRadius: 10, padding: '10px 12px', background: '#fbfdff' }}>
                         <input
                           type="checkbox"
-                          checked={Boolean(policy[field.key])}
-                          disabled={savingStaffRole === policy.role}
-                          onChange={event => updateStaffRolePolicyDraft(policy.role, field.key, event.target.checked)}
+                          checked={Boolean(selectedStaffPolicy[field.key])}
+                          disabled={savingStaffRole === selectedStaffPolicy.role}
+                          onChange={event => updateStaffRolePolicyDraft(selectedStaffPolicy.role, field.key, event.target.checked)}
                           style={{ marginTop: 2 }}
                         />
                         <div>
@@ -1769,7 +1812,9 @@ export default function AdminDashboard() {
                     ))}
                   </div>
                 </div>
-              ))}
+              ) : (
+                <div style={{ fontSize: 11.5, color: 'var(--admin-muted)' }}>Loading RBAC definitions...</div>
+              )}
               {roleManagementLoading && staffRolePolicies.length === 0 && (
                 <div style={{ fontSize: 11.5, color: 'var(--admin-muted)' }}>Loading RBAC definitions...</div>
               )}
@@ -1787,31 +1832,38 @@ export default function AdminDashboard() {
               </div>
             )}
             <div style={{ display: 'grid', gap: 10 }}>
-              {outreachRolePolicies.map(policy => (
-                <div key={policy.role} style={{ border: '1px solid var(--admin-border)', borderRadius: 12, padding: '12px 14px', background: '#fff' }}>
+              <Select
+                label="Select an outreach role"
+                placeholder="Choose a role"
+                value={selectedOutreachRole}
+                onChange={event => setSelectedOutreachRole(event.target.value)}
+                options={outreachRolePolicies.map(policy => ({ value: policy.role, label: formatRoleLabel(policy.role) }))}
+              />
+              {selectedOutreachPolicy ? (
+                <div style={{ border: '1px solid var(--admin-border)', borderRadius: 12, padding: '12px 14px', background: '#fff' }}>
                   <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, marginBottom: 10, flexWrap: 'wrap' }}>
                     <div>
-                      <div style={{ fontSize: 12.5, fontWeight: 800, textTransform: 'capitalize' }}>{policy.role.replace(/_/g, ' ')}</div>
+                      <div style={{ fontSize: 12.5, fontWeight: 800 }}>{formatRoleLabel(selectedOutreachPolicy.role)}</div>
                       <div style={{ fontSize: 10.5, color: 'var(--admin-muted)' }}>
-                        Updated {formatRelativeTime(policy.updatedAt)}
+                        Updated {formatRelativeTime(selectedOutreachPolicy.updatedAt)}
                       </div>
                     </div>
                     <Button
                       size="sm"
-                      onClick={() => void saveOutreachRolePolicy(policy.role)}
-                      loading={savingOutreachRole === policy.role}
+                      onClick={() => void saveOutreachRolePolicy(selectedOutreachPolicy.role)}
+                      loading={savingOutreachRole === selectedOutreachPolicy.role}
                     >
                       Save Role
                     </Button>
                   </div>
                   <div style={{ display: 'grid', gridTemplateColumns: viewportWidth < 1320 ? '1fr' : 'repeat(3, minmax(0, 1fr))', gap: 8 }}>
                     {outreachRoleCapabilityFields.map(field => (
-                      <label key={`${policy.role}-${field.key}`} style={{ display: 'flex', alignItems: 'flex-start', gap: 10, border: '1px solid #eef2f7', borderRadius: 10, padding: '10px 12px', background: '#fbfdff' }}>
+                      <label key={`${selectedOutreachPolicy.role}-${field.key}`} style={{ display: 'flex', alignItems: 'flex-start', gap: 10, border: '1px solid #eef2f7', borderRadius: 10, padding: '10px 12px', background: '#fbfdff' }}>
                         <input
                           type="checkbox"
-                          checked={Boolean(policy[field.key])}
-                          disabled={savingOutreachRole === policy.role}
-                          onChange={event => updateOutreachRolePolicyDraft(policy.role, field.key, event.target.checked)}
+                          checked={Boolean(selectedOutreachPolicy[field.key])}
+                          disabled={savingOutreachRole === selectedOutreachPolicy.role}
+                          onChange={event => updateOutreachRolePolicyDraft(selectedOutreachPolicy.role, field.key, event.target.checked)}
                           style={{ marginTop: 2 }}
                         />
                         <div>
@@ -1822,7 +1874,9 @@ export default function AdminDashboard() {
                     ))}
                   </div>
                 </div>
-              ))}
+              ) : (
+                <div style={{ fontSize: 11.5, color: 'var(--admin-muted)' }}>Loading outreach RBAC definitions...</div>
+              )}
               {roleManagementLoading && outreachRolePolicies.length === 0 && (
                 <div style={{ fontSize: 11.5, color: 'var(--admin-muted)' }}>Loading outreach RBAC definitions...</div>
               )}
