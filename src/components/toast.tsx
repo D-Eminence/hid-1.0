@@ -150,6 +150,21 @@ function normalizeToastMessage(message: string, type: ToastType) {
       return 'Microphone access is blocked. Allow it in your browser settings, then try again.'
     }
     if (
+      (lower.includes('does not exist') && (
+        lower.includes('column') ||
+        lower.includes('table') ||
+        lower.includes('relation') ||
+        lower.includes('function') ||
+        lower.includes('schema')
+      )) ||
+      lower.includes('null value in column') ||
+      lower.includes('violates not-null constraint') ||
+      lower.includes('violates foreign key constraint') ||
+      lower.includes('cannot insert into column')
+    ) {
+      return 'This information could not be saved right now. Please try again.'
+    }
+    if (
       lower.includes('voice capture') ||
       lower.includes('speech recognition') ||
       (lower.includes('microphone') && !lower.includes('microphone access is blocked'))

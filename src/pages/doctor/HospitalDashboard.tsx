@@ -367,8 +367,8 @@ export default function HospitalDashboard() {
             Deleting this hospital account immediately removes its access to HID. The account stays archived for admin review and can be restored by HID support if needed.
           </div>
           <Button
-            variant="danger"
-            style={{ marginTop: 14 }}
+            variant="outline"
+            style={{ marginTop: 14, borderColor: '#d1d5db', color: '#374151', background: '#f9fafb' }}
             onClick={() => {
               resetDeleteFlow()
               setDeleteModalOpen(true)

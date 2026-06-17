@@ -395,7 +395,7 @@ export default function PatientBioData() {
             <ProfileSummarySection
               title="Coverage"
               items={[
-                { label: 'Hospital Currently Using', value: patient.hospital_currently_using || '-' },
+                { label: 'Current Hospital', value: patient.hospital_currently_using || '-' },
                 { label: 'HMO Organization', value: patient.hmo_organization || '-' },
               ]}
             />
@@ -467,6 +467,12 @@ export default function PatientBioData() {
           />
           {openSections.coverage && (
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 14, marginTop: 16 }}>
+              <Input
+                label="Current Hospital"
+                value={patient.hospital_currently_using ?? ''}
+                onChange={e => updatePatientDraft(current => ({ ...current, hospital_currently_using: e.target.value }))}
+                placeholder="Enter your current hospital"
+              />
               <Input
                 label="HMO Organization"
                 value={patient.hmo_organization ?? ''}
@@ -543,8 +549,8 @@ export default function PatientBioData() {
               Deleting your patient account immediately removes your access to HID. The account stays archived for admin review and can be restored by HID support if needed.
             </div>
             <Button
-              variant="danger"
-              style={{ marginTop: 14 }}
+              variant="outline"
+              style={{ marginTop: 14, borderColor: '#d1d5db', color: '#374151', background: '#f9fafb' }}
               onClick={() => {
                 resetDeleteFlow()
                 setDeleteModalOpen(true)
