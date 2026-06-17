@@ -512,9 +512,9 @@ export default function PatientBioData() {
             <span>I confirm the information provided is correct.</span>
           </label>
 
-          <div style={{ marginTop: 28, borderTop: '1px solid #fee2e2', paddingTop: 20 }}>
-            <div style={{ fontSize: 15, fontWeight: 700, color: '#991b1b' }}>Danger Zone</div>
-            <div style={{ color: '#7f1d1d', fontSize: 12, marginTop: 6, lineHeight: 1.7 }}>
+          <div style={{ marginTop: 28, borderTop: '1px solid #e5e7eb', paddingTop: 20 }}>
+            <div style={{ fontSize: 15, fontWeight: 700, color: '#374151' }}>Danger Zone</div>
+            <div style={{ color: '#6b7280', fontSize: 12, marginTop: 6, lineHeight: 1.7 }}>
               Deleting your patient account immediately removes your access to HID. The account stays archived for admin review and can be restored by HID support if needed.
             </div>
             <Button

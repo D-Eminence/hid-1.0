@@ -1,5 +1,6 @@
 import React from 'react'
 import { badgeMap } from './ui'
+import { Badge } from './ui'
 import { RecordSourceBadge } from './RecordMarkdownView'
 import { getHealthInfoTypeIcon } from './HealthInfoTypeIcon'
 import { formatHealthInfoType, getHealthInfoTypeConfig } from '../lib/medicalRecordUtils'
@@ -43,7 +44,9 @@ export function RecordSummaryCard({ record, attachments, onClick }: RecordSummar
         </div>
         <div style={{ minWidth: 0, overflowWrap: 'anywhere' }}>
           <div style={{ fontWeight: 700, fontSize: 'clamp(13px, 3.5vw, 14px)', color: '#111827' }}>{record.title}</div>
-          <div style={{ fontSize: 12, color: '#6b7280', marginTop: 2 }}>{typeLabel}</div>
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginTop: 4 }}>
+            <Badge color={typeConfig?.accent ?? 'gray'}>{typeLabel}</Badge>
+          </div>
         </div>
       </div>
 

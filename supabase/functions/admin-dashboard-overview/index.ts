@@ -912,7 +912,14 @@ Deno.serve(req => withErrorHandling(req, async () => {
   const focusDayStart = selectedDate ? scope.periodStart : startOfToday()
   const focusDayEnd = selectedDate ? scope.periodEnd : new Date()
 
-  const authUsersPromise = listAllAuthUsers(adminClient)
+  const authUsersPromise = (async () => {
+    const startedAt = Date.now()
+    const response = await listAllAuthUsers(adminClient)
+    return {
+      durationMs: Date.now() - startedAt,
+      response,
+    }
+  })()
   const patientAuthUsersPromise = safePostgrest(
     adminClient
       .from('hid_patients')
@@ -936,21 +943,6 @@ Deno.serve(req => withErrorHandling(req, async () => {
     [] as Array<Record<string, unknown>>,
   )
 
-  const responseTimeProbe = (async () => {
-    const startedAt = Date.now()
-    try {
-      await adminClient.from('hid_user_profiles').select('id', { head: true }).limit(1)
-    } catch {
-      // The dashboard can continue without a probe result.
-    }
-    return {
-      durationMs: Date.now() - startedAt,
-      result: {
-        error: null as null,
-      },
-    }
-  })()
-
   const storageBytesPromise = loadStorageBytes(adminClient)
   const accountCreatedCountPromise = safePostgrest(
     adminClient
@@ -964,7 +956,7 @@ Deno.serve(req => withErrorHandling(req, async () => {
   )
 
   const [
-    authUsers,
+    authUsersResult,
     patientAuthUsersResponse,
     totalPatientsCountResponse,
     staffAuthUsersResponse,
@@ -980,7 +972,6 @@ Deno.serve(req => withErrorHandling(req, async () => {
     mfaFailuresResponse,
     authChallengesResponse,
     breakGlassEventsResponse,
-    responseTimeProbeResult,
     storageBytes,
     accountCreatedCountResponse,
     sentry,
@@ -1043,12 +1034,13 @@ Deno.serve(req => withErrorHandling(req, async () => {
       adminClient.from('hid_audit_events').select('event_id').gte('created_at', periodStart.toISOString()).lt('created_at', periodEnd.toISOString()).ilike('action', '%break_glass%'),
       [] as Array<Record<string, unknown>>,
     ),
-    responseTimeProbe,
     storageBytesPromise,
     accountCreatedCountPromise,
     loadSentryOverview(scope),
     loadPosthogOverview(scope),
   ])
+
+  const authUsers = authUsersResult.response
 
   const reportableAuthUserIds = new Set(
     [
@@ -1060,7 +1052,7 @@ Deno.serve(req => withErrorHandling(req, async () => {
   )
   const reportableAuthUsers = filterReportableAuthUsers(authUsers, reportableAuthUserIds)
 
-  const apiResponseTimeMs = responseTimeProbeResult.durationMs
+  const apiResponseTimeMs = authUsersResult.durationMs
   const totalUsers = reportableAuthUsers.length
   const totalPatients = totalPatientsCountResponse.count ?? 0
   const verifiedUsers = reportableAuthUsers.filter(isConfirmedAuthUser).length

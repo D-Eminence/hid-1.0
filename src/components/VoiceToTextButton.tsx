@@ -34,17 +34,55 @@ export function VoiceToTextButton({
   const recognitionRef = useRef<SpeechRecognitionLike | null>(null)
   const [listening, setListening] = useState(false)
 
+  function getFriendlyVoiceError(error: string) {
+    const normalized = error.toLowerCase()
+    if (normalized.includes('not-allowed') || normalized.includes('service-not-allowed')) {
+      return 'Microphone access is blocked. Allow it in your browser settings, then try again.'
+    }
+    if (normalized.includes('audio-capture')) {
+      return 'No microphone was detected on this device.'
+    }
+    if (normalized.includes('network')) {
+      return 'Voice capture could not connect right now. Try again in a moment.'
+    }
+    if (normalized.includes('no-speech')) {
+      return 'We did not hear any speech. Please try again.'
+    }
+    if (normalized.includes('aborted')) {
+      return 'Voice capture was stopped before it could finish.'
+    }
+    return 'Voice capture could not start right now.'
+  }
+
   useEffect(() => {
     return () => {
       recognitionRef.current?.stop()
     }
   }, [])
 
-  function startListening() {
+  async function startListening() {
     const Recognition = window.SpeechRecognition ?? window.webkitSpeechRecognition
     if (!Recognition) {
       showToast('Voice-to-text is not supported in this browser', 'error')
       return
+    }
+
+    if (!window.isSecureContext) {
+      showToast('Voice capture requires a secure connection (HTTPS).', 'error')
+      return
+    }
+
+    if (navigator.mediaDevices?.getUserMedia) {
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({ audio: true })
+        stream.getTracks().forEach(track => track.stop())
+      } catch (error) {
+        const permissionMessage = error instanceof Error ? error.message : 'Microphone access is blocked.'
+        showToast(permissionMessage.toLowerCase().includes('denied') || permissionMessage.toLowerCase().includes('allowed')
+          ? 'Microphone access is blocked. Allow it in your browser settings, then try again.'
+          : 'Microphone access could not be enabled right now.', 'error')
+        return
+      }
     }
 
     const recognition = new Recognition()
@@ -63,13 +101,19 @@ export function VoiceToTextButton({
     }
     recognition.onerror = event => {
       setListening(false)
-      showToast(`Voice-to-text error: ${event.error}`, 'error')
+      showToast(getFriendlyVoiceError(event.error), 'error')
     }
     recognition.onend = () => setListening(false)
-    recognition.start()
-    recognitionRef.current = recognition
-    setListening(true)
-    showToast('Voice capture started', 'info')
+
+    try {
+      recognition.start()
+      recognitionRef.current = recognition
+      setListening(true)
+      showToast('Voice capture started', 'info')
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Voice capture could not start.'
+      showToast(getFriendlyVoiceError(message), 'error')
+    }
   }
 
   function stopListening() {

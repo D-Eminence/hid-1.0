@@ -1,5 +1,5 @@
 import React from 'react'
-import { Badge } from './ui'
+import { Badge, badgeMap } from './ui'
 import { formatHealthInfoType, getHealthInfoTypeConfig, getRecordSourceBadge, getRoleNoteLabel } from '../lib/medicalRecordUtils'
 import { formatDate, formatDateTime } from '../lib/utils'
 import type { MedicalRecord, MedicalRecordFile, PatientNote } from '../types/database'
@@ -116,6 +116,61 @@ export function RecordSourceBadge({ record }: { record: MedicalRecord }) {
   )
 }
 
+function RecordDisclosure({
+  title,
+  subtitle,
+  children,
+  defaultOpen = true,
+}: {
+  title: string
+  subtitle?: string
+  children: React.ReactNode
+  defaultOpen?: boolean
+}) {
+  return (
+    <details
+      className="record-disclosure"
+      open={defaultOpen}
+      style={{
+        border: '1px solid #e5e7eb',
+        borderRadius: 12,
+        background: '#fff',
+        overflow: 'hidden',
+      }}
+    >
+      <style>{`
+        .record-disclosure > summary {
+          list-style: none;
+        }
+        .record-disclosure > summary::-webkit-details-marker {
+          display: none;
+        }
+      `}</style>
+      <summary
+        style={{
+          listStyle: 'none',
+          cursor: 'pointer',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          gap: 12,
+          padding: '12px 14px',
+          userSelect: 'none',
+        }}
+      >
+        <div style={{ minWidth: 0 }}>
+          <div style={{ fontSize: 13.5, fontWeight: 700, color: '#111827' }}>{title}</div>
+          {subtitle && <div style={{ fontSize: 11.5, color: '#6b7280', marginTop: 2 }}>{subtitle}</div>}
+        </div>
+        <svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true" style={{ color: '#9ca3af', flexShrink: 0 }}>
+          <path d="M4 6l4 4 4-4" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
+        </svg>
+      </summary>
+      <div style={{ padding: '0 14px 14px' }}>{children}</div>
+    </details>
+  )
+}
+
 function formatStructuredFieldValue(value: unknown, kind: string | undefined, options?: { value: string; label: string }[]) {
   const raw = String(value)
   if (kind === 'date') return formatDate(raw)
@@ -138,46 +193,115 @@ export function MedicalRecordMarkdownView({ record, attachments = [] }: { record
   const structuredData = record.structured_data
   const typeConfig = getHealthInfoTypeConfig(record.info_type)
   const structuredEntries = structuredData ? Object.entries(structuredData) : []
-
-  const lines = [
-    `# ${record.title}`,
-    '',
-    `- Type: ${formatHealthInfoType(record.info_type, record.category)}`,
-    `- Saved by: ${record.created_by}`,
-    `- Saved at: ${formatDateTime(record.created_at)}`,
-    `- Files attached: ${allAttachments.length}`,
-  ]
-
-  if (structuredEntries.length > 0) {
-    lines.push('', '## Details')
-    structuredEntries.forEach(([key, value]) => {
-      const field = typeConfig?.fields.find(item => item.key === key)
-      const label = field?.label ?? key
-      lines.push(`- ${label}: ${formatStructuredFieldValue(value, field?.kind, field?.options)}`)
-    })
-  }
-
-  lines.push('', `## Record details`, record.record || '-')
-
-  if (record.notes) {
-    lines.push('', `## ${getRoleNoteLabel(record.added_by_role)}`, record.notes)
-  }
-
-  if (record.transcription_text) {
-    lines.push('', '## Audio to text note', record.transcription_text)
-  }
-
-  lines.push('', '> Saved medical records are read-only.')
+  const categoryLabel = formatHealthInfoType(record.info_type, record.category)
+  const accent = badgeMap[typeConfig?.accent ?? 'gray']
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
       <RecordSourceBadge record={record} />
-      {markdownShell(lines)}
-      {allAttachments.length > 0 && (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-          {allAttachments.map(attachment => <FileAttachmentPreview key={attachment.id} attachment={attachment} />)}
+      <div style={{ border: '1px solid #e5e7eb', borderRadius: 16, background: '#fff', padding: 16, boxShadow: '0 10px 24px rgba(15, 23, 42, 0.04)', display: 'grid', gap: 14 }}>
+        <div style={{ display: 'flex', flexWrap: 'wrap', justifyContent: 'space-between', gap: 12 }}>
+          <div style={{ minWidth: 0 }}>
+            <div style={{ fontSize: 11, fontWeight: 800, letterSpacing: '0.08em', textTransform: 'uppercase', color: accent.text }}>
+              Medical record
+            </div>
+            <div style={{ fontSize: 'clamp(18px, 4.5vw, 22px)', fontWeight: 800, color: '#111827', marginTop: 4, overflowWrap: 'anywhere' }}>
+              {record.title}
+            </div>
+            <div style={{ fontSize: 13, color: '#6b7280', marginTop: 6, overflowWrap: 'anywhere' }}>
+              {categoryLabel}
+            </div>
+          </div>
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, alignItems: 'flex-start' }}>
+            <Badge color={typeConfig?.accent ?? 'gray'}>{categoryLabel}</Badge>
+            <Badge color="gray">{allAttachments.length} file{allAttachments.length === 1 ? '' : 's'}</Badge>
+          </div>
         </div>
+
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: 10 }}>
+          <div style={{ border: '1px solid #e5e7eb', borderRadius: 12, padding: '10px 12px', background: '#f8fafc' }}>
+            <div style={{ fontSize: 10.5, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Saved by</div>
+            <div style={{ fontSize: 13, fontWeight: 700, color: '#111827', marginTop: 4, overflowWrap: 'anywhere' }}>{record.created_by}</div>
+          </div>
+          <div style={{ border: '1px solid #e5e7eb', borderRadius: 12, padding: '10px 12px', background: '#f8fafc' }}>
+            <div style={{ fontSize: 10.5, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Saved at</div>
+            <div style={{ fontSize: 13, fontWeight: 700, color: '#111827', marginTop: 4, overflowWrap: 'anywhere' }}>{formatDateTime(record.created_at)}</div>
+          </div>
+          <div style={{ border: '1px solid #e5e7eb', borderRadius: 12, padding: '10px 12px', background: '#f8fafc' }}>
+            <div style={{ fontSize: 10.5, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Category</div>
+            <div style={{ fontSize: 13, fontWeight: 700, color: '#111827', marginTop: 4, overflowWrap: 'anywhere' }}>{categoryLabel}</div>
+          </div>
+          <div style={{ border: '1px solid #e5e7eb', borderRadius: 12, padding: '10px 12px', background: '#f8fafc' }}>
+            <div style={{ fontSize: 10.5, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Attachments</div>
+            <div style={{ fontSize: 13, fontWeight: 700, color: '#111827', marginTop: 4 }}>{allAttachments.length}</div>
+          </div>
+        </div>
+      </div>
+
+      {structuredEntries.length > 0 && (
+        <RecordDisclosure
+          title="Structured details"
+          subtitle={`${structuredEntries.length} field${structuredEntries.length === 1 ? '' : 's'} categorized from the record`}
+        >
+          <div style={{ display: 'grid', gap: 10 }}>
+            {structuredEntries.map(([key, value]) => {
+              const field = typeConfig?.fields.find(item => item.key === key)
+              const label = field?.label ?? key
+              return (
+                <div key={key} style={{ border: '1px solid #e5e7eb', borderRadius: 12, padding: '10px 12px', background: '#f8fafc' }}>
+                  <div style={{ fontSize: 10.5, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.05em' }}>{label}</div>
+                  <div style={{ fontSize: 13.5, fontWeight: 700, color: '#111827', marginTop: 4, overflowWrap: 'anywhere' }}>
+                    {formatStructuredFieldValue(value, field?.kind, field?.options)}
+                  </div>
+                </div>
+              )
+            })}
+          </div>
+        </RecordDisclosure>
       )}
+
+      {record.record && (
+        <RecordDisclosure
+          title="Record details"
+          subtitle="Saved medical note content"
+        >
+          {markdownShell(record.record.split('\n'))}
+        </RecordDisclosure>
+      )}
+
+      {record.notes && (
+        <RecordDisclosure
+          title={getRoleNoteLabel(record.added_by_role)}
+          subtitle="Additional context from the contributor"
+        >
+          {markdownShell(record.notes.split('\n'))}
+        </RecordDisclosure>
+      )}
+
+      {record.transcription_text && (
+        <RecordDisclosure
+          title="Audio to text note"
+          subtitle="Voice transcript captured during entry"
+        >
+          {markdownShell(record.transcription_text.split('\n'))}
+        </RecordDisclosure>
+      )}
+
+      {allAttachments.length > 0 && (
+        <RecordDisclosure
+          title="Attachments"
+          subtitle={`${allAttachments.length} linked file${allAttachments.length === 1 ? '' : 's'}`}
+          defaultOpen={allAttachments.length <= 2}
+        >
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+            {allAttachments.map(attachment => <FileAttachmentPreview key={attachment.id} attachment={attachment} />)}
+          </div>
+        </RecordDisclosure>
+      )}
+
+      <div style={{ fontSize: 12, color: '#94a3b8', fontStyle: 'italic' }}>
+        Saved medical records are read-only.
+      </div>
     </div>
   )
 }

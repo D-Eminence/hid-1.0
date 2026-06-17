@@ -361,9 +361,9 @@ export default function HospitalDashboard() {
           )}
         </Card>
 
-        <Card style={{ border: '1px solid #fecaca', background: '#fff7f7' }}>
-          <div style={{ fontSize: 15, fontWeight: 700, color: '#991b1b' }}>Danger Zone</div>
-          <div style={{ color: '#7f1d1d', fontSize: 12, marginTop: 6, lineHeight: 1.7 }}>
+        <Card style={{ border: '1px solid #e5e7eb', background: '#f8fafc' }}>
+          <div style={{ fontSize: 15, fontWeight: 700, color: '#374151' }}>Danger Zone</div>
+          <div style={{ color: '#6b7280', fontSize: 12, marginTop: 6, lineHeight: 1.7 }}>
             Deleting this hospital account immediately removes its access to HID. The account stays archived for admin review and can be restored by HID support if needed.
           </div>
           <Button
