@@ -67,6 +67,7 @@ export default function PatientBioData() {
   const [dobInput, setDobInput] = useState(() => cachedPatient ? formatDate(cachedPatient.dob) : '')
   const [openSections, setOpenSections] = useState({
     about: true,
+    coverage: false,
     health: false,
     emergency: false,
     notes: false,
@@ -391,6 +392,13 @@ export default function PatientBioData() {
                 { label: 'Address', value: patient.emergency_contact_address || '-' },
               ]}
             />
+            <ProfileSummarySection
+              title="Coverage"
+              items={[
+                { label: 'Hospital Currently Using', value: patient.hospital_currently_using || '-' },
+                { label: 'HMO Organization', value: patient.hmo_organization || '-' },
+              ]}
+            />
           </Card>
         </div>
 
@@ -449,6 +457,23 @@ export default function PatientBioData() {
                 Standard hospital access uses this PIN together with your HID code. {patient.access_pin_configured ? 'A PIN is already set for this account.' : 'No Access PIN has been set yet.'}
               </div>
             </>
+          )}
+
+          <AccordionHeader
+            title="Coverage Details"
+            subtitle="Hospital and HMO information."
+            open={openSections.coverage}
+            onClick={() => toggleSection('coverage')}
+          />
+          {openSections.coverage && (
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 14, marginTop: 16 }}>
+              <Input
+                label="HMO Organization"
+                value={patient.hmo_organization ?? ''}
+                onChange={e => updatePatientDraft(current => ({ ...current, hmo_organization: e.target.value }))}
+                placeholder="Enter your HMO organization"
+              />
+            </div>
           )}
 
           <AccordionHeader
@@ -636,10 +661,12 @@ function calculateProfilePercent(patient: Patient, parsedDob: string | null, acc
     patient.first_name,
     patient.last_name,
     patient.phone,
+    patient.hospital_currently_using,
     patient.gender,
     parsedDob,
     patient.country,
     patient.state,
+    patient.hmo_organization,
     patient.genotype,
     patient.blood_group,
     patient.emergency_contact_name,
@@ -664,6 +691,7 @@ function buildProfileSnapshot(patient: Patient, dobValue: string, accessPinDraft
     genotype: patient.genotype ?? '',
     country: patient.country ?? '',
     state: patient.state ?? '',
+    hospital_currently_using: patient.hospital_currently_using ?? '',
     allergies: patient.allergies ?? '',
     chronic_conditions: patient.chronic_conditions ?? '',
     current_medications: patient.current_medications ?? '',
@@ -672,6 +700,7 @@ function buildProfileSnapshot(patient: Patient, dobValue: string, accessPinDraft
     emergency_contact_relationship: patient.emergency_contact_relationship ?? '',
     emergency_contact_phone: patient.emergency_contact_phone ?? '',
     emergency_contact_address: patient.emergency_contact_address ?? '',
+    hmo_organization: patient.hmo_organization ?? '',
     medical_notes: patient.medical_notes ?? '',
     notifications_enabled: Boolean(patient.notifications_enabled),
     access_pin_draft: accessPinDraft.trim(),

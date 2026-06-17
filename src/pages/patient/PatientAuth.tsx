@@ -100,6 +100,7 @@ export default function PatientAuth() {
     firstName: '',
     lastName: '',
     phone: '',
+    hospitalCurrentlyUsing: '',
     gender: '',
     password: '',
     confirmPassword: '',
@@ -212,6 +213,7 @@ export default function PatientAuth() {
         firstName: signup.firstName,
         lastName: signup.lastName,
         phone: signup.phone,
+        hospitalCurrentlyUsing: signup.hospitalCurrentlyUsing,
         gender: signup.gender,
         password: signup.password,
       })
@@ -327,6 +329,7 @@ export default function PatientAuth() {
         firstName: signup.firstName,
         lastName: signup.lastName,
         phone: signup.phone,
+        hospitalCurrentlyUsing: signup.hospitalCurrentlyUsing,
         gender: signup.gender,
         password: signupVerification.password || signup.password,
       })
@@ -482,6 +485,7 @@ export default function PatientAuth() {
         </div>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 12, marginTop: 12 }}>
           <Input placeholder="Phone Number" value={signup.phone} onChange={e => setSignup(v => ({ ...v, phone: e.target.value }))} />
+          <Input placeholder="Hospital Currently Using" value={signup.hospitalCurrentlyUsing} onChange={e => setSignup(v => ({ ...v, hospitalCurrentlyUsing: e.target.value }))} />
           <Select
             placeholder="Gender"
             value={signup.gender}

@@ -17,6 +17,7 @@ export interface HidPatient {
   full_name: string
   phone_e164: string | null
   email: string | null
+  hospital_currently_using: string | null
   gender: string | null
   dob: string | null
   blood_group: string | null
@@ -31,6 +32,7 @@ export interface HidPatient {
   emergency_contact_relationship: string | null
   emergency_contact_phone: string | null
   emergency_contact_address: string | null
+  hmo_organization: string | null
   medical_notes: string | null
   nin_last4: string | null
   nin_hash: string | null

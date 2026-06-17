@@ -143,6 +143,22 @@ function normalizeToastMessage(message: string, type: ToastType) {
 
   const lower = raw.toLowerCase()
   if (type === 'error') {
+    if (lower.includes('request could not be completed with those details')) {
+      return 'Voice capture could not start right now. Please try again.'
+    }
+    if (lower.includes('microphone access is blocked')) {
+      return 'Microphone access is blocked. Allow it in your browser settings, then try again.'
+    }
+    if (
+      lower.includes('voice capture') ||
+      lower.includes('speech recognition') ||
+      (lower.includes('microphone') && !lower.includes('microphone access is blocked'))
+    ) {
+      if (lower.includes('not allowed') || lower.includes('permission denied') || lower.includes('service not allowed')) {
+        return 'Microphone access is blocked. Allow it in your browser settings, then try again.'
+      }
+      return 'Voice capture could not start right now. Please try again.'
+    }
     if (lower === 'we could not complete that request right now. please try again.') {
       return 'That action could not be completed right now. Refresh and try again. If it keeps happening, sign out and sign back in.'
     }

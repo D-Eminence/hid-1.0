@@ -30,6 +30,7 @@ type PendingPatientSignup = {
   email?: string | null
   firstName: string
   lastName: string
+  hospitalCurrentlyUsing?: string | null
   gender?: string | null
   dob?: string | null
   phone?: string | null
@@ -174,6 +175,7 @@ const HID_PATIENT_COLUMNS = [
   'full_name',
   'phone_e164',
   'email',
+  'hospital_currently_using',
   'gender',
   'dob',
   'blood_group',
@@ -188,6 +190,7 @@ const HID_PATIENT_COLUMNS = [
   'emergency_contact_relationship',
   'emergency_contact_phone',
   'emergency_contact_address',
+  'hmo_organization',
   'medical_notes',
   'nin_last4',
   'nin_hash',
@@ -902,6 +905,7 @@ export function toLegacyPatient(patient: HidPatient): Patient {
     full_name: patient.full_name,
     phone: patient.phone_e164,
     email: patient.email,
+    hospital_currently_using: patient.hospital_currently_using,
     gender: patient.gender,
     auth_password_hash: null,
     blood_group: patient.blood_group ?? 'Unknown',
@@ -922,6 +926,7 @@ export function toLegacyPatient(patient: HidPatient): Patient {
     emergency_contact_relationship: patient.emergency_contact_relationship,
     emergency_contact_phone: patient.emergency_contact_phone,
     emergency_contact_address: patient.emergency_contact_address,
+    hmo_organization: patient.hmo_organization,
     medical_notes: patient.medical_notes,
     profile_percent: patient.profile_percent,
     notifications_enabled: patient.notifications_enabled,
@@ -1328,11 +1333,12 @@ export async function ensurePatientProfileRegistered(override?: PendingPatientSi
   }
 
   try {
-    await edgeRequest<{ patient_id: string; hid_code: string }>('patient-register', {
+      await edgeRequest<{ patient_id: string; hid_code: string }>('patient-register', {
       method: 'POST',
       body: {
         firstName: pendingData.firstName,
         lastName: pendingData.lastName,
+        hospitalCurrentlyUsing: normalizeOptionalText(pendingData.hospitalCurrentlyUsing),
         gender: normalizeOptionalText(pendingData.gender),
         dob: normalizeOptionalText(pendingData.dob),
         phone: normalizeOptionalText(pendingData.phone),
@@ -1375,6 +1381,7 @@ export async function updateMyPatientProfile(patch: Partial<Patient>) {
     genotype: patch.genotype ?? current.patient.genotype,
     country: patch.country ?? current.patient.country,
     state: patch.state ?? current.patient.state,
+    hospital_currently_using: patch.hospital_currently_using ?? current.patient.hospital_currently_using,
     allergies: patch.allergies ?? current.patient.allergies,
     chronic_conditions: patch.chronic_conditions ?? current.patient.chronic_conditions,
     current_medications: patch.current_medications ?? current.patient.current_medications,
@@ -1383,6 +1390,7 @@ export async function updateMyPatientProfile(patch: Partial<Patient>) {
     emergency_contact_relationship: patch.emergency_contact_relationship ?? current.patient.emergency_contact_relationship,
     emergency_contact_phone: patch.emergency_contact_phone ?? current.patient.emergency_contact_phone,
     emergency_contact_address: patch.emergency_contact_address ?? current.patient.emergency_contact_address,
+    hmo_organization: patch.hmo_organization ?? current.patient.hmo_organization,
     medical_notes: patch.medical_notes ?? current.patient.medical_notes,
     notifications_enabled: patch.notifications_enabled ?? current.patient.notifications_enabled,
     profile_percent: patch.profile_percent ?? current.patient.profile_percent,
@@ -1847,6 +1855,7 @@ export async function patientSignUpWithPassword(params: PendingPatientSignup & {
     email: normalizeOptionalText(normalizedEmail),
     firstName: params.firstName.trim(),
     lastName: params.lastName.trim(),
+    hospitalCurrentlyUsing: normalizeOptionalText(params.hospitalCurrentlyUsing),
     gender: normalizeOptionalText(params.gender),
     dob: normalizeOptionalText(params.dob),
     phone: normalizedPhone,

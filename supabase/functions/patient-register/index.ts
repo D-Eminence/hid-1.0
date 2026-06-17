@@ -6,6 +6,7 @@ import { asTrimmedString, normalizePhone, optionalTrimmedString } from '../_shar
 type Payload = {
   firstName: string
   lastName: string
+  hospitalCurrentlyUsing?: string | null
   gender?: string | null
   dob?: string | null
   phone?: string | null
@@ -22,6 +23,7 @@ Deno.serve(req => withErrorHandling(req, async () => {
   const { data, error } = await client.rpc('hid_register_patient_profile', {
     p_first_name: firstName,
     p_last_name: lastName,
+    p_hospital_currently_using: optionalTrimmedString(body.hospitalCurrentlyUsing),
     p_gender: optionalTrimmedString(body.gender),
     p_dob: optionalTrimmedString(body.dob),
     p_phone_e164: normalizePhone(body.phone),

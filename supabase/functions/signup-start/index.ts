@@ -11,6 +11,7 @@ type AccountType = 'patient' | 'hospital'
 type PatientSignupPayload = {
   firstName?: string
   lastName?: string
+  hospitalCurrentlyUsing?: string | null
   gender?: string | null
   dob?: string | null
   phone?: string | null
@@ -234,6 +235,7 @@ Deno.serve(req => withErrorHandling(req, async () => {
         firstName,
         gender: optionalTrimmedString(patient.gender),
         lastName,
+        hospitalCurrentlyUsing: optionalTrimmedString(patient.hospitalCurrentlyUsing),
         phone,
       },
       requested_role: 'patient',

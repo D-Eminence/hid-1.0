@@ -462,6 +462,8 @@ export type Database = {
 
 export type Patient = Database['public']['Tables']['patients']['Row'] & {
   access_pin_configured?: boolean | null
+  hospital_currently_using?: string | null
+  hmo_organization?: string | null
 }
 export type MedicalRecord = Database['public']['Tables']['medical_records']['Row']
 export type MedicalRecordFile = Database['public']['Tables']['medical_record_files']['Row']

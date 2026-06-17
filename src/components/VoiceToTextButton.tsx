@@ -36,7 +36,13 @@ export function VoiceToTextButton({
 
   function getFriendlyVoiceError(error: string) {
     const normalized = error.toLowerCase()
+    if (normalized.includes('request could not be completed with those details')) {
+      return 'Voice capture could not start right now. Please try again.'
+    }
     if (normalized.includes('not-allowed') || normalized.includes('service-not-allowed')) {
+      return 'Microphone access is blocked. Allow it in your browser settings, then try again.'
+    }
+    if (normalized.includes('permission denied') || normalized.includes('not allowed')) {
       return 'Microphone access is blocked. Allow it in your browser settings, then try again.'
     }
     if (normalized.includes('audio-capture')) {
@@ -80,7 +86,7 @@ export function VoiceToTextButton({
         const permissionMessage = error instanceof Error ? error.message : 'Microphone access is blocked.'
         showToast(permissionMessage.toLowerCase().includes('denied') || permissionMessage.toLowerCase().includes('allowed')
           ? 'Microphone access is blocked. Allow it in your browser settings, then try again.'
-          : 'Microphone access could not be enabled right now.', 'error')
+          : 'Voice capture could not start right now. Please try again.', 'error')
         return
       }
     }
