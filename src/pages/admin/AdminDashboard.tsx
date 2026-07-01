@@ -509,7 +509,6 @@ export default function AdminDashboard() {
       })
       setNewAdminForm({ fullName: '', email: '' })
       showToast('Platform admin created. Share the password setup link shown below.', 'success')
-      void loadRoleManagement(true)
     } catch (reason) {
       const message = reason instanceof Error ? reason.message : 'The platform admin could not be created right now.'
       showToast(message, 'error')

@@ -39,7 +39,7 @@ function overviewCacheKey(window: AdminOverviewWindow, date: string | null | und
   return `${window}:${date?.trim() ?? ''}`
 }
 
-function fallbackErrorMessage(raw: string, status: number) {
+function fallbackErrorMessage(raw: string, status: number, fallbackMessage = 'The admin dashboard could not be loaded right now. Refresh and try again.') {
   const lower = raw.toLowerCase()
   if (lower.includes('sentry')) return 'Sentry data is not available right now.'
   if (lower.includes('posthog')) return 'PostHog data is not available right now.'
@@ -50,7 +50,7 @@ function fallbackErrorMessage(raw: string, status: number) {
   if (status === 408) return NETWORK_TIMEOUT_MESSAGE
   if (status === 429) return 'The admin dashboard is being rate-limited right now. Please wait a moment and try again.'
   if (status >= 500) return 'The admin dashboard is temporarily unavailable right now. Please try again shortly.'
-  return 'The admin dashboard could not be loaded right now. Refresh and try again.'
+  return fallbackMessage
 }
 
 function isLowSignalErrorMessage(message: string) {
@@ -69,7 +69,7 @@ function isLowSignalErrorMessage(message: string) {
   )
 }
 
-function sanitizeAdminDashboardMessage(raw: string, status: number) {
+function sanitizeAdminDashboardMessage(raw: string, status: number, fallbackMessage?: string) {
   const lower = raw.toLowerCase()
   if (
     lower.includes('lock:sb-') ||
@@ -114,7 +114,84 @@ function sanitizeAdminDashboardMessage(raw: string, status: number) {
   }
   if (lower.includes('sentry')) return 'Sentry data is not available right now.'
   if (lower.includes('posthog')) return 'PostHog data is not available right now.'
-  return fallbackErrorMessage(raw, status)
+  return fallbackErrorMessage(raw, status, fallbackMessage)
+}
+
+function parseAdminRequestAction(init: RequestInit) {
+  if (typeof init.body !== 'string') return null
+  try {
+    const parsed = JSON.parse(init.body) as { action?: unknown }
+    return typeof parsed.action === 'string' ? parsed.action : null
+  } catch {
+    return null
+  }
+}
+
+function getAdminEndpointFallbackMessage(path: string, init: RequestInit, status: number) {
+  const lowerPath = path.toLowerCase()
+  const action = parseAdminRequestAction(init)
+
+  if (lowerPath.includes('admin-role-management')) {
+    if (action === 'create_admin') {
+      if (status === 401) return 'Please sign in to create a platform admin.'
+      if (status === 403) return 'Admin access is limited to platform admins.'
+      if (status === 404) return 'The platform admin account could not be created right now.'
+      if (status === 408) return 'The platform admin request took too long. Please try again.'
+      if (status === 429) return 'Platform admin creation is being rate-limited right now. Please wait a moment and try again.'
+      if (status >= 500) return 'The platform admin could not be created right now. Please try again shortly.'
+      return 'The platform admin could not be created right now. Refresh and try again.'
+    }
+
+    if (action === 'update_staff_role_policy') {
+      if (status === 401) return 'Please sign in to update hospital RBAC settings.'
+      if (status === 403) return 'Admin access is limited to platform admins.'
+      if (status === 408) return 'The hospital RBAC request took too long. Please try again.'
+      if (status >= 500) return 'The hospital RBAC settings could not be updated right now. Please try again shortly.'
+      return 'The hospital RBAC settings could not be updated right now. Refresh and try again.'
+    }
+
+    if (action === 'update_outreach_role_policy') {
+      if (status === 401) return 'Please sign in to update outreach RBAC settings.'
+      if (status === 403) return 'Admin access is limited to platform admins.'
+      if (status === 408) return 'The outreach RBAC request took too long. Please try again.'
+      if (status >= 500) return 'The outreach RBAC settings could not be updated right now. Please try again shortly.'
+      return 'The outreach RBAC settings could not be updated right now. Refresh and try again.'
+    }
+
+    if (status === 401) return 'Please sign in to open admin role settings.'
+    if (status === 403) return 'Admin access is limited to platform admins.'
+    if (status === 408) return 'The admin role settings request took too long. Please try again.'
+    if (status === 429) return 'Admin role settings are being rate-limited right now. Please wait a moment and try again.'
+    if (status >= 500) return 'Admin role settings are temporarily unavailable right now. Please try again shortly.'
+    return 'Admin role settings could not be loaded right now. Refresh and try again.'
+  }
+
+  if (lowerPath.includes('admin-platform-controls')) {
+    if (status === 401) return 'Please sign in to open platform controls.'
+    if (status === 403) return 'Admin access is limited to platform admins.'
+    if (status === 408) return 'The platform controls request took too long. Please try again.'
+    if (status === 429) return 'Platform controls are being rate-limited right now. Please wait a moment and try again.'
+    if (status >= 500) return 'Platform controls are temporarily unavailable right now. Please try again shortly.'
+    return 'Platform controls could not be loaded right now. Refresh and try again.'
+  }
+
+  if (lowerPath.includes('admin-user-management')) {
+    const method = `${init.method ?? 'GET'}`.toUpperCase()
+    if (method === 'GET') {
+      if (status === 401) return 'Please sign in to open the user directory.'
+      if (status === 403) return 'Admin access is limited to platform admins.'
+      if (status === 408) return 'The user directory request took too long. Please try again.'
+      if (status >= 500) return 'The user directory could not be loaded right now. Please try again shortly.'
+      return 'The user directory could not be loaded right now. Refresh and try again.'
+    }
+    if (status === 401) return 'Please sign in to continue.'
+    if (status === 403) return 'Admin access is limited to platform admins.'
+    if (status === 408) return 'This admin action took too long. Please try again.'
+    if (status >= 500) return 'This admin action could not be completed right now. Please try again shortly.'
+    return 'This admin action could not be completed right now. Refresh and try again.'
+  }
+
+  return undefined
 }
 
 function requireSupabaseUrl() {
@@ -213,7 +290,8 @@ async function callAdminUserManagement<T>(path: string, init: RequestInit, statu
       parsedPayload && typeof parsedPayload === 'object' && 'error' in parsedPayload && typeof parsedPayload.error === 'string'
         ? parsedPayload.error
         : rawBody || response.statusText || ''
-    const message = sanitizeAdminDashboardMessage(rawMessage || fallbackErrorMessage('', statusFallback), response.status || statusFallback)
+    const fallbackMessage = getAdminEndpointFallbackMessage(path, init, response.status || statusFallback)
+    const message = sanitizeAdminDashboardMessage(rawMessage || fallbackErrorMessage('', statusFallback, fallbackMessage), response.status || statusFallback, fallbackMessage)
 
     if (response.status === 401 || message.toLowerCase().includes('please sign in again')) {
       try {
