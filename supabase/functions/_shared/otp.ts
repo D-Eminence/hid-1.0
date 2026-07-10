@@ -6,9 +6,10 @@ const PASSWORD_RESET_CHALLENGE = 'patient_password_reset'
 const ACCOUNT_DELETE_CHALLENGE = 'account_deletion'
 const PATIENT_SIGNUP_CHALLENGE = 'patient_signup'
 const HOSPITAL_SIGNUP_CHALLENGE = 'hospital_signup'
+const ADMIN_EXPORT_CHALLENGE = 'admin_export'
 
 type SignupChallengeType = typeof PATIENT_SIGNUP_CHALLENGE | typeof HOSPITAL_SIGNUP_CHALLENGE
-type AuthChallengeType = typeof PASSWORD_RESET_CHALLENGE | typeof ACCOUNT_DELETE_CHALLENGE | SignupChallengeType
+type AuthChallengeType = typeof PASSWORD_RESET_CHALLENGE | typeof ACCOUNT_DELETE_CHALLENGE | typeof ADMIN_EXPORT_CHALLENGE | SignupChallengeType
 
 type AuthChallengeRow = {
   id: string
@@ -48,6 +49,10 @@ export function accountDeletionOtpTtlMinutes() {
 
 export function signupOtpTtlMinutes() {
   return parsePositiveInt(optionalEnv('HID_SIGNUP_OTP_TTL_MINUTES', '10'), 10, 5, 30)
+}
+
+export function adminExportOtpTtlMinutes() {
+  return passwordResetOtpTtlMinutes()
 }
 
 function maxAttempts() {
@@ -93,6 +98,13 @@ function generateVerificationToken() {
   return toHex(values)
 }
 
+function challengeLabel(challengeType: AuthChallengeType) {
+  if (challengeType === ACCOUNT_DELETE_CHALLENGE) return 'account deletion'
+  if (challengeType === PASSWORD_RESET_CHALLENGE) return 'password reset'
+  if (challengeType === ADMIN_EXPORT_CHALLENGE) return 'admin export'
+  return 'verification'
+}
+
 async function fetchChallenge(adminClient: SupabaseClient, challengeId: string, challengeType: AuthChallengeType) {
   const { data, error } = await adminClient
     .from('hid_auth_challenges')
@@ -102,8 +114,7 @@ async function fetchChallenge(adminClient: SupabaseClient, challengeId: string, 
     .maybeSingle()
 
   if (error || !data) {
-    const label = challengeType === ACCOUNT_DELETE_CHALLENGE ? 'account deletion' : 'password reset'
-    throw new HttpError(400, `The ${label} challenge could not be found.`)
+    throw new HttpError(400, `The ${challengeLabel(challengeType)} challenge could not be found.`)
   }
 
   return data as AuthChallengeRow
@@ -316,6 +327,25 @@ export async function createAccountDeletionChallenge(
   })
 }
 
+export async function createAdminExportChallenge(
+  adminClient: SupabaseClient,
+  params: {
+    authUserId: string
+    deliveryChannels: Array<'sms' | 'email'>
+    deliverySummary: Record<string, unknown>
+    metadata?: Record<string, unknown>
+  },
+) {
+  return createChallenge(adminClient, {
+    authUserId: params.authUserId,
+    challengeType: ADMIN_EXPORT_CHALLENGE,
+    deliveryChannels: params.deliveryChannels,
+    deliverySummary: params.deliverySummary,
+    metadata: params.metadata,
+    patientId: null,
+  })
+}
+
 export async function createSignupChallenge(
   adminClient: SupabaseClient,
   params: {
@@ -358,6 +388,20 @@ export async function verifyAccountDeletionChallenge(
     authUserId,
     challengeId,
     challengeType: ACCOUNT_DELETE_CHALLENGE,
+    code,
+  })
+}
+
+export async function verifyAdminExportChallenge(
+  adminClient: SupabaseClient,
+  challengeId: string,
+  code: string,
+  authUserId: string,
+) {
+  return verifyChallenge(adminClient, {
+    authUserId,
+    challengeId,
+    challengeType: ADMIN_EXPORT_CHALLENGE,
     code,
   })
 }
@@ -420,6 +464,25 @@ export async function consumeAccountDeletionChallenge(
     authUserId: params.authUserId,
     challengeId: params.challengeId,
     challengeType: ACCOUNT_DELETE_CHALLENGE,
+    verificationToken: params.verificationToken,
+  })
+
+  await consumeChallenge(adminClient, challenge.id)
+  return challenge
+}
+
+export async function consumeAdminExportChallenge(
+  adminClient: SupabaseClient,
+  params: {
+    authUserId: string
+    challengeId: string
+    verificationToken: string
+  },
+) {
+  const challenge = await assertVerifiedChallenge(adminClient, {
+    authUserId: params.authUserId,
+    challengeId: params.challengeId,
+    challengeType: ADMIN_EXPORT_CHALLENGE,
     verificationToken: params.verificationToken,
   })
 

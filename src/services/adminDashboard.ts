@@ -8,6 +8,8 @@ import type {
   AdminPlatformControlsResponse,
   AdminRoleManagementResponse,
   AdminStaffRolePolicy,
+  AdminUsersExportFormat,
+  AdminUsersExportStartResponse,
   AdminUserActionResponse,
   AdminUserDirectoryResponse,
   AdminUserManagementAction,
@@ -191,6 +193,34 @@ function getAdminEndpointFallbackMessage(path: string, init: RequestInit, status
     return 'This admin action could not be completed right now. Refresh and try again.'
   }
 
+  if (lowerPath.includes('admin-user-export')) {
+    const action = parseAdminRequestAction(init)
+    if (action === 'start') {
+      if (status === 401) return 'Please sign in to export users.'
+      if (status === 403) return 'Admin access is limited to platform admins.'
+      if (status === 408) return 'The export verification request took too long. Please try again.'
+      if (status === 429) return 'User export verification is being rate-limited right now. Please wait a moment and try again.'
+      if (status >= 500) return 'The user export could not be prepared right now. Please try again shortly.'
+      return 'The user export could not be prepared right now. Refresh and try again.'
+    }
+
+    if (action === 'download') {
+      if (status === 401) return 'Please sign in to export users.'
+      if (status === 403) return 'Admin access is limited to platform admins.'
+      if (status === 408) return 'The export request took too long. Please try again.'
+      if (status === 429) return 'User export is being rate-limited right now. Please wait a moment and try again.'
+      if (status >= 500) return 'The user export could not be downloaded right now. Please try again shortly.'
+      return 'The user export could not be downloaded right now. Refresh and try again.'
+    }
+
+    if (status === 401) return 'Please sign in to export users.'
+    if (status === 403) return 'Admin access is limited to platform admins.'
+    if (status === 408) return 'The user export request took too long. Please try again.'
+    if (status === 429) return 'User export is being rate-limited right now. Please wait a moment and try again.'
+    if (status >= 500) return 'The user export could not be completed right now. Please try again shortly.'
+    return 'The user export could not be completed right now. Refresh and try again.'
+  }
+
   return undefined
 }
 
@@ -220,6 +250,22 @@ function requireSupabaseFunctionUrl(name: string) {
   return `${requireSupabaseUrl()}/functions/v1/${name}`
 }
 
+async function fetchWithTimeoutMs(input: RequestInfo | URL, init: RequestInit = {}, timeoutMs = 60000) {
+  const controller = new AbortController()
+  const timeoutId = globalThis.setTimeout(() => {
+    controller.abort(new Error(timeoutMs === 60000 ? 'The export request took too long. Please try again.' : NETWORK_TIMEOUT_MESSAGE))
+  }, timeoutMs)
+
+  try {
+    return await fetch(input, {
+      ...init,
+      signal: controller.signal,
+    })
+  } finally {
+    globalThis.clearTimeout(timeoutId)
+  }
+}
+
 function getCachedUserSearch(query: string) {
   const cached = userSearchCache.get(query)
   if (cached && cached.expiresAt > Date.now()) {
@@ -229,6 +275,21 @@ function getCachedUserSearch(query: string) {
     userSearchCache.delete(query)
   }
   return null
+}
+
+function buildAdminRequestInit(init: RequestInit, accessToken: string): RequestInit {
+  const headers = new Headers(init.headers ?? undefined)
+  headers.set('Authorization', `Bearer ${accessToken}`)
+  headers.set('apikey', requireSupabaseAnonKey())
+  if (init.body && !headers.has('Content-Type')) {
+    headers.set('Content-Type', 'application/json')
+  }
+
+  return {
+    ...init,
+    cache: 'no-store',
+    headers,
+  }
 }
 
 export function invalidateAdminDashboardCaches() {
@@ -252,16 +313,7 @@ async function callAdminUserManagement<T>(path: string, init: RequestInit, statu
 
   let response: Response
   try {
-    response = await fetchWithTimeout(path, {
-      cache: 'no-store',
-      headers: {
-        Authorization: `Bearer ${accessToken}`,
-        apikey: requireSupabaseAnonKey(),
-        ...(init.body ? { 'Content-Type': 'application/json' } : {}),
-        ...(init.headers ?? {}),
-      },
-      ...init,
-    })
+    response = await fetchWithTimeout(path, buildAdminRequestInit(init, accessToken))
   } catch (error) {
     if (error instanceof Error && error.message.toLowerCase().includes('too long')) {
       throw new HidApiError(408, NETWORK_TIMEOUT_MESSAGE, error)
@@ -422,6 +474,31 @@ export async function fetchAdminDashboardOverview(window: AdminOverviewWindow = 
   }
 }
 
+async function callAdminUserExport(path: string, init: RequestInit, statusFallback: number) {
+  const accessToken = await getAccessToken()
+  if (!accessToken) {
+    throw new HidApiError(401, 'Please sign in to continue.')
+  }
+
+  let response: Response
+  try {
+    response = await fetchWithTimeoutMs(path, buildAdminRequestInit(init, accessToken))
+  } catch (error) {
+    const rawMessage = error instanceof Error ? error.message : 'The export request could not be completed right now.'
+    throw new HidApiError(statusFallback, sanitizeAdminDashboardMessage(rawMessage, statusFallback, getAdminEndpointFallbackMessage(path, init, statusFallback)), error)
+  }
+
+  if (!response.ok) {
+    const payload = await response.json().catch(() => null)
+    const rawMessage = payload && typeof payload === 'object' && 'error' in payload
+      ? String((payload as { error?: unknown }).error ?? '')
+      : response.statusText || 'Request failed.'
+    throw new HidApiError(response.status, sanitizeAdminDashboardMessage(rawMessage, response.status, getAdminEndpointFallbackMessage(path, init, response.status)), payload)
+  }
+
+  return response
+}
+
 export async function searchAdminUsers(query: string, options: { force?: boolean } = {}) {
   const trimmed = query.trim()
   if (!trimmed) {
@@ -575,6 +652,46 @@ export async function createPlatformAdmin(email: string, fullName: string) {
 
   invalidateAdminDashboardCaches()
   return data
+}
+
+export async function startAdminUsersExport(format: AdminUsersExportFormat) {
+  const data = await callAdminUserManagement<AdminUsersExportStartResponse>(requireSupabaseFunctionUrl('admin-user-export'), {
+    method: 'POST',
+    body: JSON.stringify({
+      action: 'start',
+      format,
+    }),
+  }, 500)
+
+  return data
+}
+
+export async function downloadAdminUsersExport(params: {
+  challengeId: string
+  code: string
+  format: AdminUsersExportFormat
+}) {
+  const response = await callAdminUserExport(requireSupabaseFunctionUrl('admin-user-export'), {
+    method: 'POST',
+    body: JSON.stringify({
+      action: 'download',
+      challengeId: params.challengeId,
+      code: params.code,
+      format: params.format,
+    }),
+  }, 500)
+
+  const blob = await response.blob()
+  const disposition = response.headers.get('content-disposition') ?? ''
+  const fileNameMatch = /filename="([^"]+)"/i.exec(disposition)
+  const fileName = fileNameMatch?.[1] ?? `hid-users-export.${params.format}`
+  const mimeType = response.headers.get('content-type') ?? 'application/octet-stream'
+
+  return {
+    blob,
+    fileName,
+    mimeType,
+  }
 }
 
 export async function updateAdminStaffRolePolicy(

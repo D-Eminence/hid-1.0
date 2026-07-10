@@ -1027,7 +1027,7 @@ Deno.serve(req => withErrorHandling(req, async () => {
       [] as Array<Record<string, unknown>>,
     ),
     safePostgrest(
-      adminClient.from('hid_auth_challenges').select('id, created_at, verified_at').gte('created_at', periodStart.toISOString()).lt('created_at', periodEnd.toISOString()),
+      adminClient.from('hid_auth_challenges').select('id, created_at, verified_at').gte('created_at', periodStart.toISOString()).lt('created_at', periodEnd.toISOString()).neq('challenge_type', 'admin_export'),
       [] as Array<Record<string, unknown>>,
     ),
     safePostgrest(

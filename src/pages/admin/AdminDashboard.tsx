@@ -3,7 +3,8 @@ import { AdminLayout, type AdminSidebarSection } from '../../components/AdminLay
 import { AdminFunnelChart } from '../../components/admin/AdminFunnelChart'
 import { AdminMetricCard } from '../../components/admin/AdminMetricCard'
 import { AdminSeriesChart } from '../../components/admin/AdminSeriesChart'
-import { Badge, Button, EmptyState, Input, PageLoader, Select, showToast } from '../../components/ui'
+import { Badge, Button, EmptyState, Input, Modal, PageLoader, Select, showToast } from '../../components/ui'
+import { OtpInputs } from '../../components/OtpInputs'
 import { useAdminDashboard } from '../../hooks/useAdminDashboard'
 import { ADMIN_LOGIN_PATH } from '../../lib/adminRoutes'
 import { signOutAndClearSessions } from '../../lib/auth'
@@ -11,10 +12,12 @@ import { getSafeUser } from '../../lib/supabase'
 import {
   applyAdminUserAction,
   createPlatformAdmin,
+  downloadAdminUsersExport,
   fetchAdminPlatformControls,
   fetchAdminRoleManagement,
   fetchDeletedAdminUsers,
   searchAdminUsers,
+  startAdminUsersExport,
   updateAdminOutreachRolePolicy,
   updateAdminPlatformControls,
   updateAdminStaffRolePolicy,
@@ -27,6 +30,8 @@ import type {
   AdminPlatformAdmin,
   AdminPlatformControls,
   AdminStaffRolePolicy,
+  AdminUsersExportFormat,
+  AdminUsersExportStartResponse,
   AdminUserManagementAction,
 } from '../../types/admin'
 
@@ -298,6 +303,17 @@ const platformControlFields: Array<{
   { key: 'uploadsEnabled', label: 'File Uploads', helper: 'Allow medical record file uploads' },
 ]
 
+const exportFormatOptions: Array<{
+  value: AdminUsersExportFormat
+  label: string
+  helper: string
+}> = [
+  { value: 'csv', label: 'CSV', helper: 'Best for spreadsheets and quick data review' },
+  { value: 'xlsx', label: 'XLSX', helper: 'Best for Excel and worksheet tools' },
+  { value: 'pdf', label: 'PDF', helper: 'Best for human-readable reports' },
+  { value: 'txt', label: 'TXT', helper: 'Best for lightweight plain-text export' },
+]
+
 export default function AdminDashboard() {
   const [viewerEmail, setViewerEmail] = useState<string | null>(null)
   const [windowKey, setWindowKey] = useState<AdminOverviewWindow>('7d')
@@ -326,6 +342,12 @@ export default function AdminDashboard() {
   const [savingOutreachRole, setSavingOutreachRole] = useState<string | null>(null)
   const [newAdminForm, setNewAdminForm] = useState({ fullName: '', email: '' })
   const [newAdminArtifact, setNewAdminArtifact] = useState<{ email: string; passwordSetupLink: string } | null>(null)
+  const [exportDialogOpen, setExportDialogOpen] = useState(false)
+  const [exportFormat, setExportFormat] = useState<AdminUsersExportFormat>('csv')
+  const [exportChallenge, setExportChallenge] = useState<AdminUsersExportStartResponse | null>(null)
+  const [exportCode, setExportCode] = useState('')
+  const [exportStarting, setExportStarting] = useState(false)
+  const [exportDownloading, setExportDownloading] = useState(false)
   const [selectedStaffRole, setSelectedStaffRole] = useState('')
   const [selectedOutreachRole, setSelectedOutreachRole] = useState('')
   const [activeSection, setActiveSection] = useState('dashboard')
@@ -386,6 +408,75 @@ export default function AdminDashboard() {
     setViewerEmail(user?.email ?? null)
   }
 
+  function resetExportFlow() {
+    setExportChallenge(null)
+    setExportCode('')
+    setExportStarting(false)
+    setExportDownloading(false)
+  }
+
+  function openExportDialog() {
+    setExportDialogOpen(true)
+    resetExportFlow()
+  }
+
+  function closeExportDialog() {
+    setExportDialogOpen(false)
+    resetExportFlow()
+  }
+
+  async function requestExportCode() {
+    if (exportStarting || exportDownloading) return
+
+    setExportStarting(true)
+    try {
+      const challenge = await startAdminUsersExport(exportFormat)
+      setExportChallenge(challenge)
+      setExportCode('')
+      showToast(`Verification code sent to ${challenge.maskedEmail ?? 'your email address'}.`, 'success')
+    } catch (reason) {
+      const message = reason instanceof Error ? reason.message : 'The user export could not be prepared right now.'
+      showToast(message, 'error')
+    } finally {
+      setExportStarting(false)
+    }
+  }
+
+  async function confirmExportDownload() {
+    if (!exportChallenge || exportDownloading) return
+
+    const code = exportCode.trim()
+    if (code.length !== 6) {
+      showToast('Enter the 6-digit verification code first.', 'error')
+      return
+    }
+
+    setExportDownloading(true)
+    try {
+      const { blob, fileName } = await downloadAdminUsersExport({
+        challengeId: exportChallenge.challengeId,
+        code,
+        format: exportFormat,
+      })
+      const url = URL.createObjectURL(blob)
+      const link = document.createElement('a')
+      link.href = url
+      link.download = fileName
+      link.rel = 'noopener'
+      document.body.appendChild(link)
+      link.click()
+      link.remove()
+      URL.revokeObjectURL(url)
+      showToast('Users export downloaded successfully.', 'success')
+      closeExportDialog()
+    } catch (reason) {
+      const message = reason instanceof Error ? reason.message : 'The user export could not be downloaded right now.'
+      showToast(message, 'error')
+    } finally {
+      setExportDownloading(false)
+    }
+  }
+
   async function logout() {
     await signOutAndClearSessions()
     window.location.assign(ADMIN_LOGIN_PATH)
@@ -402,6 +493,9 @@ export default function AdminDashboard() {
   const selectedOutreachPolicy = useMemo(() => (
     outreachRolePolicies.find(policy => policy.role === selectedOutreachRole) ?? null
   ), [outreachRolePolicies, selectedOutreachRole])
+  const selectedExportFormatOption = useMemo(() => (
+    exportFormatOptions.find(option => option.value === exportFormat) ?? exportFormatOptions[0]
+  ), [exportFormat])
   const visibleDeletedDirectoryResults = useMemo(() => (
     deletedDirectoryResults.filter(item => !directoryResults.some(directoryItem => directoryItem.id === item.id))
   ), [deletedDirectoryResults, directoryResults])
@@ -912,6 +1006,15 @@ export default function AdminDashboard() {
           <div style={panelStyle()}>
             {sectionLabel('User Controls')}
             {sectionTitle('User Directory')}
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap', marginBottom: 12 }}>
+              <div style={{ fontSize: 11.5, color: 'var(--admin-muted)', lineHeight: 1.6, maxWidth: 680 }}>
+                Search by HID code or email to inspect a user profile, lock or unlock the profile, manage staff access, close patient access, delete the account, or restore a deleted account.
+                Use export if you need a secure offline copy of the current user directory.
+              </div>
+              <Button variant="outline" onClick={openExportDialog}>
+                Export Users
+              </Button>
+            </div>
             <div style={{ display: 'flex', flexWrap: 'wrap', gap: 10, alignItems: 'center', marginBottom: 12 }}>
               <input
                 value={directoryQuery}
@@ -953,9 +1056,6 @@ export default function AdminDashboard() {
               >
                 Clear
               </Button>
-            </div>
-            <div style={{ fontSize: 11.5, color: 'var(--admin-muted)', marginBottom: 12 }}>
-              Search by HID code or email to inspect a user profile, lock or unlock the profile, manage staff access, close patient access, delete the account, or restore a deleted account.
             </div>
             {directoryError && (
               <div style={{ ...alertToneStyle('warning'), borderRadius: 10, padding: '10px 12px', marginBottom: 12, fontSize: 11.5 }}>
@@ -1449,6 +1549,80 @@ export default function AdminDashboard() {
             )}
           </div>
         </section>
+
+        <Modal
+          open={exportDialogOpen}
+          onClose={() => {
+            if (!exportStarting && !exportDownloading) {
+              closeExportDialog()
+            }
+          }}
+          title="Export users"
+          width={560}
+        >
+          <div style={{ display: 'grid', gap: 16 }}>
+            <div style={{ color: '#4b5563', fontSize: 13, lineHeight: 1.7 }}>
+              Export the current user directory only after OTP verification. The export is available in CSV, XLSX, PDF, or TXT and is sent securely to the signed-in admin email.
+            </div>
+
+            <div style={{ display: 'grid', gap: 8 }}>
+              <Select
+                label="Export format"
+                value={exportFormat}
+                onChange={event => setExportFormat(event.target.value as AdminUsersExportFormat)}
+                options={exportFormatOptions.map(option => ({ value: option.value, label: option.label }))}
+                placeholder="Choose a format"
+                disabled={Boolean(exportChallenge)}
+              />
+              <div style={{ fontSize: 11.5, color: 'var(--admin-muted)', lineHeight: 1.6 }}>
+                {selectedExportFormatOption.helper}
+              </div>
+            </div>
+
+            {!exportChallenge ? (
+              <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10, flexWrap: 'wrap' }}>
+                <Button variant="outline" onClick={closeExportDialog} disabled={exportStarting}>
+                  Cancel
+                </Button>
+                <Button loading={exportStarting} onClick={() => void requestExportCode()}>
+                  Send OTP
+                </Button>
+              </div>
+            ) : (
+              <>
+                <div style={{ border: '1px solid var(--admin-border)', borderRadius: 12, padding: '12px 14px', background: '#fbfdff' }}>
+                  <div style={{ fontSize: 10.5, fontWeight: 800, letterSpacing: '0.06em', textTransform: 'uppercase', color: 'var(--admin-muted)', marginBottom: 6 }}>
+                    Verification sent
+                  </div>
+                  <div style={{ fontSize: 13, color: '#4b5563', lineHeight: 1.7 }}>
+                    We sent a 6-digit code to <strong>{exportChallenge.maskedEmail ?? 'your email address'}</strong>. It expires at {formatDateTime(exportChallenge.expiresAt)}.
+                  </div>
+                </div>
+
+                <OtpInputs value={exportCode} onChange={setExportCode} onComplete={setExportCode} />
+
+                <div style={{ display: 'flex', justifyContent: 'space-between', gap: 10, flexWrap: 'wrap' }}>
+                  <button
+                    type="button"
+                    onClick={() => void requestExportCode()}
+                    style={{ border: 'none', background: 'none', color: '#1f8cff', fontSize: 12, cursor: 'pointer', padding: 0 }}
+                    disabled={exportStarting || exportDownloading}
+                  >
+                    Send code again
+                  </button>
+                  <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
+                    <Button variant="outline" onClick={closeExportDialog} disabled={exportStarting || exportDownloading}>
+                      Cancel
+                    </Button>
+                    <Button loading={exportDownloading} onClick={() => void confirmExportDownload()}>
+                      Download export
+                    </Button>
+                  </div>
+                </div>
+              </>
+            )}
+          </div>
+        </Modal>
 
         <section style={splitPanelStyle}>
           <div style={panelStyle()}>

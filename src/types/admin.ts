@@ -261,6 +261,15 @@ export interface AdminUserDirectoryResponse {
   matches: AdminManagedUser[]
 }
 
+export type AdminUsersExportFormat = 'csv' | 'xlsx' | 'pdf' | 'txt'
+
+export interface AdminUsersExportStartResponse {
+  challengeId: string
+  deliveryChannels: Array<'email'>
+  expiresAt: string
+  maskedEmail: string | null
+}
+
 export interface AdminUserActionResponse {
   deleted: boolean
   targetAuthUserId: string
