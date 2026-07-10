@@ -85,14 +85,17 @@ Deno.serve(req => withErrorHandling(req, async () => {
   await verifyTurnstileToken(req, body.turnstileToken ?? null, 'patient-login')
 
   const adminClient = createAdminClient()
-  const controls = await loadPlatformControls(adminClient)
+  const controlsPromise = loadPlatformControls(adminClient)
+  const resolvedIdentityPromise = resolvePatientAuthIdentity(adminClient, identifier)
+
+  const controls = await controlsPromise
   if (controls.maintenance_mode) {
     throw new HttpError(503, 'HID is under scheduled maintenance right now. Please try again shortly.')
   }
   if (!controls.patient_portal_enabled) {
     throw new HttpError(503, 'The patient portal is temporarily unavailable right now.')
   }
-  const resolvedIdentity = await resolvePatientAuthIdentity(adminClient, identifier)
+  const resolvedIdentity = await resolvedIdentityPromise
   if (!resolvedIdentity) {
     if (!looksLikeEmailIdentifier(identifier)) {
       throw new HttpError(401, 'The sign-in details are not correct.')

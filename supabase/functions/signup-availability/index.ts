@@ -38,11 +38,25 @@ Deno.serve(req => withErrorHandling(req, async () => {
   const email = optionalTrimmedString(body.email)?.toLowerCase() ?? null
   const phone = normalizePhone(body.phone)
   const adminClient = createAdminClient()
-  const controls = await loadPlatformControls(adminClient)
+  const controlsPromise = loadPlatformControls(adminClient)
+  const emailSignupStatePromise = email
+    ? adminClient.rpc('hid_auth_email_signup_state', {
+        p_email: email,
+      })
+    : null
+  const phoneAvailabilityPromise = phone && accountType === 'patient'
+    ? adminClient
+        .from('hid_patients')
+        .select('id', { head: true, count: 'exact' })
+        .eq('phone_e164', phone)
+        .limit(1)
+    : null
 
   if (!email && !phone) {
     throw new HttpError(400, 'Provide an email address or phone number to check.')
   }
+
+  const controls = await controlsPromise
 
   if (controls.maintenance_mode) {
     throw new HttpError(503, 'HID is under scheduled maintenance right now. Please try again shortly.')
@@ -64,9 +78,7 @@ Deno.serve(req => withErrorHandling(req, async () => {
   let emailOwner: 'patient' | 'hospital' | 'account' | null = null
 
   if (email) {
-    const authStateResult = await adminClient.rpc('hid_auth_email_signup_state', {
-      p_email: email,
-    })
+    const authStateResult = await emailSignupStatePromise!
 
     if (authStateResult.error) {
       throw new HttpError(400, 'We could not verify this email right now.', authStateResult.error)
@@ -108,11 +120,7 @@ Deno.serve(req => withErrorHandling(req, async () => {
 
   let phoneInUse = false
   if (phone && accountType === 'patient') {
-    const phoneResult = await adminClient
-      .from('hid_patients')
-      .select('id', { head: true, count: 'exact' })
-      .eq('phone_e164', phone)
-      .limit(1)
+    const phoneResult = await phoneAvailabilityPromise!
 
     if (phoneResult.error) {
       throw new HttpError(400, 'We could not verify this phone number right now.', phoneResult.error)

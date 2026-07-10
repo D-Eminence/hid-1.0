@@ -1,5 +1,11 @@
 export function getTurnstileSiteKey() {
-  return (import.meta.env.VITE_TURNSTILE_SITE_KEY || import.meta.env.HID || '').trim()
+  return (
+    import.meta.env.VITE_TURNSTILE_SITE_KEY ||
+    import.meta.env.HID_TURNSTILE_SITE_KEY ||
+    import.meta.env.TURNSTILE_SITE_KEY ||
+    import.meta.env.HID ||
+    ''
+  ).trim()
 }
 
 function isLocalHostname(hostname: string) {
