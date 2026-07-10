@@ -30,7 +30,9 @@ import type {
   AdminPlatformAdmin,
   AdminPlatformControls,
   AdminStaffRolePolicy,
+  AdminUsersExportFilters,
   AdminUsersExportFormat,
+  AdminUsersExportScope,
   AdminUsersExportStartResponse,
   AdminUserManagementAction,
 } from '../../types/admin'
@@ -314,6 +316,19 @@ const exportFormatOptions: Array<{
   { value: 'txt', label: 'TXT', helper: 'Best for lightweight plain-text export' },
 ]
 
+const exportScopeOptions: Array<{
+  value: AdminUsersExportScope
+  label: string
+  helper: string
+}> = [
+  { value: 'selected_user', label: 'Selected user', helper: 'Export the user currently selected in the directory' },
+  { value: 'search_results', label: 'Search results', helper: 'Export users matching the current HID code or email search' },
+  { value: 'selected_day', label: 'Selected day', helper: 'Export users created on one specific date' },
+  { value: 'last_7_days', label: 'Weekly', helper: 'Export users created in the last 7 days' },
+  { value: 'last_30_days', label: 'Monthly', helper: 'Export users created in the last 30 days' },
+  { value: 'all', label: 'All users', helper: 'Export the full reportable user directory' },
+]
+
 export default function AdminDashboard() {
   const [viewerEmail, setViewerEmail] = useState<string | null>(null)
   const [windowKey, setWindowKey] = useState<AdminOverviewWindow>('7d')
@@ -344,6 +359,10 @@ export default function AdminDashboard() {
   const [newAdminArtifact, setNewAdminArtifact] = useState<{ email: string; passwordSetupLink: string } | null>(null)
   const [exportDialogOpen, setExportDialogOpen] = useState(false)
   const [exportFormat, setExportFormat] = useState<AdminUsersExportFormat>('csv')
+  const [exportScope, setExportScope] = useState<AdminUsersExportScope>('all')
+  const [exportTargetUserId, setExportTargetUserId] = useState<string | null>(null)
+  const [exportQuery, setExportQuery] = useState('')
+  const [exportDate, setExportDate] = useState(() => new Date().toISOString().slice(0, 10))
   const [exportChallenge, setExportChallenge] = useState<AdminUsersExportStartResponse | null>(null)
   const [exportCode, setExportCode] = useState('')
   const [exportStarting, setExportStarting] = useState(false)
@@ -415,8 +434,29 @@ export default function AdminDashboard() {
     setExportDownloading(false)
   }
 
+  function getDefaultExportScope(): AdminUsersExportScope {
+    if (selectedDirectoryUserId) return 'selected_user'
+    if (directoryQuery.trim()) return 'search_results'
+    if (selectedDate) return 'selected_day'
+    return 'all'
+  }
+
+  function buildExportFilters(): AdminUsersExportFilters {
+    const trimmedQuery = exportQuery.trim()
+    return {
+      scope: exportScope,
+      authUserId: exportScope === 'selected_user' ? (exportTargetUserId ?? null) : null,
+      query: exportScope === 'search_results' ? trimmedQuery : null,
+      date: exportScope === 'selected_day' ? exportDate : null,
+    }
+  }
+
   function openExportDialog() {
     setExportDialogOpen(true)
+    setExportScope(getDefaultExportScope())
+    setExportTargetUserId(selectedDirectoryUserId)
+    setExportQuery(directoryQuery.trim())
+    setExportDate(selectedDate ?? new Date().toISOString().slice(0, 10))
     resetExportFlow()
   }
 
@@ -428,9 +468,26 @@ export default function AdminDashboard() {
   async function requestExportCode() {
     if (exportStarting || exportDownloading) return
 
+    const filters = buildExportFilters()
+    if (filters.scope === 'selected_user' && !filters.authUserId) {
+      showToast('Choose a user first, then export again.', 'error')
+      return
+    }
+    if (filters.scope === 'search_results' && !filters.query) {
+      showToast('Enter an HID code or email to export first.', 'error')
+      return
+    }
+    if (filters.scope === 'selected_day' && !filters.date) {
+      showToast('Choose a date to export first.', 'error')
+      return
+    }
+
     setExportStarting(true)
     try {
-      const challenge = await startAdminUsersExport(exportFormat)
+      const challenge = await startAdminUsersExport({
+        format: exportFormat,
+        filters,
+      })
       setExportChallenge(challenge)
       setExportCode('')
       showToast(`Verification code sent to ${challenge.maskedEmail ?? 'your email address'}.`, 'success')
@@ -496,6 +553,32 @@ export default function AdminDashboard() {
   const selectedExportFormatOption = useMemo(() => (
     exportFormatOptions.find(option => option.value === exportFormat) ?? exportFormatOptions[0]
   ), [exportFormat])
+  const selectedExportScopeOption = useMemo(() => (
+    exportScopeOptions.find(option => option.value === exportScope) ?? exportScopeOptions[0]
+  ), [exportScope])
+  const exportCanRequest = useMemo(() => {
+    if (exportScope === 'selected_user') return Boolean(exportTargetUserId)
+    if (exportScope === 'search_results') return Boolean(exportQuery.trim())
+    if (exportScope === 'selected_day') return Boolean(exportDate)
+    return true
+  }, [exportDate, exportQuery, exportScope, exportTargetUserId])
+  const exportScopeSummary = useMemo(() => {
+    if (exportScope === 'selected_user') {
+      if (!selectedDirectoryUser) return 'No user is selected right now.'
+      const label = selectedDirectoryUser.patient?.fullName ?? selectedDirectoryUser.staff?.fullName ?? selectedDirectoryUser.profile?.displayName ?? selectedDirectoryUser.email ?? 'Selected user'
+      const extra = selectedDirectoryUser.patient?.hidCode ?? selectedDirectoryUser.email ?? 'No email'
+      return `${label} • ${extra}`
+    }
+    if (exportScope === 'search_results') {
+      return exportQuery.trim() ? `Matches for "${exportQuery.trim()}"` : 'Enter a search query to export matching users.'
+    }
+    if (exportScope === 'selected_day') {
+      return exportDate ? `Users created on ${formatDayLabel(exportDate) ?? exportDate}` : 'Choose a date to export.'
+    }
+    if (exportScope === 'last_7_days') return 'Users created in the last 7 days.'
+    if (exportScope === 'last_30_days') return 'Users created in the last 30 days.'
+    return 'All reportable users.'
+  }, [exportDate, exportQuery, exportScope, selectedDirectoryUser])
   const visibleDeletedDirectoryResults = useMemo(() => (
     deletedDirectoryResults.filter(item => !directoryResults.some(directoryItem => directoryItem.id === item.id))
   ), [deletedDirectoryResults, directoryResults])
@@ -1562,7 +1645,7 @@ export default function AdminDashboard() {
         >
           <div style={{ display: 'grid', gap: 16 }}>
             <div style={{ color: '#4b5563', fontSize: 13, lineHeight: 1.7 }}>
-              Export the current user directory only after OTP verification. The export is available in CSV, XLSX, PDF, or TXT and is sent securely to the signed-in admin email.
+              Export one selected user, the current search results, or a date-based batch only after OTP verification. The export is available in CSV, XLSX, PDF, or TXT and is sent securely to the signed-in admin email.
             </div>
 
             <div style={{ display: 'grid', gap: 8 }}>
@@ -1579,12 +1662,65 @@ export default function AdminDashboard() {
               </div>
             </div>
 
+            <div style={{ display: 'grid', gap: 8 }}>
+              <Select
+                label="Export scope"
+                value={exportScope}
+                onChange={event => setExportScope(event.target.value as AdminUsersExportScope)}
+                options={exportScopeOptions.map(option => ({ value: option.value, label: option.label }))}
+                placeholder="Choose a scope"
+                disabled={Boolean(exportChallenge)}
+              />
+              <div style={{ fontSize: 11.5, color: 'var(--admin-muted)', lineHeight: 1.6 }}>
+                {selectedExportScopeOption.helper}
+              </div>
+            </div>
+
+            <div style={{ border: '1px solid var(--admin-border)', borderRadius: 12, padding: '12px 14px', background: '#fbfdff' }}>
+              <div style={{ fontSize: 10.5, fontWeight: 800, letterSpacing: '0.06em', textTransform: 'uppercase', color: 'var(--admin-muted)', marginBottom: 6 }}>
+                Export preview
+              </div>
+              <div style={{ fontSize: 13, color: '#4b5563', lineHeight: 1.7 }}>
+                {exportScopeSummary}
+              </div>
+            </div>
+
+            {exportScope === 'selected_user' && (
+              <div style={{ border: '1px solid var(--admin-border)', borderRadius: 12, padding: '12px 14px', background: '#fff' }}>
+                <div style={{ fontSize: 12, fontWeight: 700, marginBottom: 6 }}>Selected user</div>
+                <div style={{ fontSize: 11.5, color: 'var(--admin-muted)', lineHeight: 1.6 }}>
+                  {selectedDirectoryUser
+                    ? `${selectedDirectoryUser.patient?.fullName ?? selectedDirectoryUser.staff?.fullName ?? selectedDirectoryUser.profile?.displayName ?? selectedDirectoryUser.email ?? 'Selected user'} • ${selectedDirectoryUser.patient?.hidCode ?? selectedDirectoryUser.email ?? 'No email'}`
+                    : 'Search for a user first, then reopen export to target that account.'}
+                </div>
+              </div>
+            )}
+
+            {exportScope === 'search_results' && (
+              <Input
+                label="Search query"
+                value={exportQuery}
+                onChange={event => setExportQuery(event.target.value)}
+                placeholder="Search by HID code or email"
+              />
+            )}
+
+            {exportScope === 'selected_day' && (
+              <Input
+                label="Export date"
+                type="date"
+                value={exportDate}
+                max={new Date().toISOString().slice(0, 10)}
+                onChange={event => setExportDate(event.target.value)}
+              />
+            )}
+
             {!exportChallenge ? (
               <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10, flexWrap: 'wrap' }}>
                 <Button variant="outline" onClick={closeExportDialog} disabled={exportStarting}>
                   Cancel
                 </Button>
-                <Button loading={exportStarting} onClick={() => void requestExportCode()}>
+                <Button loading={exportStarting} onClick={() => void requestExportCode()} disabled={!exportCanRequest}>
                   Send OTP
                 </Button>
               </div>

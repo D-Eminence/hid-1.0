@@ -8,6 +8,7 @@ import type {
   AdminPlatformControlsResponse,
   AdminRoleManagementResponse,
   AdminStaffRolePolicy,
+  AdminUsersExportFilters,
   AdminUsersExportFormat,
   AdminUsersExportStartResponse,
   AdminUserActionResponse,
@@ -101,6 +102,9 @@ function sanitizeAdminDashboardMessage(raw: string, status: number, fallbackMess
   }
   if (lower.includes('platform admin accounts cannot be modified')) {
     return 'Platform admin accounts cannot be changed from the dashboard.'
+  }
+  if (lower.includes('no users matched the selected export criteria')) {
+    return 'No users matched the selected export criteria.'
   }
   if (lower.includes('staff account could not be found')) {
     return 'We could not find that hospital account right now.'
@@ -224,6 +228,10 @@ function getAdminEndpointFallbackMessage(path: string, init: RequestInit, status
   return undefined
 }
 
+function getAdminExportNetworkMessage() {
+  return 'The export service could not be reached right now. Please try again.'
+}
+
 function requireSupabaseUrl() {
   const value = import.meta.env.VITE_SUPABASE_URL as string | undefined
   if (!value) throw new HidApiError(500, 'Supabase is not configured for this app.')
@@ -250,10 +258,15 @@ function requireSupabaseFunctionUrl(name: string) {
   return `${requireSupabaseUrl()}/functions/v1/${name}`
 }
 
-async function fetchWithTimeoutMs(input: RequestInfo | URL, init: RequestInit = {}, timeoutMs = 60000) {
+async function fetchWithTimeoutMs(
+  input: RequestInfo | URL,
+  init: RequestInit = {},
+  timeoutMs = 120000,
+  timeoutMessage = 'The export request took too long. Please try again.',
+) {
   const controller = new AbortController()
   const timeoutId = globalThis.setTimeout(() => {
-    controller.abort(new Error(timeoutMs === 60000 ? 'The export request took too long. Please try again.' : NETWORK_TIMEOUT_MESSAGE))
+    controller.abort(new Error(timeoutMessage))
   }, timeoutMs)
 
   try {
@@ -315,6 +328,12 @@ async function callAdminUserManagement<T>(path: string, init: RequestInit, statu
   try {
     response = await fetchWithTimeout(path, buildAdminRequestInit(init, accessToken))
   } catch (error) {
+    if (path.includes('admin-user-export')) {
+      if (error instanceof Error && (error.name === 'AbortError' || error.message.toLowerCase().includes('too long') || error.message.toLowerCase().includes('timed out'))) {
+        throw new HidApiError(408, 'The export request took too long. Please try again.', error)
+      }
+      throw new HidApiError(statusFallback, getAdminExportNetworkMessage(), error)
+    }
     if (error instanceof Error && error.message.toLowerCase().includes('too long')) {
       throw new HidApiError(408, NETWORK_TIMEOUT_MESSAGE, error)
     }
@@ -484,6 +503,12 @@ async function callAdminUserExport(path: string, init: RequestInit, statusFallba
   try {
     response = await fetchWithTimeoutMs(path, buildAdminRequestInit(init, accessToken))
   } catch (error) {
+    if (path.includes('admin-user-export')) {
+      if (error instanceof Error && (error.name === 'AbortError' || error.message.toLowerCase().includes('too long') || error.message.toLowerCase().includes('timed out'))) {
+        throw new HidApiError(408, 'The export request took too long. Please try again.', error)
+      }
+      throw new HidApiError(statusFallback, getAdminExportNetworkMessage(), error)
+    }
     const rawMessage = error instanceof Error ? error.message : 'The export request could not be completed right now.'
     throw new HidApiError(statusFallback, sanitizeAdminDashboardMessage(rawMessage, statusFallback, getAdminEndpointFallbackMessage(path, init, statusFallback)), error)
   }
@@ -654,12 +679,16 @@ export async function createPlatformAdmin(email: string, fullName: string) {
   return data
 }
 
-export async function startAdminUsersExport(format: AdminUsersExportFormat) {
+export async function startAdminUsersExport(params: {
+  format: AdminUsersExportFormat
+  filters: AdminUsersExportFilters
+}) {
   const data = await callAdminUserManagement<AdminUsersExportStartResponse>(requireSupabaseFunctionUrl('admin-user-export'), {
     method: 'POST',
     body: JSON.stringify({
       action: 'start',
-      format,
+      format: params.format,
+      filters: params.filters,
     }),
   }, 500)
 

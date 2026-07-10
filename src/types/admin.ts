@@ -263,6 +263,21 @@ export interface AdminUserDirectoryResponse {
 
 export type AdminUsersExportFormat = 'csv' | 'xlsx' | 'pdf' | 'txt'
 
+export type AdminUsersExportScope =
+  | 'selected_user'
+  | 'search_results'
+  | 'selected_day'
+  | 'last_7_days'
+  | 'last_30_days'
+  | 'all'
+
+export interface AdminUsersExportFilters {
+  scope: AdminUsersExportScope
+  authUserId?: string | null
+  query?: string | null
+  date?: string | null
+}
+
 export interface AdminUsersExportStartResponse {
   challengeId: string
   deliveryChannels: Array<'email'>

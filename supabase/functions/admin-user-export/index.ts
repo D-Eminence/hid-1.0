@@ -11,6 +11,7 @@ import { asTrimmedString } from '../_shared/validation.ts'
 import {
   buildAdminUsersExportFile,
   loadAdminUsersExportRows,
+  type AdminUsersExportFilters,
   type AdminUsersExportFormat,
 } from '../_shared/admin-user-export.ts'
 
@@ -19,6 +20,41 @@ type Payload = {
   challengeId?: string
   code?: string
   format?: AdminUsersExportFormat
+  filters?: Partial<AdminUsersExportFilters>
+}
+
+const EXPORT_SCOPES: AdminUsersExportFilters['scope'][] = [
+  'selected_user',
+  'search_results',
+  'selected_day',
+  'last_7_days',
+  'last_30_days',
+  'all',
+]
+
+function normalizeFilters(input?: Partial<AdminUsersExportFilters>) {
+  const scope = EXPORT_SCOPES.includes(`${input?.scope ?? 'all'}` as AdminUsersExportFilters['scope'])
+    ? `${input?.scope ?? 'all'}` as AdminUsersExportFilters['scope']
+    : 'all'
+
+  return {
+    scope,
+    authUserId: input?.authUserId?.trim() || null,
+    query: input?.query?.trim() || null,
+    date: input?.date?.trim() || null,
+  } satisfies AdminUsersExportFilters
+}
+
+function validateFilters(filters: AdminUsersExportFilters) {
+  if (filters.scope === 'selected_user' && !filters.authUserId) {
+    throw new HttpError(400, 'Choose a user to export first.')
+  }
+  if (filters.scope === 'search_results' && !filters.query) {
+    throw new HttpError(400, 'Enter a HID code or email to export first.')
+  }
+  if (filters.scope === 'selected_day' && !filters.date) {
+    throw new HttpError(400, 'Choose a date to export first.')
+  }
 }
 
 function maskEmailAddress(value: string | null | undefined) {
@@ -70,6 +106,8 @@ Deno.serve(req => withErrorHandling(req, async () => {
     if (!['csv', 'xlsx', 'pdf', 'txt'].includes(format)) {
       throw new HttpError(400, 'Choose a valid export format first.')
     }
+    const filters = normalizeFilters(body.filters)
+    validateFilters(filters)
 
     const email = auth.user.email?.trim().toLowerCase() ?? null
     if (!email) {
@@ -84,6 +122,7 @@ Deno.serve(req => withErrorHandling(req, async () => {
       },
       metadata: {
         export_format: format,
+        filters,
       },
     })
 
@@ -130,6 +169,7 @@ Deno.serve(req => withErrorHandling(req, async () => {
     if (!['csv', 'xlsx', 'pdf', 'txt'].includes(requestedFormat)) {
       throw new HttpError(400, 'Choose a valid export format first.')
     }
+    const requestedFilters = normalizeFilters(body.filters)
 
     const verified = await verifyAdminExportChallenge(adminClient, challengeId, code, auth.user.id)
     const exportFormat = `${verified.challenge.metadata?.export_format ?? ''}`.trim().toLowerCase() as AdminUsersExportFormat
@@ -137,13 +177,18 @@ Deno.serve(req => withErrorHandling(req, async () => {
       throw new HttpError(400, 'This export format no longer matches the verification code. Start again to get a new code.')
     }
 
+    const exportFilters = normalizeFilters(
+      (verified.challenge.metadata?.filters as Partial<AdminUsersExportFilters> | undefined) ?? requestedFilters,
+    )
+    validateFilters(exportFilters)
+
     await consumeAdminExportChallenge(adminClient, {
       authUserId: auth.user.id,
       challengeId,
       verificationToken: verified.verificationToken,
     })
 
-    const rows = await loadAdminUsersExportRows(adminClient)
+    const rows = await loadAdminUsersExportRows(adminClient, exportFilters)
     const file = await buildAdminUsersExportFile(rows, exportFormat)
 
     const auditResult = await adminClient.from('hid_audit_events').insert({

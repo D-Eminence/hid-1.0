@@ -2,6 +2,14 @@ import type { createClient } from 'https://esm.sh/@supabase/supabase-js@2.49.8'
 import { HttpError } from './http.ts'
 
 export type AdminUsersExportFormat = 'csv' | 'xlsx' | 'pdf' | 'txt'
+export type AdminUsersExportScope = 'selected_user' | 'search_results' | 'selected_day' | 'last_7_days' | 'last_30_days' | 'all'
+
+export interface AdminUsersExportFilters {
+  scope: AdminUsersExportScope
+  authUserId?: string | null
+  query?: string | null
+  date?: string | null
+}
 
 type AdminClient = ReturnType<typeof createClient>
 
@@ -12,6 +20,14 @@ type AuthUserRow = {
   id: string
   last_sign_in_at: string | null
   user_metadata: Record<string, unknown> | null
+}
+
+type MatchedAuthUserRow = {
+  auth_user_id: string
+  created_at: string | null
+  email: string | null
+  email_confirmed_at: string | null
+  last_sign_in_at: string | null
 }
 
 type ProfileRow = {
@@ -212,6 +228,10 @@ function displayValue(value: string) {
   return value.trim() ? value : 'N/A'
 }
 
+function normalizeSearchValue(value: string | null | undefined) {
+  return `${value ?? ''}`.trim().toLowerCase()
+}
+
 function escapeCsv(value: string) {
   if (!/[",\n\r]/.test(value)) return value
   return `"${value.replace(/"/g, '""')}"`
@@ -297,6 +317,89 @@ async function listAllAuthUsers(adminClient: AdminClient) {
   }
 
   return users
+}
+
+async function getAuthUsersByIds(adminClient: AdminClient, authUserIds: string[]) {
+  const uniqueAuthUserIds = unique(authUserIds).filter(Boolean)
+  if (uniqueAuthUserIds.length === 0) return [] as AuthUserRow[]
+
+  const users = await Promise.all(uniqueAuthUserIds.map(async authUserId => {
+    const { data, error } = await adminClient.auth.admin.getUserById(authUserId)
+    if (error) {
+      throw new HttpError(400, error.message, error)
+    }
+
+    const user = data.user
+    if (!user) return null
+
+    return {
+      created_at: typeof user.created_at === 'string' ? user.created_at : null,
+      email: typeof user.email === 'string' ? user.email : null,
+      email_confirmed_at: typeof user.email_confirmed_at === 'string' ? user.email_confirmed_at : null,
+      id: authUserId,
+      last_sign_in_at: typeof user.last_sign_in_at === 'string' ? user.last_sign_in_at : null,
+      user_metadata: (user.user_metadata && typeof user.user_metadata === 'object') ? user.user_metadata as Record<string, unknown> : null,
+    } satisfies AuthUserRow
+  }))
+
+  return users.filter((user): user is AuthUserRow => Boolean(user))
+}
+
+async function lookupAuthUsersByEmail(adminClient: AdminClient, query: string) {
+  const matches = new Map<string, MatchedAuthUserRow>()
+  const { data, error } = await adminClient.rpc('hid_admin_auth_user_search', {
+    p_limit: 20,
+    p_query: query,
+  })
+
+  if (error) {
+    throw new HttpError(400, error.message, error)
+  }
+
+  for (const row of ((data ?? []) as Array<Record<string, unknown>>)) {
+    const authUserId = `${row.auth_user_id ?? ''}`.trim()
+    if (!authUserId) continue
+    matches.set(authUserId, {
+      auth_user_id: authUserId,
+      created_at: typeof row.created_at === 'string' ? row.created_at : null,
+      email: typeof row.email === 'string' ? row.email : null,
+      email_confirmed_at: typeof row.email_confirmed_at === 'string' ? row.email_confirmed_at : null,
+      last_sign_in_at: typeof row.last_sign_in_at === 'string' ? row.last_sign_in_at : null,
+    })
+  }
+
+  return matches
+}
+
+async function loadAuthUsersCreatedBetween(adminClient: AdminClient, startIso: string, endIso: string) {
+  const { data, error } = await adminClient.rpc('hid_admin_auth_users_created_between', {
+    p_end: endIso,
+    p_start: startIso,
+  })
+
+  if (!error) {
+    return ((data ?? []) as Array<Record<string, unknown>>)
+      .map(row => {
+        const authUserId = `${row.auth_user_id ?? ''}`.trim()
+        if (!authUserId) return null
+        return {
+          created_at: typeof row.created_at === 'string' ? row.created_at : null,
+          email: typeof row.email === 'string' ? row.email : null,
+          email_confirmed_at: typeof row.email_confirmed_at === 'string' ? row.email_confirmed_at : null,
+          id: authUserId,
+          last_sign_in_at: typeof row.last_sign_in_at === 'string' ? row.last_sign_in_at : null,
+          user_metadata: null,
+        } satisfies AuthUserRow
+      })
+      .filter((row): row is AuthUserRow => Boolean(row))
+  }
+
+  const fallbackUsers = await listAllAuthUsers(adminClient)
+  return fallbackUsers.filter(user => {
+    const createdAt = user.created_at ? new Date(user.created_at).getTime() : Number.NaN
+    if (Number.isNaN(createdAt)) return false
+    return createdAt >= new Date(startIso).getTime() && createdAt < new Date(endIso).getTime()
+  })
 }
 
 function isConfirmedAuthUser(user: AuthUserRow) {
@@ -485,6 +588,116 @@ function buildExportRows(
         staffVerificationStatus: normalizeText(staffAccount?.verification_status),
       } satisfies AdminUsersExportRow
     })
+}
+
+function isWithinDays(isoTimestamp: string, days: number) {
+  const timestamp = new Date(isoTimestamp).getTime()
+  if (Number.isNaN(timestamp)) return false
+  const lowerBound = Date.now() - (days * 24 * 60 * 60 * 1000)
+  return timestamp >= lowerBound
+}
+
+function matchesExportQuery(row: AdminUsersExportRow, query: string) {
+  const normalized = normalizeSearchValue(query)
+  if (!normalized) return true
+  return [
+    row.authUserId,
+    row.email,
+    row.patientEmail,
+    row.patientEmergencyContactName,
+    row.patientFullName,
+    row.patientHidCode,
+    row.patientPhone,
+    row.profileAppRole,
+    row.profileDisplayName,
+    row.staffEmail,
+    row.staffFullName,
+    row.staffHospitalName,
+    row.staffPhone,
+    row.staffRole,
+  ].some(value => normalizeSearchValue(value).includes(normalized))
+}
+
+function searchMatchesEmail(query: string) {
+  return query.includes('@')
+}
+
+async function loadScopedAuthUsers(adminClient: AdminClient, filters: AdminUsersExportFilters) {
+  if (filters.scope === 'selected_user' && filters.authUserId) {
+    return getAuthUsersByIds(adminClient, [filters.authUserId])
+  }
+
+  if (filters.scope === 'search_results' && filters.query) {
+    const trimmedQuery = filters.query.trim()
+    const searchPattern = `%${trimmedQuery}%`
+    const [patientResult, staffResult, authMatches] = await Promise.all([
+      searchMatchesEmail(trimmedQuery)
+        ? adminClient.from('hid_patients').select('auth_user_id').ilike('email', searchPattern).limit(20)
+        : adminClient.from('hid_patients').select('auth_user_id').ilike('hid_code', searchPattern).limit(20),
+      searchMatchesEmail(trimmedQuery)
+        ? adminClient.from('hid_staff_accounts').select('auth_user_id').ilike('email', searchPattern).limit(20)
+        : Promise.resolve({ data: [], error: null }),
+      searchMatchesEmail(trimmedQuery)
+        ? lookupAuthUsersByEmail(adminClient, trimmedQuery)
+        : Promise.resolve(new Map<string, MatchedAuthUserRow>()),
+    ])
+
+    if (patientResult.error) throw new HttpError(400, patientResult.error.message, patientResult.error)
+    if (staffResult.error) throw new HttpError(400, staffResult.error.message, staffResult.error)
+
+    const authUserIds = unique([
+      ...((patientResult.data ?? []) as Array<{ auth_user_id: string }>).map(item => item.auth_user_id),
+      ...((staffResult.data ?? []) as Array<{ auth_user_id: string }>).map(item => item.auth_user_id),
+      ...authMatches.keys(),
+    ])
+
+    return getAuthUsersByIds(adminClient, authUserIds)
+  }
+
+  if (filters.scope === 'selected_day' && filters.date) {
+    const start = new Date(`${filters.date}T00:00:00.000Z`).toISOString()
+    const end = new Date(new Date(`${filters.date}T00:00:00.000Z`).getTime() + 24 * 60 * 60 * 1000).toISOString()
+    return loadAuthUsersCreatedBetween(adminClient, start, end)
+  }
+
+  if (filters.scope === 'last_7_days') {
+    const end = new Date()
+    const start = new Date(end.getTime() - (7 * 24 * 60 * 60 * 1000))
+    return loadAuthUsersCreatedBetween(adminClient, start.toISOString(), end.toISOString())
+  }
+
+  if (filters.scope === 'last_30_days') {
+    const end = new Date()
+    const start = new Date(end.getTime() - (30 * 24 * 60 * 60 * 1000))
+    return loadAuthUsersCreatedBetween(adminClient, start.toISOString(), end.toISOString())
+  }
+
+  return listAllAuthUsers(adminClient)
+}
+
+function matchesExportDate(row: AdminUsersExportRow, filters: AdminUsersExportFilters) {
+  if (filters.scope === 'selected_day' && filters.date) {
+    return row.authCreatedAt.slice(0, 10) === filters.date
+  }
+  if (filters.scope === 'last_7_days') {
+    return isWithinDays(row.authCreatedAt, 7)
+  }
+  if (filters.scope === 'last_30_days') {
+    return isWithinDays(row.authCreatedAt, 30)
+  }
+  return true
+}
+
+function filterExportRows(rows: AdminUsersExportRow[], filters: AdminUsersExportFilters) {
+  return rows.filter(row => {
+    if (filters.scope === 'selected_user' && filters.authUserId) {
+      return row.authUserId === filters.authUserId
+    }
+    if (filters.scope === 'search_results') {
+      return matchesExportQuery(row, filters.query ?? '')
+    }
+    return matchesExportDate(row, filters)
+  })
 }
 
 function formatTimestampForFileName(value = new Date()) {
@@ -909,9 +1122,9 @@ function buildZip(files: Array<{ content: string; path: string }>) {
   return concatBytes([...fileChunks, centralDirectory, endOfCentralDirectory])
 }
 
-export async function loadAdminUsersExportRows(adminClient: AdminClient) {
-  const allAuthUsers = await listAllAuthUsers(adminClient)
-  const authUserIds = unique(allAuthUsers.map(user => user.id))
+export async function loadAdminUsersExportRows(adminClient: AdminClient, filters: AdminUsersExportFilters) {
+  const scopedAuthUsers = await loadScopedAuthUsers(adminClient, filters)
+  const authUserIds = unique(scopedAuthUsers.map(user => user.id))
   const profiles = await loadExportProfiles(adminClient, authUserIds)
   const patients = await loadExportPatients(adminClient, authUserIds)
   const staff = await loadExportStaff(adminClient, authUserIds)
@@ -922,8 +1135,13 @@ export async function loadAdminUsersExportRows(adminClient: AdminClient) {
     ...patients.map(patient => patient.auth_user_id),
     ...staff.map(item => item.auth_user_id),
   ])
-  const authUsers = filterReportableAuthUsers(allAuthUsers, profiledAuthUserIds)
-  return buildExportRows(authUsers, profiles, patients, staff, memberships)
+  const authUsers = filterReportableAuthUsers(scopedAuthUsers, profiledAuthUserIds)
+  const rows = buildExportRows(authUsers, profiles, patients, staff, memberships)
+  const filteredRows = filterExportRows(rows, filters)
+  if (filteredRows.length === 0) {
+    throw new HttpError(404, 'No users matched the selected export criteria.')
+  }
+  return filteredRows
 }
 
 export async function buildAdminUsersExportFile(rows: AdminUsersExportRow[], format: AdminUsersExportFormat) {
