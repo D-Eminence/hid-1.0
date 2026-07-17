@@ -106,6 +106,9 @@ function sanitizeAdminDashboardMessage(raw: string, status: number, fallbackMess
   if (lower.includes('no users matched the selected export criteria')) {
     return 'No users matched the selected export criteria.'
   }
+  if (lower.includes('could not send the verification code')) {
+    return 'We could not send the export verification code right now. Please try again.'
+  }
   if (lower.includes('staff account could not be found')) {
     return 'We could not find that hospital account right now.'
   }

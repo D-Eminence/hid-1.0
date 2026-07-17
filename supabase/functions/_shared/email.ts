@@ -52,20 +52,34 @@ export function getConfiguredEmailProvider(): TransactionalEmailProvider {
 
 export async function sendTransactionalEmail(to: string, subject: string, html: string) {
   const brevo = getBrevoConfig()
-  const response = await fetch('https://api.brevo.com/v3/smtp/email', {
-    method: 'POST',
-    headers: {
-      accept: 'application/json',
-      'api-key': brevo.apiKey,
-      'content-type': 'application/json',
-    },
-    body: JSON.stringify({
-      sender: brevo.sender,
-      to: [{ email: to }],
-      subject,
-      htmlContent: html,
-    }),
-  })
+  const controller = new AbortController()
+  const timeoutId = setTimeout(() => controller.abort(), 15000)
+
+  let response: Response
+  try {
+    response = await fetch('https://api.brevo.com/v3/smtp/email', {
+      method: 'POST',
+      headers: {
+        accept: 'application/json',
+        'api-key': brevo.apiKey,
+        'content-type': 'application/json',
+      },
+      body: JSON.stringify({
+        sender: brevo.sender,
+        to: [{ email: to }],
+        subject,
+        htmlContent: html,
+      }),
+      signal: controller.signal,
+    })
+  } catch (error) {
+    if (error instanceof Error && error.name === 'AbortError') {
+      throw new Error('Unable to send email right now.')
+    }
+    throw new Error('Unable to send email right now.')
+  } finally {
+    clearTimeout(timeoutId)
+  }
 
   const payload = await response.json().catch(() => null)
   if (!response.ok) {

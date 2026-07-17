@@ -13,10 +13,13 @@ additional_redirect_urls = [
   "https://healthidentitydirectory.com/patient",
   "https://healthidentitydirectory.com/hospital",
   "https://healthidentitydirectory.com/hospital/auth",
+  "https://healthidentitydirectory.com/eminence/login",
   "https://www.healthidentitydirectory.com",
   "https://www.healthidentitydirectory.com/patient",
   "https://www.healthidentitydirectory.com/hospital",
   "https://www.healthidentitydirectory.com/hospital/auth",
+  "https://www.healthidentitydirectory.com/eminence/login",
+  "https://hid-nu.vercel.app/eminence/login",
   "http://localhost:3000",
   "http://localhost:3000/*",
   "http://127.0.0.1:3000",
@@ -133,6 +136,9 @@ verify_jwt = true
 verify_jwt = true
 
 [functions.admin-role-management]
+verify_jwt = true
+
+[functions.admin-user-export]
 verify_jwt = true
 
 [functions.admin-platform-controls]

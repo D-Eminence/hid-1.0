@@ -126,11 +126,15 @@ Deno.serve(req => withErrorHandling(req, async () => {
       },
     })
 
-    await sendTransactionalEmail(
-      email,
-      'Your HID export verification code',
-      renderExportEmail(format, challenge.code, adminExportOtpTtlMinutes()),
-    )
+    try {
+      await sendTransactionalEmail(
+        email,
+        'Your HID export verification code',
+        renderExportEmail(format, challenge.code, adminExportOtpTtlMinutes()),
+      )
+    } catch (error) {
+      throw new HttpError(503, 'We could not send the verification code right now. Please try again.', error)
+    }
 
     const auditResult = await adminClient.from('hid_audit_events').insert({
       actor_user_id: auth.user.id,
