@@ -364,7 +364,7 @@ export default function HospitalDashboard() {
         <Card style={{ border: '1px solid #e5e7eb', background: '#f8fafc' }}>
           <div style={{ fontSize: 15, fontWeight: 700, color: '#374151' }}>Danger Zone</div>
           <div style={{ color: '#6b7280', fontSize: 12, marginTop: 6, lineHeight: 1.7 }}>
-            Deleting this hospital account immediately removes its access to HID. The account stays archived for admin review and can be restored by HID support if needed.
+            Deleting your account removes your access to HID immediately. You can recover your account through HID Support within 30 days. After 30 days, your account and data are permanently deleted and cannot be restored.
           </div>
           <Button
             variant="outline"
@@ -384,7 +384,7 @@ export default function HospitalDashboard() {
           {!deleteChallengeId ? (
             <>
               <div style={{ color: '#4b5563', fontSize: 13, lineHeight: 1.7 }}>
-                This deletes the hospital HID access and archives the account for admin review. Type DELETE, then we will send a 6-digit verification code to your email.
+                Deleting your account removes your access to HID immediately. You can recover your account through HID Support within 30 days. After 30 days, your account and data are permanently deleted and cannot be restored. Type DELETE, then we will send a 6-digit verification code to your email.
               </div>
               <Input
                 label='Type "DELETE" to confirm'
@@ -428,7 +428,7 @@ export default function HospitalDashboard() {
           ) : (
             <>
               <div style={{ color: '#4b5563', fontSize: 13, lineHeight: 1.7 }}>
-                Verification complete. Deleting this hospital account will remove HID access and archive the account for admin review or restoration.
+                Verification complete. Deleting your account removes your access to HID immediately. You can recover your account through HID Support within 30 days. After 30 days, your account and data are permanently deleted and cannot be restored.
               </div>
               <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10, flexWrap: 'wrap' }}>
                 <Button variant="outline" onClick={() => setDeleteModalOpen(false)} disabled={deletingAccount}>
