@@ -25,8 +25,8 @@ type EcosystemKind = 'identity' | 'emr' | 'lab' | 'pharmacy' | 'outreach'
 const sectionPadding = '80px clamp(20px, 5vw, 48px)'
 const landingTrustBadges = ['HIPAA + NDPC aligned', 'End-to-end encrypted', 'Built for African healthcare'] as const
 const SUPPORT_EMAIL = 'support@healthidentitydirectory.com'
-const PARTNER_HREF = `mailto:${SUPPORT_EMAIL}`
 const DEMO_HREF = `mailto:${SUPPORT_EMAIL}?subject=Book a Demo`
+const HOSPITAL_AUTH_HREF = 'https://healthidentitydirectory.com/hospital/auth'
 
 const footerLinkStyle: React.CSSProperties = {
   display: 'block',
@@ -225,13 +225,26 @@ function ctaLook(variant: CtaVariant): React.CSSProperties {
 function ctaHoverLook(variant: CtaVariant): React.CSSProperties {
   switch (variant) {
     case 'secondary':
-      return { background: '#e8f1fc' }
+      return { background: '#e8f1fc', color: '#1a6fd4', borderColor: '#1a6fd4' }
     case 'white':
       return { filter: 'brightness(0.96)' }
     case 'outlineWhite':
       return { background: 'rgba(255,255,255,0.1)' }
     default:
       return { filter: 'brightness(0.94)' }
+  }
+}
+
+function ctaActiveLook(variant: CtaVariant): React.CSSProperties {
+  switch (variant) {
+    case 'secondary':
+      return { background: '#dbeafe', color: '#1254a8', borderColor: '#1254a8' }
+    case 'white':
+      return { filter: 'brightness(0.92)' }
+    case 'outlineWhite':
+      return { background: 'rgba(255,255,255,0.18)' }
+    default:
+      return { filter: 'brightness(0.88)' }
   }
 }
 
@@ -255,6 +268,8 @@ function Cta({
   children: React.ReactNode
 }) {
   const [hovered, setHovered] = useState(false)
+  const [focused, setFocused] = useState(false)
+  const [pressed, setPressed] = useState(false)
   const sizing: React.CSSProperties = size === 'sm'
     ? { padding: '10px 22px', fontSize: 14 }
     : { padding: '14px 28px', fontSize: 15 }
@@ -270,31 +285,47 @@ function Cta({
     lineHeight: 1,
     boxSizing: 'border-box',
     width: fullWidth ? '100%' : undefined,
-    transition: 'filter 0.15s ease, background 0.15s ease, color 0.15s ease',
+    transition: 'filter 0.15s ease, background 0.15s ease, color 0.15s ease, border-color 0.15s ease, box-shadow 0.15s ease',
     ...sizing,
     ...ctaLook(variant),
     ...(hovered ? ctaHoverLook(variant) : null),
+    ...(pressed ? ctaActiveLook(variant) : null),
+    ...(focused ? { outline: 'none', boxShadow: '0 0 0 3px rgba(26,111,212,0.22)' } : null),
   }
   const handleEnter = () => {
     setHovered(true)
     onMouseEnter?.()
   }
-  const handleLeave = () => setHovered(false)
+  const handleLeave = () => {
+    setHovered(false)
+    setPressed(false)
+  }
   const handleFocus = () => {
     setHovered(true)
+    setFocused(true)
     onFocus?.()
   }
-  const handleBlur = () => setHovered(false)
+  const handleBlur = () => {
+    setHovered(false)
+    setFocused(false)
+    setPressed(false)
+  }
+  const handlePress = () => setPressed(true)
+  const handleRelease = () => setPressed(false)
+  const handleKeyDown = (event: React.KeyboardEvent<HTMLElement>) => {
+    if (event.key === 'Enter' || event.key === ' ') setPressed(true)
+  }
+  const handleKeyUp = () => setPressed(false)
 
   if (href) {
     return (
-      <a href={href} onClick={onClick} onMouseEnter={handleEnter} onMouseLeave={handleLeave} onFocus={handleFocus} onBlur={handleBlur} style={style}>
+      <a href={href} onClick={onClick} onMouseEnter={handleEnter} onMouseLeave={handleLeave} onMouseDown={handlePress} onMouseUp={handleRelease} onKeyDown={handleKeyDown} onKeyUp={handleKeyUp} onFocus={handleFocus} onBlur={handleBlur} style={style}>
         {children}
       </a>
     )
   }
   return (
-    <button type="button" onClick={onClick} onMouseEnter={handleEnter} onMouseLeave={handleLeave} onFocus={handleFocus} onBlur={handleBlur} style={style}>
+    <button type="button" onClick={onClick} onMouseEnter={handleEnter} onMouseLeave={handleLeave} onMouseDown={handlePress} onMouseUp={handleRelease} onKeyDown={handleKeyDown} onKeyUp={handleKeyUp} onFocus={handleFocus} onBlur={handleBlur} style={style}>
       {children}
     </button>
   )
@@ -424,7 +455,6 @@ export default function Landing() {
         { label: 'Patient Portal', onClick: () => navigate('/patient') },
         { label: 'Hospital Portal', onClick: () => navigate(HOSPITAL_AUTH_PATH) },
         { label: 'Book a Demo', href: DEMO_HREF },
-        { label: 'Partner With Us', href: PARTNER_HREF },
         { label: 'FAQs', href: '#faq' },
       ],
     },
@@ -512,17 +542,14 @@ export default function Landing() {
 
         {!isCompact && (
           <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-            <Cta variant="secondary" size="sm" href={DEMO_HREF}>
-              Book a Demo
-            </Cta>
             <Cta
-              variant="primary"
+              variant="secondary"
               size="sm"
-              onClick={() => navigate('/patient')}
-              onMouseEnter={() => preloadRoute('patientAuth')}
-              onFocus={() => preloadRoute('patientAuth')}
+              href={HOSPITAL_AUTH_HREF}
+              onMouseEnter={() => preloadRoute('doctorAuth')}
+              onFocus={() => preloadRoute('doctorAuth')}
             >
-              Get Your HID
+              Hospital / Provider Access
             </Cta>
           </div>
         )}
@@ -576,15 +603,17 @@ export default function Landing() {
             <Cta variant="secondary" size="md" fullWidth href={DEMO_HREF} onClick={() => setMenuOpen(false)}>
               Book a Demo
             </Cta>
-            <Cta variant="secondary" size="md" fullWidth href={PARTNER_HREF} onClick={() => setMenuOpen(false)}>
-              Partner With Us
-            </Cta>
-            <button
-              onClick={() => { setMenuOpen(false); navigate(HOSPITAL_AUTH_PATH) }}
-              style={{ marginTop: 4, background: 'none', border: 'none', color: '#6b7280', fontSize: 14, fontWeight: 500, cursor: 'pointer', padding: 8 }}
+            <Cta
+              variant="secondary"
+              size="md"
+              fullWidth
+              href={HOSPITAL_AUTH_HREF}
+              onClick={() => setMenuOpen(false)}
+              onMouseEnter={() => preloadRoute('doctorAuth')}
+              onFocus={() => preloadRoute('doctorAuth')}
             >
-              Hospital or provider staff? Sign in &rarr;
-            </button>
+              Hospital / Provider Access
+            </Cta>
           </div>
         </div>
       )}
@@ -626,14 +655,6 @@ export default function Landing() {
               Book a Demo
             </Cta>
           </div>
-          <button
-            onClick={() => navigate(HOSPITAL_AUTH_PATH)}
-            onMouseEnter={() => preloadRoute('doctorAuth')}
-            onFocus={() => preloadRoute('doctorAuth')}
-            style={{ marginTop: 14, background: 'none', border: 'none', color: '#6b7280', fontSize: 13, fontWeight: 500, cursor: 'pointer' }}
-          >
-            Hospital or provider staff? Sign in &rarr;
-          </button>
 
           <div style={{ background: '#f3f4f6', borderRadius: 14, padding: 'clamp(16px, 4vw, 24px)', marginTop: 28, width: '100%' }}>
             <img
