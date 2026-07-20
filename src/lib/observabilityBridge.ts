@@ -24,9 +24,22 @@ let initialized = false
 let pendingRoutePath: string | null = null
 let pendingIdentity: IdentifyParams | null = null
 let shouldClearIdentity = false
+let isCapturingException = false
 
 const pendingEvents: PendingEvent[] = []
 const pendingExceptions: PendingException[] = []
+
+function captureExceptionSafely(module: ObservabilityModule, error: unknown, context?: Record<string, unknown>) {
+  // Reporting must never recursively report an error raised by the reporting SDK itself.
+  if (isCapturingException) return
+
+  isCapturingException = true
+  try {
+    module.captureException(error, context)
+  } finally {
+    isCapturingException = false
+  }
+}
 
 function loadObservabilityModule() {
   if (!modulePromise) {
@@ -65,7 +78,7 @@ async function flushPending(module: ObservabilityModule) {
   while (pendingExceptions.length > 0) {
     const next = pendingExceptions.shift()
     if (!next) break
-    module.captureException(next.error, next.context)
+    captureExceptionSafely(module, next.error, next.context)
   }
 }
 
@@ -141,6 +154,6 @@ export function captureException(error: unknown, context?: Record<string, unknow
   }
 
   runIfInitialized(module => {
-    module.captureException(error, context)
+    captureExceptionSafely(module, error, context)
   })
 }

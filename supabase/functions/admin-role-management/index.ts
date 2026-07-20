@@ -418,7 +418,7 @@ async function applyPlatformAdminAction(
   if (action === 'unlock_admin' && target.deleted_at) {
     throw new HttpError(409, 'Deleted platform admin accounts cannot be restored from the dashboard.')
   }
-  if (action !== 'unlock_admin' && target.deleted_at) {
+  if (action === 'lock_admin' && target.deleted_at) {
     throw new HttpError(409, 'This platform admin account is already deleted.')
   }
 
@@ -471,44 +471,25 @@ async function applyPlatformAdminAction(
   }
 
   if (action === 'delete_admin') {
-    const deletedAt = new Date().toISOString()
-    const profileUpdate = await adminClient
-      .from('hid_user_profiles')
-      .update({
-        active: false,
-        deleted_at: deletedAt,
-        deleted_reason: 'Platform admin account deleted by another HID admin.',
-      })
-      .eq('id', target.id)
-    if (profileUpdate.error) throw new HttpError(400, profileUpdate.error.message, profileUpdate.error)
-
-    const authUpdate = await adminClient.auth.admin.updateUserById(targetAuthUserId, { ban_duration: '876000h' })
-    if (authUpdate.error) {
-      await adminClient
-        .from('hid_user_profiles')
-        .update({
-          active: target.active,
-          deleted_at: target.deleted_at,
-          deleted_reason: target.deleted_reason,
-        })
-        .eq('id', target.id)
-      throw new HttpError(400, authUpdate.error.message, authUpdate.error)
-    }
-
     await logAdminAuditEvent(adminClient, actor, {
-      action: 'admin_delete_platform_admin',
+      action: 'admin_permanently_delete_platform_admin',
       resourceId: target.id,
       resourceType: 'user_profile',
-      reason: 'Platform admin account deleted by another HID admin.',
+      reason: 'Platform admin account permanently deleted by another HID admin.',
       metadata: { target_auth_user_id: targetAuthUserId },
     })
+
+    const authDelete = await adminClient.auth.admin.deleteUser(targetAuthUserId)
+    if (authDelete.error) throw new HttpError(400, authDelete.error.message, authDelete.error)
+
+    return { admin: null, deletedAuthUserId: targetAuthUserId }
   }
 
   const admins = await listPlatformAdmins(adminClient)
   const admin = admins.find(item => item.authUserId === targetAuthUserId)
   if (!admin) throw new HttpError(500, 'The platform admin account was updated, but could not be reloaded.')
 
-  return { admin }
+  return { admin, deletedAuthUserId: null }
 }
 
 async function updateStaffRolePolicy(

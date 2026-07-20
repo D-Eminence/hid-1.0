@@ -308,7 +308,8 @@ export interface AdminPlatformAdmin {
 export type AdminPlatformAdminAction = 'lock_admin' | 'unlock_admin' | 'delete_admin'
 
 export interface AdminPlatformAdminActionResponse {
-  admin: AdminPlatformAdmin
+  admin: AdminPlatformAdmin | null
+  deletedAuthUserId: string | null
 }
 
 export interface AdminStaffRolePolicy {

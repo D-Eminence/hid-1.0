@@ -66,7 +66,7 @@ export default function PatientBioData() {
   const [deletingAccount, setDeletingAccount] = useState(false)
   const [dobInput, setDobInput] = useState(() => cachedPatient ? formatDate(cachedPatient.dob) : '')
   const [openSections, setOpenSections] = useState({
-    about: true,
+    about: false,
     coverage: false,
     health: false,
     emergency: false,

@@ -706,22 +706,27 @@ export default function AdminDashboard() {
       ? 'limit access for this platform admin'
       : action === 'unlock_admin'
         ? 'restore access for this platform admin'
-        : 'delete this platform admin account'
+        : 'permanently delete this platform admin account'
 
     if (!window.confirm(`Do you want to ${actionLabel}?`)) return
 
     setPlatformAdminActioning(`${admin.authUserId}:${action}`)
     try {
       const result = await applyPlatformAdminAction(admin.authUserId, action)
-      setPlatformAdmins(current => current.map(item => (
-        item.authUserId === result.admin.authUserId ? result.admin : item
-      )))
+      if (result.deletedAuthUserId) {
+        setPlatformAdmins(current => current.filter(item => item.authUserId !== result.deletedAuthUserId))
+      } else if (result.admin) {
+        const updatedAdmin = result.admin
+        setPlatformAdmins(current => current.map(item => (
+          item.authUserId === updatedAdmin.authUserId ? updatedAdmin : item
+        )))
+      }
       showToast(
         action === 'lock_admin'
           ? 'Platform admin access limited successfully.'
           : action === 'unlock_admin'
             ? 'Platform admin access restored successfully.'
-            : 'Platform admin account deleted successfully.',
+            : 'Platform admin account permanently deleted successfully.',
         'success',
       )
     } catch (reason) {
@@ -1543,23 +1548,25 @@ export default function AdminDashboard() {
                           <div style={{ fontSize: 10.5, color: 'var(--admin-muted)' }}>
                             Created {formatRelativeTime(admin.createdAt)} • Last sign-in {formatRelativeTime(admin.lastSignInAt)}
                           </div>
-                          {!isCurrentAdmin && !isDeleted && (
+                          {!isCurrentAdmin && (
                             <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-                              <Button
-                                size="sm"
-                                variant="outline"
-                                loading={platformAdminActioning === actionKey(admin.active ? 'lock_admin' : 'unlock_admin')}
-                                onClick={() => void handlePlatformAdminAction(admin, admin.active ? 'lock_admin' : 'unlock_admin')}
-                              >
-                                {admin.active ? 'Limit Access' : 'Restore Access'}
-                              </Button>
+                              {!isDeleted && (
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  loading={platformAdminActioning === actionKey(admin.active ? 'lock_admin' : 'unlock_admin')}
+                                  onClick={() => void handlePlatformAdminAction(admin, admin.active ? 'lock_admin' : 'unlock_admin')}
+                                >
+                                  {admin.active ? 'Limit Access' : 'Restore Access'}
+                                </Button>
+                              )}
                               <Button
                                 size="sm"
                                 variant="danger"
                                 loading={platformAdminActioning === actionKey('delete_admin')}
                                 onClick={() => void handlePlatformAdminAction(admin, 'delete_admin')}
                               >
-                                Delete Admin
+                                Permanently Delete
                               </Button>
                             </div>
                           )}
