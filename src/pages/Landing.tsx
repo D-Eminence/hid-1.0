@@ -362,6 +362,7 @@ export default function Landing() {
   const [openFaq, setOpenFaq] = useState<number | null>(null)
   const [legalOpen, setLegalOpen] = useState(false)
   const [menuOpen, setMenuOpen] = useState(false)
+  const [productsOpen, setProductsOpen] = useState(false)
   const [viewportWidth, setViewportWidth] = useState(() => (typeof window !== 'undefined' ? window.innerWidth : 1024))
 
   const faqs = [
@@ -475,11 +476,18 @@ export default function Landing() {
   const stackedGridColumns = isNarrow ? '1fr' : 'repeat(auto-fit, minmax(260px, 1fr))'
 
   const navLinks = [
-    { label: 'Products', href: '/products' },
-    { label: 'Solutions', href: '/solutions' },
-    { label: 'Developers', href: '/developers' },
-    { label: 'Pricing', href: '/pricing' },
-    { label: 'Company', href: '#company' },
+    { label: 'Why HID', href: '#why-hid' },
+    { label: 'Ecosystem', href: '#ecosystem' },
+    { label: 'How it Works', href: '#how-it-works' },
+    { label: 'Security', href: '#security' },
+  ]
+  const productLinks = [
+    { label: 'HID Identity', description: 'One persistent patient identity.', href: '/products/identity' },
+    { label: 'HID EMR', description: 'Modular hospital operations.', href: '/products/emr' },
+    { label: 'HID Laboratory', description: 'Complete diagnostic workflows.', href: '/products/laboratory' },
+    { label: 'HID Pharmacy', description: 'Stock, dispensing, and sales.', href: '/products/pharmacy' },
+    { label: 'HID Migrate', description: 'Digitize legacy patient folders.', href: '/products/migrate' },
+    { label: 'HID Outreach', description: 'Connected care in the field.', href: '/products/outreach' },
   ]
 
   useEffect(() => {
@@ -525,6 +533,31 @@ export default function Landing() {
 
         {!isCompact && (
           <div style={{ display: 'flex', alignItems: 'center', gap: 'clamp(16px, 4vw, 32px)' }}>
+            <div
+              style={{ position: 'relative' }}
+              onMouseEnter={() => setProductsOpen(true)}
+              onMouseLeave={() => setProductsOpen(false)}
+            >
+              <button
+                type="button"
+                aria-expanded={productsOpen}
+                onClick={() => setProductsOpen(open => !open)}
+                style={{ border: 'none', background: 'transparent', fontSize: 14, fontWeight: 500, color: 'var(--t3)', display: 'inline-flex', alignItems: 'center', gap: 5, padding: '10px 0' }}
+              >
+                Products <span aria-hidden="true" style={{ fontSize: 10 }}>▾</span>
+              </button>
+              {productsOpen && (
+                <div style={{ position: 'absolute', top: '100%', left: -16, width: 330, padding: 10, background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 'var(--r-lg)', boxShadow: 'var(--shadow-md)', display: 'grid', gap: 2 }}>
+                  {productLinks.map(product => (
+                    <a key={product.label} href={product.href} style={{ display: 'grid', gap: 2, padding: '10px 12px', borderRadius: 'var(--r-md)', color: 'var(--text)' }}>
+                      <strong style={{ fontSize: 13 }}>{product.label}</strong>
+                      <span style={{ color: 'var(--t3)', fontSize: 12 }}>{product.description}</span>
+                    </a>
+                  ))}
+                  <a href="/products" style={{ marginTop: 4, padding: '10px 12px', borderTop: '1px solid var(--border)', color: 'var(--blue)', fontSize: 12, fontWeight: 700 }}>View all products →</a>
+                </div>
+              )}
+            </div>
             {navLinks.map(link => (
               <a
                 key={link.label}
@@ -554,7 +587,6 @@ export default function Landing() {
             >
               Hospital / Provider Access
             </Cta>
-            <Cta variant="primary" size="sm" href={DEMO_HREF}>Book a Demo</Cta>
           </div>
         )}
 
@@ -589,6 +621,15 @@ export default function Landing() {
             </button>
           </div>
           <div style={{ display: 'flex', flexDirection: 'column', marginTop: 14 }}>
+            <button
+              type="button"
+              onClick={() => setProductsOpen(open => !open)}
+              aria-expanded={productsOpen}
+              style={{ fontSize: 16, fontWeight: 600, color: 'var(--text)', background: 'transparent', border: 'none', textAlign: 'left', padding: '16px 6px', borderBottom: '1px solid var(--bg)' }}
+            >
+              Products <span aria-hidden="true">{productsOpen ? '▴' : '▾'}</span>
+            </button>
+            {productsOpen && <div style={{ display: 'grid', padding: '6px 0 10px 14px', borderBottom: '1px solid var(--bg)' }}>{productLinks.map(product => <a key={product.label} href={product.href} onClick={() => setMenuOpen(false)} style={{ padding: '10px 6px', color: 'var(--t2)', fontSize: 14, fontWeight: 600 }}>{product.label}</a>)}</div>}
             {navLinks.map(link => (
               <a
                 key={link.label}
