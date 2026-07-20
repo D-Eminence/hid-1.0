@@ -13,16 +13,16 @@ interface ButtonProps extends React.ButtonHTMLAttributes<HTMLButtonElement> {
 }
 
 const btnStyles: Record<BtnVariant, React.CSSProperties> = {
-  primary: { background: '#1a6fd4', color: '#fff', border: 'none' },
-  secondary: { background: '#e8f1fc', color: '#1a6fd4', border: 'none' },
-  danger: { background: '#dc2626', color: '#fff', border: 'none' },
-  ghost: { background: 'transparent', color: '#6b7280', border: 'none' },
-  outline: { background: 'transparent', color: '#1a6fd4', border: '1.5px solid #1a6fd4' },
+  primary: { background: 'var(--color-brand-primary)', color: 'var(--color-surface)', border: 'none' },
+  secondary: { background: 'var(--color-brand-primary-soft)', color: 'var(--color-brand-primary)', border: 'none' },
+  danger: { background: 'var(--color-error)', color: 'var(--color-surface)', border: 'none' },
+  ghost: { background: 'transparent', color: 'var(--color-text-muted)', border: 'none' },
+  outline: { background: 'transparent', color: 'var(--color-brand-primary)', border: '1.5px solid var(--color-brand-primary)' },
 }
 const sizeStyles: Record<BtnSize, React.CSSProperties> = {
-  sm: { padding: '6px 14px', fontSize: 12, borderRadius: 6 },
-  md: { padding: '10px 20px', fontSize: 14, borderRadius: 8 },
-  lg: { padding: '13px 28px', fontSize: 15, borderRadius: 10 },
+  sm: { padding: 'var(--space-2) var(--space-3)', fontSize: 'var(--font-size-xs)', borderRadius: 'var(--radius-sm)', minHeight: 36 },
+  md: { padding: 'var(--space-2) var(--space-5)', fontSize: 'var(--font-size-sm)', borderRadius: 'var(--radius-md)', minHeight: 'var(--control-height)' },
+  lg: { padding: 'var(--space-3) var(--space-6)', fontSize: 'var(--font-size-md)', borderRadius: 'var(--radius-md)', minHeight: 48 },
 }
 
 export function Button({
@@ -41,10 +41,10 @@ export function Button({
   ...rest
 }: ButtonProps) {
   const base: React.CSSProperties = {
-    display: 'inline-flex', alignItems: 'center', gap: 8,
+    display: 'inline-flex', alignItems: 'center', gap: 'var(--space-2)',
     fontWeight: 600, cursor: disabled || loading ? 'not-allowed' : 'pointer',
     opacity: disabled || loading ? 0.6 : 1,
-    transition: 'transform 0.08s ease, opacity 0.15s ease, filter 0.08s ease, box-shadow 0.15s ease',
+    transition: 'transform var(--transition-fast), opacity var(--transition-fast), filter var(--transition-fast), box-shadow var(--transition-fast)',
     width: fullWidth ? '100%' : undefined, justifyContent: 'center',
     whiteSpace: 'nowrap',
     touchAction: 'manipulation',
@@ -79,7 +79,7 @@ export function Button({
       }}
       {...rest}
     >
-      {loading ? <Spinner size={14} color={variant === 'primary' || variant === 'danger' ? '#fff' : '#1a6fd4'} /> : icon}
+      {loading ? <Spinner size={14} color={variant === 'primary' || variant === 'danger' ? 'var(--color-surface)' : 'var(--color-brand-primary)'} /> : icon}
       {children}
     </button>
   )
@@ -114,15 +114,15 @@ export function Input({
   const rightPadding = isPasswordField ? 44 : 12
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-2)' }}>
       {label && (
-        <label style={{ fontSize: 13, fontWeight: 500, color: '#374151' }}>{label}</label>
+        <label style={{ fontSize: 'var(--font-size-xs)', fontWeight: 500, color: 'var(--color-text-secondary)' }}>{label}</label>
       )}
       <div style={{ position: 'relative' }}>
         {icon && (
           <span style={{
             position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)',
-            color: '#9ca3af', display: 'flex', alignItems: 'center', pointerEvents: 'none'
+            color: 'var(--color-text-disabled)', display: 'flex', alignItems: 'center', pointerEvents: 'none'
           }}>{icon}</span>
         )}
         <input
@@ -130,24 +130,24 @@ export function Input({
           disabled={disabled}
           style={{
             width: '100%',
-            height: 42,
+            height: 'var(--control-height)',
             padding: `0 ${rightPadding}px 0 ${leftPadding}px`,
-            border: `1.5px solid ${error ? '#dc2626' : '#e5e7eb'}`,
-            borderRadius: 8,
-            fontSize: 16,
-            color: '#111827',
-            background: '#fff',
+            border: `1.5px solid ${error ? 'var(--color-error)' : 'var(--color-border)'}`,
+            borderRadius: 'var(--radius-md)',
+            fontSize: 'var(--font-size-md)',
+            color: 'var(--color-text-primary)',
+            background: 'var(--color-surface)',
             outline: 'none',
-            transition: 'border-color 0.15s',
+            transition: 'border-color var(--transition-fast)',
             boxSizing: 'border-box',
             ...style
           }}
           onFocus={e => {
-            e.currentTarget.style.borderColor = error ? '#dc2626' : '#1a6fd4'
+            e.currentTarget.style.borderColor = error ? 'var(--color-error)' : 'var(--color-brand-primary)'
             onFocus?.(e)
           }}
           onBlur={e => {
-            e.currentTarget.style.borderColor = error ? '#dc2626' : '#e5e7eb'
+            e.currentTarget.style.borderColor = error ? 'var(--color-error)' : 'var(--color-border)'
             onBlur?.(e)
           }}
           {...rest}
@@ -170,7 +170,7 @@ export function Input({
               height: 28,
               border: 'none',
               background: 'transparent',
-              color: '#6b7280',
+              color: 'var(--color-text-muted)',
               cursor: disabled ? 'not-allowed' : 'pointer',
               padding: 0,
             }}
@@ -191,8 +191,8 @@ export function Input({
           </button>
         )}
       </div>
-      {error && <p style={{ fontSize: 12, color: '#dc2626' }}>{error}</p>}
-      {hint && !error && <p style={{ fontSize: 12, color: '#9ca3af' }}>{hint}</p>}
+      {error && <p style={{ fontSize: 'var(--font-size-xs)', color: 'var(--color-error)' }}>{error}</p>}
+      {hint && !error && <p style={{ fontSize: 'var(--font-size-xs)', color: 'var(--color-text-disabled)' }}>{hint}</p>}
     </div>
   )
 }
@@ -207,17 +207,17 @@ interface SelectProps extends React.SelectHTMLAttributes<HTMLSelectElement> {
 
 export function Select({ label, error, options, placeholder = 'Select...', style, ...rest }: SelectProps) {
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-      {label && <label style={{ fontSize: 13, fontWeight: 500, color: '#374151' }}>{label}</label>}
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-2)' }}>
+      {label && <label style={{ fontSize: 'var(--font-size-xs)', fontWeight: 500, color: 'var(--color-text-secondary)' }}>{label}</label>}
       <div style={{ position: 'relative' }}>
         <select style={{
-          width: '100%', height: 42, padding: '0 36px 0 12px',
-          border: `1.5px solid ${error ? '#dc2626' : '#e5e7eb'}`,
-          borderRadius: 8, fontSize: 16, color: '#111827', background: '#fff',
+          width: '100%', height: 'var(--control-height)', padding: '0 36px 0 var(--space-3)',
+          border: `1.5px solid ${error ? 'var(--color-error)' : 'var(--color-border)'}`,
+          borderRadius: 'var(--radius-md)', fontSize: 'var(--font-size-md)', color: 'var(--color-text-primary)', background: 'var(--color-surface)',
           appearance: 'none', outline: 'none', cursor: 'pointer', boxSizing: 'border-box', ...style
         }}
-          onFocus={e => e.currentTarget.style.borderColor = '#1a6fd4'}
-          onBlur={e => e.currentTarget.style.borderColor = error ? '#dc2626' : '#e5e7eb'}
+          onFocus={e => e.currentTarget.style.borderColor = 'var(--color-brand-primary)'}
+          onBlur={e => e.currentTarget.style.borderColor = error ? 'var(--color-error)' : 'var(--color-border)'}
           {...rest}
         >
           <option value="">{placeholder}</option>
@@ -225,14 +225,14 @@ export function Select({ label, error, options, placeholder = 'Select...', style
         </select>
         <span style={{
           position: 'absolute', right: 12, top: '50%', transform: 'translateY(-50%)',
-          pointerEvents: 'none', color: '#9ca3af'
+          pointerEvents: 'none', color: 'var(--color-text-disabled)'
         }}>
           <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
             <path d="M3 5l4 4 4-4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
           </svg>
         </span>
       </div>
-      {error && <p style={{ fontSize: 12, color: '#dc2626' }}>{error}</p>}
+      {error && <p style={{ fontSize: 'var(--font-size-xs)', color: 'var(--color-error)' }}>{error}</p>}
     </div>
   )
 }
@@ -244,19 +244,19 @@ interface TextareaProps extends React.TextareaHTMLAttributes<HTMLTextAreaElement
 }
 export function Textarea({ label, error, style, ...rest }: TextareaProps) {
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-      {label && <label style={{ fontSize: 13, fontWeight: 500, color: '#374151' }}>{label}</label>}
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-2)' }}>
+      {label && <label style={{ fontSize: 'var(--font-size-xs)', fontWeight: 500, color: 'var(--color-text-secondary)' }}>{label}</label>}
       <textarea style={{
         width: '100%', padding: '10px 12px', minHeight: 96,
-        border: `1.5px solid ${error ? '#dc2626' : '#e5e7eb'}`,
-        borderRadius: 8, fontSize: 16, color: '#111827', background: '#fff',
-        outline: 'none', resize: 'vertical', lineHeight: 1.6, boxSizing: 'border-box', ...style
+        border: `1.5px solid ${error ? 'var(--color-error)' : 'var(--color-border)'}`,
+        borderRadius: 'var(--radius-md)', fontSize: 'var(--font-size-md)', color: 'var(--color-text-primary)', background: 'var(--color-surface)',
+        outline: 'none', resize: 'vertical', lineHeight: 'var(--line-height-longform)', boxSizing: 'border-box', ...style
       }}
-        onFocus={e => e.currentTarget.style.borderColor = '#1a6fd4'}
-        onBlur={e => e.currentTarget.style.borderColor = error ? '#dc2626' : '#e5e7eb'}
+        onFocus={e => e.currentTarget.style.borderColor = 'var(--color-brand-primary)'}
+        onBlur={e => e.currentTarget.style.borderColor = error ? 'var(--color-error)' : 'var(--color-border)'}
         {...rest}
       />
-      {error && <p style={{ fontSize: 12, color: '#dc2626' }}>{error}</p>}
+      {error && <p style={{ fontSize: 'var(--font-size-xs)', color: 'var(--color-error)' }}>{error}</p>}
     </div>
   )
 }
@@ -272,10 +272,10 @@ export function Card({ children, style, padding = 24, onClick }: CardProps) {
   const resolvedPadding = typeof padding === 'number' ? `clamp(12px, 3.5vw, ${padding}px)` : padding
   return (
     <div onClick={onClick} style={{
-      background: '#fff', borderRadius: 12, border: '1px solid #e5e7eb',
-      padding: resolvedPadding, boxShadow: '0 1px 4px rgba(0,0,0,0.06)',
+      background: 'var(--color-surface)', borderRadius: 'var(--radius-lg)', border: '1px solid var(--color-border)',
+      padding: resolvedPadding, boxShadow: 'var(--elevation-subtle)',
       cursor: onClick ? 'pointer' : undefined,
-      transition: onClick ? 'box-shadow 0.15s' : undefined,
+      transition: onClick ? 'box-shadow var(--transition-fast)' : undefined,
       minWidth: 0,
       ...style
     }}>
@@ -287,11 +287,11 @@ export function Card({ children, style, padding = 24, onClick }: CardProps) {
 // ── Badge ─────────────────────────────────────────────────────────────────────
 export type BadgeColor = 'blue' | 'green' | 'red' | 'amber' | 'gray'
 export const badgeMap: Record<BadgeColor, { bg: string; text: string }> = {
-  blue:  { bg: '#e8f1fc', text: '#1254a8' },
-  green: { bg: '#dcfce7', text: '#15803d' },
-  red:   { bg: '#fee2e2', text: '#b91c1c' },
-  amber: { bg: '#fef3c7', text: '#b45309' },
-  gray:  { bg: '#f3f4f6', text: '#4b5563' },
+  blue:  { bg: 'var(--color-info-soft)', text: 'var(--color-brand-primary-strong)' },
+  green: { bg: 'var(--color-success-soft)', text: 'var(--color-success)' },
+  red:   { bg: 'var(--color-error-soft)', text: 'var(--color-error)' },
+  amber: { bg: 'var(--color-warning-soft)', text: 'var(--color-warning)' },
+  gray:  { bg: 'var(--color-background)', text: 'var(--color-text-secondary)' },
 }
 export function Badge({ children, color = 'gray' }: { children: React.ReactNode; color?: BadgeColor }) {
   const { bg, text } = badgeMap[color]
@@ -299,13 +299,13 @@ export function Badge({ children, color = 'gray' }: { children: React.ReactNode;
     <span style={{
       display: 'inline-flex', alignItems: 'center', gap: 4,
       background: bg, color: text, fontSize: 11, fontWeight: 600,
-      padding: '3px 9px', borderRadius: 999
+      padding: '3px 9px', borderRadius: 'var(--radius-full)'
     }}>{children}</span>
   )
 }
 
 // ── Spinner ──────────────────────────────────────────────────────────────────
-export function Spinner({ size = 20, color = '#1a6fd4' }: { size?: number; color?: string }) {
+export function Spinner({ size = 20, color = 'var(--color-brand-primary)' }: { size?: number; color?: string }) {
   return (
     <svg width={size} height={size} viewBox="0 0 24 24" fill="none"
       style={{ animation: 'spin 0.8s linear infinite', flexShrink: 0 }}
@@ -320,7 +320,7 @@ export function Spinner({ size = 20, color = '#1a6fd4' }: { size?: number; color
 export function PageLoader({ label = 'Loading your page...' }: { label?: string }) {
   return (
     <div style={{ minHeight: '42vh', padding: 32, display: 'flex', justifyContent: 'center', alignItems: 'flex-start' }}>
-      <div style={{ display: 'inline-flex', alignItems: 'center', gap: 12, padding: '14px 18px', borderRadius: 999, background: '#fff', border: '1px solid #e5e7eb', color: '#4b5563', fontSize: 14, fontWeight: 600, boxShadow: '0 10px 24px rgba(15, 23, 42, 0.05)' }}>
+      <div style={{ display: 'inline-flex', alignItems: 'center', gap: 'var(--space-3)', padding: 'var(--space-3) var(--space-5)', borderRadius: 'var(--radius-full)', background: 'var(--color-surface)', border: '1px solid var(--color-border)', color: 'var(--color-text-secondary)', fontSize: 'var(--font-size-sm)', fontWeight: 600, boxShadow: 'var(--elevation-subtle)' }}>
         <Spinner size={16} />
         {label}
       </div>
@@ -336,9 +336,9 @@ export function EmptyState({ icon, title, description, action }: {
 }) {
   return (
     <div style={{ textAlign: 'center', padding: '48px 24px', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 12 }}>
-      <div style={{ color: '#d1d5db', marginBottom: 4 }}>{icon}</div>
-      <p style={{ fontWeight: 600, fontSize: 15, color: '#374151' }}>{title}</p>
-      {description && <p style={{ fontSize: 13, color: '#9ca3af', maxWidth: 320 }}>{description}</p>}
+      <div style={{ color: 'var(--color-border)', marginBottom: 'var(--space-1)' }}>{icon}</div>
+      <p style={{ fontWeight: 600, fontSize: 'var(--font-size-md)', color: 'var(--color-text-secondary)' }}>{title}</p>
+      {description && <p style={{ fontSize: 'var(--font-size-xs)', color: 'var(--color-text-disabled)', maxWidth: 320 }}>{description}</p>}
       {action}
     </div>
   )
@@ -351,8 +351,8 @@ export function SectionHeader({ title, subtitle, action }: {
   return (
     <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: 'clamp(14px, 4vw, 20px)', gap: 16, flexWrap: 'wrap', rowGap: 12 }}>
       <div style={{ minWidth: 0 }}>
-        <h2 style={{ fontSize: 'clamp(15px, 3.5vw, 18px)', fontWeight: 700, letterSpacing: '-0.3px' }}>{title}</h2>
-        {subtitle && <p style={{ fontSize: 13, color: '#6b7280', marginTop: 4 }}>{subtitle}</p>}
+        <h2 style={{ fontSize: 'clamp(var(--font-size-md), 3.5vw, var(--font-size-lg))', fontWeight: 600, letterSpacing: 'var(--tracking-heading)' }}>{title}</h2>
+        {subtitle && <p style={{ fontSize: 'var(--font-size-xs)', color: 'var(--color-text-muted)', marginTop: 'var(--space-1)' }}>{subtitle}</p>}
       </div>
       {action}
     </div>
@@ -372,17 +372,17 @@ export function Modal({ open, onClose, title, children, width = 480 }: {
   if (!open) return null
   return (
     <div style={{
-      position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.45)',
-      display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000, padding: 'clamp(10px, 4vw, 24px)'
+      position: 'fixed', inset: 0, background: 'var(--color-overlay)',
+      display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 'var(--z-modal)', padding: 'clamp(10px, 4vw, 24px)'
     }} onClick={e => { if (e.target === e.currentTarget) onClose() }}>
       <div style={{
-        background: '#fff', borderRadius: 16, width: '100%', maxWidth: width,
-        boxShadow: '0 20px 60px rgba(0,0,0,0.15)', animation: 'modalIn 0.2s ease', maxHeight: 'calc(100vh - 48px)', overflow: 'hidden'
+        background: 'var(--color-surface)', borderRadius: 'var(--radius-lg)', width: '100%', maxWidth: width,
+        boxShadow: 'var(--elevation-modal)', animation: 'modalIn var(--transition-standard)', maxHeight: 'calc(100vh - 48px)', overflow: 'hidden'
       }}>
         <style>{`@keyframes modalIn{from{opacity:0;transform:scale(0.96)}to{opacity:1;transform:scale(1)}}`}</style>
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, padding: 'clamp(14px, 4vw, 20px) clamp(16px, 4vw, 24px)', borderBottom: '1px solid #e5e7eb' }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 'var(--space-3)', padding: 'clamp(var(--space-3), 4vw, var(--space-5)) clamp(var(--space-4), 4vw, var(--space-6))', borderBottom: '1px solid var(--color-border)' }}>
           <h3 style={{ fontSize: 16, fontWeight: 700, minWidth: 0, overflowWrap: 'anywhere' }}>{title}</h3>
-          <button onClick={onClose} style={{ background: 'none', border: 'none', color: '#9ca3af', padding: 4, borderRadius: 6, display: 'flex', alignItems: 'center', flexShrink: 0 }}>
+          <button onClick={onClose} style={{ background: 'none', border: 'none', color: 'var(--color-text-disabled)', minWidth: 'var(--touch-target)', minHeight: 'var(--touch-target)', borderRadius: 'var(--radius-sm)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
             <svg width="18" height="18" viewBox="0 0 18 18" fill="none"><path d="M4 4l10 10M14 4L4 14" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"/></svg>
           </button>
         </div>
@@ -447,7 +447,7 @@ export function BottomSheet({ open, onClose, title, onBack, step, totalSteps, fo
   return (
     <div
       style={{
-        position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.45)', zIndex: 1000,
+        position: 'fixed', inset: 0, background: 'var(--color-overlay)', zIndex: 'var(--z-modal)',
         display: 'flex',
         alignItems: isCompact ? 'flex-end' : 'stretch',
         justifyContent: isCompact ? 'center' : 'flex-end',
@@ -457,15 +457,15 @@ export function BottomSheet({ open, onClose, title, onBack, step, totalSteps, fo
       <div
         ref={sheetRef}
         style={isCompact ? {
-          background: '#fff', width: '100%', maxWidth: 560,
+          background: 'var(--color-surface)', width: '100%', maxWidth: 560,
           borderRadius: '20px 20px 0 0', height: '65vh', maxHeight: '65vh',
           display: 'flex', flexDirection: 'column',
-          boxShadow: '0 -10px 40px rgba(0,0,0,0.15)',
+          boxShadow: 'var(--elevation-sheet)',
           animation: 'sheetIn 0.25s ease', transition: 'transform 0.2s ease',
         } : {
-          background: '#fff', width: 'min(420px, 100%)', height: '100vh',
+          background: 'var(--color-surface)', width: 'min(420px, 100%)', height: '100vh',
           display: 'flex', flexDirection: 'column',
-          boxShadow: '-10px 0 40px rgba(0,0,0,0.12)',
+          boxShadow: 'var(--elevation-drawer)',
           animation: 'drawerIn 0.25s ease',
         }}
       >
@@ -478,43 +478,43 @@ export function BottomSheet({ open, onClose, title, onBack, step, totalSteps, fo
             onPointerCancel={handlePointerUp}
             style={{ padding: 'clamp(10px, 3vw, 14px) clamp(16px, 4vw, 24px) 14px', cursor: 'grab', touchAction: 'none', flexShrink: 0 }}
           >
-            <div style={{ width: 40, height: 4, borderRadius: 999, background: '#e5e7eb', margin: '0 auto 14px' }} />
+            <div style={{ width: 40, height: 4, borderRadius: 'var(--radius-full)', background: 'var(--color-border)', margin: '0 auto var(--space-3)' }} />
             <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
               {onBack && (
-                <button onClick={onBack} aria-label="Back" style={{ background: 'none', border: 'none', color: '#374151', padding: 4, borderRadius: 6, display: 'flex', alignItems: 'center', flexShrink: 0 }}>
+                <button onClick={onBack} aria-label="Back" style={{ background: 'none', border: 'none', color: 'var(--color-text-secondary)', minWidth: 'var(--touch-target)', minHeight: 'var(--touch-target)', borderRadius: 'var(--radius-sm)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
                   <svg width="20" height="20" viewBox="0 0 20 20" fill="none"><path d="M12 4l-6 6 6 6" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"/></svg>
                 </button>
               )}
               <h3 style={{ fontSize: 16, fontWeight: 700, flex: 1, minWidth: 0, overflowWrap: 'anywhere' }}>{title}</h3>
-              <button onClick={onClose} aria-label="Close" style={{ background: 'none', border: 'none', color: '#9ca3af', padding: 4, borderRadius: 6, display: 'flex', alignItems: 'center', flexShrink: 0 }}>
+              <button onClick={onClose} aria-label="Close" style={{ background: 'none', border: 'none', color: 'var(--color-text-disabled)', minWidth: 'var(--touch-target)', minHeight: 'var(--touch-target)', borderRadius: 'var(--radius-sm)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
                 <svg width="18" height="18" viewBox="0 0 18 18" fill="none"><path d="M4 4l10 10M14 4L4 14" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"/></svg>
               </button>
             </div>
             {step !== undefined && totalSteps !== undefined && totalSteps > 1 && (
               <div style={{ display: 'flex', gap: 4, marginTop: 12 }}>
                 {Array.from({ length: totalSteps }).map((_, index) => (
-                  <span key={index} style={{ flex: 1, height: 3, borderRadius: 999, background: index <= step ? '#1a6fd4' : '#e5e7eb' }} />
+                  <span key={index} style={{ flex: 1, height: 3, borderRadius: 'var(--radius-full)', background: index <= step ? 'var(--color-brand-primary)' : 'var(--color-border)' }} />
                 ))}
               </div>
             )}
           </div>
         ) : (
-          <div style={{ padding: '20px 24px', borderBottom: '1px solid #edf1f5', flexShrink: 0 }}>
+          <div style={{ padding: 'var(--space-5) var(--space-6)', borderBottom: '1px solid var(--color-border)', flexShrink: 0 }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
               {onBack && (
-                <button onClick={onBack} aria-label="Back" style={{ background: 'none', border: 'none', color: '#374151', padding: 4, borderRadius: 6, display: 'flex', alignItems: 'center', flexShrink: 0 }}>
+                <button onClick={onBack} aria-label="Back" style={{ background: 'none', border: 'none', color: 'var(--color-text-secondary)', minWidth: 'var(--touch-target)', minHeight: 'var(--touch-target)', borderRadius: 'var(--radius-sm)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
                   <svg width="20" height="20" viewBox="0 0 20 20" fill="none"><path d="M12 4l-6 6 6 6" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"/></svg>
                 </button>
               )}
               <h3 style={{ fontSize: 16, fontWeight: 700, flex: 1, minWidth: 0, overflowWrap: 'anywhere' }}>{title}</h3>
-              <button onClick={onClose} aria-label="Close" style={{ background: 'none', border: 'none', color: '#9ca3af', padding: 4, borderRadius: 6, display: 'flex', alignItems: 'center', flexShrink: 0 }}>
+              <button onClick={onClose} aria-label="Close" style={{ background: 'none', border: 'none', color: 'var(--color-text-disabled)', minWidth: 'var(--touch-target)', minHeight: 'var(--touch-target)', borderRadius: 'var(--radius-sm)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
                 <svg width="18" height="18" viewBox="0 0 18 18" fill="none"><path d="M4 4l10 10M14 4L4 14" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"/></svg>
               </button>
             </div>
             {step !== undefined && totalSteps !== undefined && totalSteps > 1 && (
               <div style={{ display: 'flex', gap: 4, marginTop: 12 }}>
                 {Array.from({ length: totalSteps }).map((_, index) => (
-                  <span key={index} style={{ flex: 1, height: 3, borderRadius: 999, background: index <= step ? '#1a6fd4' : '#e5e7eb' }} />
+                  <span key={index} style={{ flex: 1, height: 3, borderRadius: 'var(--radius-full)', background: index <= step ? 'var(--color-brand-primary)' : 'var(--color-border)' }} />
                 ))}
               </div>
             )}
@@ -522,7 +522,7 @@ export function BottomSheet({ open, onClose, title, onBack, step, totalSteps, fo
         )}
         <div style={{ padding: isCompact ? '0 clamp(16px, 4vw, 24px) clamp(16px, 4vw, 24px)' : '0 24px 24px', overflowY: 'auto', flex: 1 }}>{children}</div>
         {footer && (
-          <div style={{ borderTop: '1px solid #e5e7eb', padding: 'clamp(12px, 4vw, 20px) clamp(16px, 4vw, 24px)', display: 'flex', gap: 12, justifyContent: 'flex-end', flexShrink: 0 }}>
+          <div style={{ borderTop: '1px solid var(--color-border)', padding: 'clamp(var(--space-3), 4vw, var(--space-5)) clamp(var(--space-4), 4vw, var(--space-6))', display: 'flex', gap: 'var(--space-3)', justifyContent: 'flex-end', flexShrink: 0 }}>
             {footer}
           </div>
         )}
@@ -541,14 +541,14 @@ export function Chip({ active, onClick, children, disabled }: {
       onClick={onClick}
       disabled={disabled}
       style={{
-        border: `1px solid ${active ? '#1a6fd4' : '#e5e7eb'}`,
+        border: `1px solid ${active ? 'var(--color-brand-primary)' : 'var(--color-border)'}`,
         borderRadius: 999,
         padding: '6px 14px',
         fontSize: 12,
         fontWeight: 500,
         cursor: disabled ? 'not-allowed' : 'pointer',
-        background: active ? '#e8f1fc' : '#fff',
-        color: active ? '#1a6fd4' : '#484f58',
+        background: active ? 'var(--color-brand-primary-soft)' : 'var(--color-surface)',
+        color: active ? 'var(--color-brand-primary)' : 'var(--color-text-secondary)',
         opacity: disabled ? 0.6 : 1,
       }}
     >
@@ -581,8 +581,8 @@ export function SelectionCard({ label, description, icon, active, onClick }: {
       onClick={onClick}
       style={{
         textAlign: 'left',
-        border: `1.5px solid ${active ? '#1a6fd4' : '#e5e7eb'}`,
-        background: active ? '#e8f1fc' : '#fff',
+        border: `1.5px solid ${active ? 'var(--color-brand-primary)' : 'var(--color-border)'}`,
+        background: active ? 'var(--color-brand-primary-soft)' : 'var(--color-surface)',
         borderRadius: 12,
         padding: 14,
         cursor: 'pointer',
@@ -592,9 +592,9 @@ export function SelectionCard({ label, description, icon, active, onClick }: {
         minWidth: 0,
       }}
     >
-      {icon && <span style={{ color: active ? '#1a6fd4' : '#6b7280' }}>{icon}</span>}
-      <span style={{ fontWeight: 600, fontSize: 14, color: '#111827' }}>{label}</span>
-      {description && <span style={{ fontSize: 12, color: '#6b7280' }}>{description}</span>}
+      {icon && <span style={{ color: active ? 'var(--color-brand-primary)' : 'var(--color-text-muted)' }}>{icon}</span>}
+      <span style={{ fontWeight: 600, fontSize: 'var(--font-size-sm)', color: 'var(--color-text-primary)' }}>{label}</span>
+      {description && <span style={{ fontSize: 'var(--font-size-xs)', color: 'var(--color-text-muted)' }}>{description}</span>}
     </button>
   )
 }
