@@ -2331,7 +2331,20 @@ export async function verifyStaffPasswordResetOtp(email: string, code: string) {
 }
 
 export async function startAdminPasswordResetOtp(email: string, captchaToken?: string | null) {
-  await requestEmailOtp(email, captchaToken)
+  const normalizedEmail = email.trim().toLowerCase()
+  if (!looksLikeEmailIdentifier(normalizedEmail)) {
+    throw new HidApiError(400, 'Enter a valid admin email address first.')
+  }
+
+  await clearConflictingAuthSession(normalizedEmail)
+  await edgeRequest<{ eligible: true }>('admin-password-reset-start', {
+    method: 'POST',
+    requireAuth: false,
+    body: {
+      email: normalizedEmail,
+      turnstileToken: captchaToken ?? null,
+    },
+  })
 }
 
 export async function verifyAdminPasswordResetOtp(email: string, code: string) {

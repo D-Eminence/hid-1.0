@@ -45,20 +45,34 @@ type ProfileRow = {
 }
 
 type PatientRow = {
+  allergies: string | null
+  blood_group: string | null
+  chronic_conditions: string | null
   auth_user_id: string
   country: string | null
   created_at: string
+  current_medications: string | null
   dob: string | null
   deleted_at: string | null
   deleted_reason: string | null
   email: string | null
+  emergency_contact_address: string | null
   emergency_contact_name: string | null
   emergency_contact_phone: string | null
+  emergency_contact_relationship: string | null
+  first_name: string
   full_name: string
   gender: string | null
+  genotype: string | null
+  hmo_organization: string | null
+  hospital_currently_using: string | null
   hid_code: string
   id: string
+  last_name: string
+  medical_notes: string | null
+  nin_last4: string | null
   notifications_enabled: boolean
+  photo_url: string | null
   profile_percent: number | null
   phone_e164: string | null
   restored_at: string | null
@@ -96,6 +110,47 @@ type MembershipRow = {
   staff_account_id: string
 }
 
+type MedicalRecordRow = {
+  category: string
+  created_at: string
+  current_version_id: string | null
+  id: string
+  patient_id: string
+  title: string
+  updated_at: string
+}
+
+type MedicalRecordVersionRow = {
+  created_at: string
+  id: string
+  notes: string | null
+  record: string
+  record_id: string
+  transcription_text: string | null
+  version_no: number
+}
+
+type MedicalRecordFileRow = {
+  created_at: string
+  mime_type: string | null
+  original_file_name: string
+  patient_id: string
+  record_id: string
+  size_bytes: number | string | null
+}
+
+type ExportSummaryRow = {
+  active_access_grant_count: number | string | null
+  health_event_count: number | string | null
+  medical_record_count: number | string | null
+  notification_count: number | string | null
+  patient_id: string | null
+  pending_access_request_count: number | string | null
+  profile_id: string | null
+  record_file_count: number | string | null
+  record_file_storage_bytes: number | string | null
+}
+
 export type AdminUsersExportRow = {
   accountStatus: string
   authCreatedAt: string
@@ -110,22 +165,43 @@ export type AdminUsersExportRow = {
   lastSignInAt: string
   patientCountry: string
   patientCreatedAt: string
+  patientCurrentMedications: string
   patientDeletedAt: string
   patientDeletedReason: string
   patientDob: string
   patientEmail: string
+  patientEmergencyContactAddress: string
   patientEmergencyContactName: string
   patientEmergencyContactPhone: string
+  patientEmergencyContactRelationship: string
+  patientFirstName: string
   patientFullName: string
   patientGender: string
+  patientGenotype: string
+  patientHealthEventCount: string
+  patientHmoOrganization: string
+  patientHospitalCurrentlyUsing: string
   patientHidCode: string
   patientId: string
+  patientMedicalNotes: string
+  patientMedicalRecordCount: string
+  patientMedicalRecordDetails: string
+  patientMedicalRecordFileDetails: string
+  patientNinLast4: string
   patientNotificationsEnabled: string
+  patientPhotoUrl: string
   patientPhone: string
   patientProfilePercent: string
+  patientRecordFileCount: string
+  patientRecordFileStorageBytes: string
   patientRestoredAt: string
   patientState: string
   patientUpdatedAt: string
+  patientActiveAccessGrantCount: string
+  patientAllergies: string
+  patientBloodGroup: string
+  patientChronicConditions: string
+  patientPendingAccessRequestCount: string
   profileActive: string
   profileAppRole: string
   profileCreatedAt: string
@@ -134,6 +210,7 @@ export type AdminUsersExportRow = {
   profileDisplayName: string
   profileId: string
   profileMfaRequired: string
+  profileNotificationCount: string
   profileRestoredAt: string
   profileUpdatedAt: string
   staffActive: string
@@ -174,22 +251,43 @@ const ADMIN_USERS_EXPORT_COLUMNS: Array<keyof AdminUsersExportRow> = [
   'lastSignInAt',
   'patientCountry',
   'patientCreatedAt',
+  'patientCurrentMedications',
   'patientDeletedAt',
   'patientDeletedReason',
   'patientDob',
   'patientEmail',
+  'patientEmergencyContactAddress',
   'patientEmergencyContactName',
   'patientEmergencyContactPhone',
+  'patientEmergencyContactRelationship',
+  'patientFirstName',
   'patientFullName',
   'patientGender',
+  'patientGenotype',
+  'patientHealthEventCount',
+  'patientHmoOrganization',
+  'patientHospitalCurrentlyUsing',
   'patientHidCode',
   'patientId',
+  'patientMedicalNotes',
+  'patientMedicalRecordCount',
+  'patientMedicalRecordDetails',
+  'patientMedicalRecordFileDetails',
+  'patientNinLast4',
   'patientNotificationsEnabled',
+  'patientPhotoUrl',
   'patientPhone',
   'patientProfilePercent',
+  'patientRecordFileCount',
+  'patientRecordFileStorageBytes',
   'patientRestoredAt',
   'patientState',
   'patientUpdatedAt',
+  'patientActiveAccessGrantCount',
+  'patientAllergies',
+  'patientBloodGroup',
+  'patientChronicConditions',
+  'patientPendingAccessRequestCount',
   'profileActive',
   'profileAppRole',
   'profileCreatedAt',
@@ -198,6 +296,7 @@ const ADMIN_USERS_EXPORT_COLUMNS: Array<keyof AdminUsersExportRow> = [
   'profileDisplayName',
   'profileId',
   'profileMfaRequired',
+  'profileNotificationCount',
   'profileRestoredAt',
   'profileUpdatedAt',
   'staffActive',
@@ -429,35 +528,14 @@ async function loadExportPatients(adminClient: AdminClient, authUserIds: string[
   return loadChunkedRows(authUserIds, 250, async chunkValues => {
     const response = await adminClient
       .from('hid_patients')
-      .select('id, auth_user_id, user_profile_id, hid_code, full_name, email, phone_e164, gender, dob, country, state, emergency_contact_name, emergency_contact_phone, profile_percent, notifications_enabled, created_at, deleted_at, deleted_reason, restored_at, updated_at')
+      .select('id, auth_user_id, user_profile_id, hid_code, first_name, last_name, full_name, email, phone_e164, gender, dob, blood_group, genotype, country, state, allergies, chronic_conditions, current_medications, hospital_currently_using, hmo_organization, photo_url, emergency_contact_name, emergency_contact_relationship, emergency_contact_phone, emergency_contact_address, medical_notes, nin_last4, profile_percent, notifications_enabled, created_at, deleted_at, deleted_reason, restored_at, updated_at')
       .in('auth_user_id', chunkValues)
 
     if (response.error) {
       throw new HttpError(400, response.error.message, response.error)
     }
 
-    return (response.data ?? []) as Array<{
-      id: string
-      auth_user_id: string
-      user_profile_id: string
-      hid_code: string
-      full_name: string
-      email: string | null
-      phone_e164: string | null
-      gender: string | null
-      dob: string | null
-      country: string | null
-      state: string | null
-      emergency_contact_name: string | null
-      emergency_contact_phone: string | null
-      profile_percent: number | null
-      notifications_enabled: boolean
-      created_at: string
-      deleted_at: string | null
-      deleted_reason: string | null
-      restored_at: string | null
-      updated_at: string
-    }>
+    return (response.data ?? []) as PatientRow[]
   })
 }
 
@@ -491,17 +569,169 @@ async function loadExportMemberships(adminClient: AdminClient, staffIds: string[
   })
 }
 
+async function loadExportMedicalRecords(adminClient: AdminClient, patientIds: string[]) {
+  return loadChunkedRows(patientIds, 250, async chunkValues => {
+    const response = await adminClient
+      .from('hid_medical_records')
+      .select('id, patient_id, title, category, current_version_id, created_at, updated_at')
+      .in('patient_id', chunkValues)
+
+    if (response.error) {
+      throw new HttpError(400, response.error.message, response.error)
+    }
+
+    return (response.data ?? []) as MedicalRecordRow[]
+  })
+}
+
+async function loadExportMedicalRecordVersions(adminClient: AdminClient, versionIds: string[]) {
+  return loadChunkedRows(versionIds, 250, async chunkValues => {
+    const response = await adminClient
+      .from('hid_medical_record_versions')
+      .select('id, record_id, version_no, record, notes, transcription_text, created_at')
+      .in('id', chunkValues)
+
+    if (response.error) {
+      throw new HttpError(400, response.error.message, response.error)
+    }
+
+    return (response.data ?? []) as MedicalRecordVersionRow[]
+  })
+}
+
+async function loadExportMedicalRecordFiles(adminClient: AdminClient, recordIds: string[]) {
+  return loadChunkedRows(recordIds, 250, async chunkValues => {
+    const response = await adminClient
+      .from('hid_medical_record_files')
+      .select('record_id, patient_id, original_file_name, mime_type, size_bytes, created_at')
+      .in('record_id', chunkValues)
+
+    if (response.error) {
+      throw new HttpError(400, response.error.message, response.error)
+    }
+
+    return (response.data ?? []) as MedicalRecordFileRow[]
+  })
+}
+
+async function loadExportSummaries(
+  adminClient: AdminClient,
+  profileIds: string[],
+  patientIds: string[],
+) {
+  const rows: ExportSummaryRow[] = []
+  const pageSize = 250
+  const totalPages = Math.max(
+    Math.ceil(profileIds.length / pageSize),
+    Math.ceil(patientIds.length / pageSize),
+  )
+
+  for (let page = 0; page < totalPages; page += 1) {
+    const response = await adminClient.rpc('hid_admin_export_user_summaries', {
+      p_patient_ids: patientIds.slice(page * pageSize, (page + 1) * pageSize),
+      p_profile_ids: profileIds.slice(page * pageSize, (page + 1) * pageSize),
+    })
+
+    if (response.error) {
+      throw new HttpError(400, response.error.message, response.error)
+    }
+
+    rows.push(...((response.data ?? []) as ExportSummaryRow[]))
+  }
+
+  return rows
+}
+
+function summaryCount(value: number | string | null | undefined) {
+  return value === null || value === undefined ? '0' : String(value)
+}
+
+function buildMedicalRecordDetails(
+  records: MedicalRecordRow[],
+  versions: MedicalRecordVersionRow[],
+) {
+  const versionsById = new Map(versions.map(version => [version.id, version]))
+  const detailsByPatientId = new Map<string, string>()
+  const recordsByPatientId = new Map<string, MedicalRecordRow[]>()
+
+  for (const record of records) {
+    const current = recordsByPatientId.get(record.patient_id) ?? []
+    current.push(record)
+    recordsByPatientId.set(record.patient_id, current)
+  }
+
+  for (const [patientId, patientRecords] of recordsByPatientId) {
+    const details = patientRecords
+      .slice()
+      .sort((left, right) => right.created_at.localeCompare(left.created_at))
+      .map(record => {
+        const version = record.current_version_id ? versionsById.get(record.current_version_id) ?? null : null
+        const lines = [
+          `Title: ${record.title}`,
+          `Category: ${record.category}`,
+          `Created At: ${toAsciiTimestamp(record.created_at)}`,
+          `Updated At: ${toAsciiTimestamp(record.updated_at)}`,
+        ]
+
+        if (version) {
+          lines.push(`Version: ${version.version_no}`)
+          lines.push(`Version Created At: ${toAsciiTimestamp(version.created_at)}`)
+          lines.push(`Record: ${version.record}`)
+          if (version.notes) lines.push(`Notes: ${version.notes}`)
+          if (version.transcription_text) lines.push(`Transcription: ${version.transcription_text}`)
+        }
+
+        return lines.join('\n')
+      })
+
+    detailsByPatientId.set(patientId, details.join('\n\n---\n\n'))
+  }
+
+  return detailsByPatientId
+}
+
+function buildMedicalRecordFileDetails(files: MedicalRecordFileRow[]) {
+  const detailsByPatientId = new Map<string, string[]>()
+
+  for (const file of files) {
+    const details = detailsByPatientId.get(file.patient_id) ?? []
+    details.push([
+      `Name: ${file.original_file_name}`,
+      `Type: ${file.mime_type ?? 'unknown'}`,
+      `Size Bytes: ${summaryCount(file.size_bytes)}`,
+      `Uploaded At: ${toAsciiTimestamp(file.created_at)}`,
+    ].join(' | '))
+    detailsByPatientId.set(file.patient_id, details)
+  }
+
+  return new Map([...detailsByPatientId].map(([patientId, details]) => [patientId, details.join('\n')]))
+}
+
 function buildExportRows(
   authUsers: AuthUserRow[],
   profiles: ProfileRow[],
   patients: PatientRow[],
   staff: StaffRow[],
   memberships: MembershipRow[],
+  summaries: ExportSummaryRow[],
+  medicalRecordDetailsByPatientId: Map<string, string>,
+  medicalRecordFileDetailsByPatientId: Map<string, string>,
 ) {
   const profilesByAuthId = new Map(profiles.map(profile => [profile.auth_user_id, profile]))
   const patientsByAuthId = new Map(patients.map(patient => [patient.auth_user_id, patient]))
   const staffByAuthId = new Map(staff.map(item => [item.auth_user_id, item]))
   const membershipsByStaffId = new Map<string, MembershipRow[]>()
+  const profileNotificationCounts = new Map<string, string>()
+  const patientSummaries = new Map<string, ExportSummaryRow>()
+
+  for (const summary of summaries) {
+    if (summary.profile_id) {
+      profileNotificationCounts.set(summary.profile_id, summaryCount(summary.notification_count))
+    }
+    if (summary.patient_id) {
+      patientSummaries.set(summary.patient_id, summary)
+    }
+  }
 
   for (const membership of memberships) {
     const current = membershipsByStaffId.get(membership.staff_account_id) ?? []
@@ -520,6 +750,7 @@ function buildExportRows(
       const profile = profilesByAuthId.get(authUser.id) ?? null
       const patient = patientsByAuthId.get(authUser.id) ?? null
       const staffAccount = staffByAuthId.get(authUser.id) ?? null
+      const patientSummary = patient ? patientSummaries.get(patient.id) ?? null : null
       const staffMemberships = staffAccount ? (membershipsByStaffId.get(staffAccount.id) ?? []) : []
       const activeMembershipCount = staffMemberships.filter(item => item.active).length
       const inactiveMembershipCount = staffMemberships.length - activeMembershipCount
@@ -544,22 +775,43 @@ function buildExportRows(
         lastSignInAt: toAsciiTimestamp(authUser.last_sign_in_at),
         patientCountry: normalizeText(patient?.country),
         patientCreatedAt: toAsciiTimestamp(patient?.created_at),
+        patientCurrentMedications: normalizeText(patient?.current_medications),
         patientDeletedAt: toAsciiTimestamp(patient?.deleted_at),
         patientDeletedReason: normalizeText(patient?.deleted_reason),
         patientDob: normalizeText(patient?.dob),
         patientEmail: normalizeText(patient?.email),
+        patientEmergencyContactAddress: normalizeText(patient?.emergency_contact_address),
         patientEmergencyContactName: normalizeText(patient?.emergency_contact_name),
         patientEmergencyContactPhone: normalizeText(patient?.emergency_contact_phone),
+        patientEmergencyContactRelationship: normalizeText(patient?.emergency_contact_relationship),
+        patientFirstName: normalizeText(patient?.first_name),
         patientFullName: normalizeText(patient?.full_name),
         patientGender: normalizeText(patient?.gender),
+        patientGenotype: normalizeText(patient?.genotype),
+        patientHealthEventCount: summaryCount(patientSummary?.health_event_count),
+        patientHmoOrganization: normalizeText(patient?.hmo_organization),
+        patientHospitalCurrentlyUsing: normalizeText(patient?.hospital_currently_using),
         patientHidCode: normalizeText(patient?.hid_code),
         patientId: normalizeText(patient?.id),
+        patientMedicalNotes: normalizeText(patient?.medical_notes),
+        patientMedicalRecordCount: summaryCount(patientSummary?.medical_record_count),
+        patientMedicalRecordDetails: patient ? (medicalRecordDetailsByPatientId.get(patient.id) ?? '') : '',
+        patientMedicalRecordFileDetails: patient ? (medicalRecordFileDetailsByPatientId.get(patient.id) ?? '') : '',
+        patientNinLast4: normalizeText(patient?.nin_last4),
         patientNotificationsEnabled: normalizeText(patient ? patient.notifications_enabled : null),
+        patientPhotoUrl: normalizeText(patient?.photo_url),
         patientPhone: normalizeText(patient?.phone_e164),
         patientProfilePercent: normalizeText(patient?.profile_percent),
+        patientRecordFileCount: summaryCount(patientSummary?.record_file_count),
+        patientRecordFileStorageBytes: summaryCount(patientSummary?.record_file_storage_bytes),
         patientRestoredAt: normalizeText(patient?.restored_at),
         patientState: normalizeText(patient?.state),
         patientUpdatedAt: toAsciiTimestamp(patient?.updated_at),
+        patientActiveAccessGrantCount: summaryCount(patientSummary?.active_access_grant_count),
+        patientAllergies: normalizeText(patient?.allergies),
+        patientBloodGroup: normalizeText(patient?.blood_group),
+        patientChronicConditions: normalizeText(patient?.chronic_conditions),
+        patientPendingAccessRequestCount: summaryCount(patientSummary?.pending_access_request_count),
         profileActive: normalizeText(profile?.active),
         profileAppRole: normalizeText(profile?.app_role),
         profileCreatedAt: toAsciiTimestamp(profile?.created_at),
@@ -568,6 +820,7 @@ function buildExportRows(
         profileDisplayName: normalizeText(profile?.display_name),
         profileId: normalizeText(profile?.id),
         profileMfaRequired: normalizeText(profile?.mfa_required),
+        profileNotificationCount: profile ? (profileNotificationCounts.get(profile.id) ?? '0') : '0',
         profileRestoredAt: normalizeText(profile?.restored_at),
         profileUpdatedAt: toAsciiTimestamp(profile?.updated_at),
         staffActive: normalizeText(staffAccount?.active),
@@ -719,6 +972,18 @@ function buildCsv(rows: AdminUsersExportRow[]) {
   return [header, ...body].join('\n')
 }
 
+function exportColumnLabel(column: keyof AdminUsersExportRow) {
+  return String(column)
+    .replace(/([A-Z])/g, ' $1')
+    .replace(/^./, value => value.toUpperCase())
+}
+
+function appendExportDetails(lines: string[], row: AdminUsersExportRow) {
+  for (const column of ADMIN_USERS_EXPORT_COLUMNS) {
+    lines.push(`${exportColumnLabel(column)}: ${displayValue(row[column])}`)
+  }
+}
+
 function buildTxt(rows: AdminUsersExportRow[], generatedAt: string) {
   const lines: string[] = [
     'HID Admin Users Export',
@@ -729,25 +994,7 @@ function buildTxt(rows: AdminUsersExportRow[], generatedAt: string) {
 
   rows.forEach((row, index) => {
     lines.push(`User ${index + 1}`)
-    lines.push(`Account Status: ${displayValue(row.accountStatus)}`)
-    lines.push(`Auth User ID: ${displayValue(row.authUserId)}`)
-    lines.push(`Email: ${displayValue(row.email)}`)
-    lines.push(`Email Confirmed At: ${displayValue(row.emailConfirmedAt)}`)
-    lines.push(`Last Sign In At: ${displayValue(row.lastSignInAt)}`)
-    lines.push(`Profile Role: ${displayValue(row.profileAppRole)}`)
-    lines.push(`Profile Name: ${displayValue(row.profileDisplayName)}`)
-    lines.push(`Profile Active: ${displayValue(row.profileActive)}`)
-    lines.push(`Profile Deleted At: ${displayValue(row.profileDeletedAt)}`)
-    lines.push(`Profile Deleted Reason: ${displayValue(row.profileDeletedReason)}`)
-    lines.push(`Patient HID: ${displayValue(row.patientHidCode)}`)
-    lines.push(`Patient Name: ${displayValue(row.patientFullName)}`)
-    lines.push(`Patient Phone: ${displayValue(row.patientPhone)}`)
-    lines.push(`Hospital Name: ${displayValue(row.staffHospitalName)}`)
-    lines.push(`Hospital Phone: ${displayValue(row.staffPhone)}`)
-    lines.push(`Staff Role: ${displayValue(row.staffRole)}`)
-    lines.push(`Staff Verification: ${displayValue(row.staffVerificationStatus)}`)
-    lines.push(`Memberships: ${displayValue(row.staffMembershipCount)} total, ${displayValue(row.staffInactiveMembershipCount)} inactive`)
-    lines.push(`Flags: deleted=${displayValue(row.flagsDeleted)}, locked=${displayValue(row.flagsLocked)}, restorable=${displayValue(row.flagsRestorable)}, restrictable=${displayValue(row.flagsRestrictable)}`)
+    appendExportDetails(lines, row)
     lines.push('')
   })
 
@@ -784,29 +1031,9 @@ function buildPdfLines(rows: AdminUsersExportRow[], generatedAt: string) {
   ]
 
   rows.forEach((row, index) => {
-    const block = [
-      `User ${index + 1}`,
-      `Account Status: ${displayValue(row.accountStatus)}`,
-      `Auth User ID: ${displayValue(row.authUserId)}`,
-      `Email: ${displayValue(row.email)}`,
-      `Email Confirmed At: ${displayValue(row.emailConfirmedAt)}`,
-      `Last Sign In At: ${displayValue(row.lastSignInAt)}`,
-      `Profile Role: ${displayValue(row.profileAppRole)}`,
-      `Profile Name: ${displayValue(row.profileDisplayName)}`,
-      `Profile Active: ${displayValue(row.profileActive)}`,
-      `Profile Deleted At: ${displayValue(row.profileDeletedAt)}`,
-      `Profile Deleted Reason: ${displayValue(row.profileDeletedReason)}`,
-      `Patient HID: ${displayValue(row.patientHidCode)}`,
-      `Patient Name: ${displayValue(row.patientFullName)}`,
-      `Patient Phone: ${displayValue(row.patientPhone)}`,
-      `Hospital Name: ${displayValue(row.staffHospitalName)}`,
-      `Hospital Phone: ${displayValue(row.staffPhone)}`,
-      `Staff Role: ${displayValue(row.staffRole)}`,
-      `Staff Verification: ${displayValue(row.staffVerificationStatus)}`,
-      `Memberships: ${displayValue(row.staffMembershipCount)} total, ${displayValue(row.staffInactiveMembershipCount)} inactive`,
-      `Flags: deleted=${displayValue(row.flagsDeleted)}, locked=${displayValue(row.flagsLocked)}, restorable=${displayValue(row.flagsRestorable)}, restrictable=${displayValue(row.flagsRestrictable)}`,
-      '',
-    ]
+    const block: string[] = [`User ${index + 1}`]
+    appendExportDetails(block, row)
+    block.push('')
 
     block.forEach(line => {
       wrapText(line).forEach(wrapped => lines.push(wrapped))
@@ -1125,18 +1352,52 @@ function buildZip(files: Array<{ content: string; path: string }>) {
 export async function loadAdminUsersExportRows(adminClient: AdminClient, filters: AdminUsersExportFilters) {
   const scopedAuthUsers = await loadScopedAuthUsers(adminClient, filters)
   const authUserIds = unique(scopedAuthUsers.map(user => user.id))
-  const profiles = await loadExportProfiles(adminClient, authUserIds)
-  const patients = await loadExportPatients(adminClient, authUserIds)
-  const staff = await loadExportStaff(adminClient, authUserIds)
-  const staffIds = unique(staff.map(item => item.id))
-  const memberships = staffIds.length > 0 ? await loadExportMemberships(adminClient, staffIds) : []
+  const [profiles, patients, staff] = await Promise.all([
+    loadExportProfiles(adminClient, authUserIds),
+    loadExportPatients(adminClient, authUserIds),
+    loadExportStaff(adminClient, authUserIds),
+  ])
   const profiledAuthUserIds = new Set<string>([
     ...profiles.map(profile => profile.auth_user_id),
     ...patients.map(patient => patient.auth_user_id),
     ...staff.map(item => item.auth_user_id),
   ])
   const authUsers = filterReportableAuthUsers(scopedAuthUsers, profiledAuthUserIds)
-  const rows = buildExportRows(authUsers, profiles, patients, staff, memberships)
+  const reportableAuthUserIds = new Set(authUsers.map(user => user.id))
+  const reportableProfiles = profiles.filter(profile => reportableAuthUserIds.has(profile.auth_user_id))
+  const reportablePatients = patients.filter(patient => reportableAuthUserIds.has(patient.auth_user_id))
+  const reportableStaff = staff.filter(account => reportableAuthUserIds.has(account.auth_user_id))
+  const reportableStaffIds = unique(reportableStaff.map(account => account.id))
+  const medicalRecords = await loadExportMedicalRecords(
+    adminClient,
+    unique(reportablePatients.map(patient => patient.id)),
+  )
+  const medicalRecordIds = unique(medicalRecords.map(record => record.id))
+  const medicalRecordVersionIds = unique(
+    medicalRecords
+      .map(record => record.current_version_id)
+      .filter((versionId): versionId is string => Boolean(versionId)),
+  )
+  const [memberships, summaries, medicalRecordVersions, medicalRecordFiles] = await Promise.all([
+    reportableStaffIds.length > 0 ? loadExportMemberships(adminClient, reportableStaffIds) : Promise.resolve([] as MembershipRow[]),
+    loadExportSummaries(
+      adminClient,
+      unique(reportableProfiles.map(profile => profile.id)),
+      unique(reportablePatients.map(patient => patient.id)),
+    ),
+    loadExportMedicalRecordVersions(adminClient, medicalRecordVersionIds),
+    loadExportMedicalRecordFiles(adminClient, medicalRecordIds),
+  ])
+  const rows = buildExportRows(
+    authUsers,
+    reportableProfiles,
+    reportablePatients,
+    reportableStaff,
+    memberships,
+    summaries,
+    buildMedicalRecordDetails(medicalRecords, medicalRecordVersions),
+    buildMedicalRecordFileDetails(medicalRecordFiles),
+  )
   const filteredRows = filterExportRows(rows, filters)
   if (filteredRows.length === 0) {
     throw new HttpError(404, 'No users matched the selected export criteria.')

@@ -172,7 +172,7 @@ export default function PatientBioData() {
     try {
       const fullName = `${patient.first_name ?? ''} ${patient.last_name ?? ''}`.trim() || patient.full_name
       const profilePercent = calculateProfilePercent(patient, parsedDob, patient.access_pin_configured || !!accessPinDraft.trim())
-      await updateMyPatientProfile({
+      let nextPatient = await updateMyPatientProfile({
         ...patient,
         full_name: fullName,
         email: normalizedEmail,
@@ -181,10 +181,13 @@ export default function PatientBioData() {
       })
 
       if (accessPinDraft.trim()) {
-        await setMyPatientAccessPin(accessPinDraft.trim())
+        const accessPin = await setMyPatientAccessPin(accessPinDraft.trim())
+        nextPatient = {
+          ...nextPatient,
+          access_pin_configured: accessPin.configured,
+        }
       }
 
-      const nextPatient = await fetchMyPatient()
       seedPatientProfileCache(nextPatient)
       if (session) {
         warmPatientExperience(session, nextPatient)
@@ -193,6 +196,8 @@ export default function PatientBioData() {
       setPatient(nextPatient)
       setAccessPinDraft('')
       setSavedProfileSnapshot(buildProfileSnapshot(nextPatient, formatDate(nextPatient.dob), ''))
+      setProfileConfirmed(false)
+      setOpenSections(current => ({ ...current, about: false }))
       setPatientSession({
         hidCode: nextPatient.hid_code,
         phone: nextPatient.phone ?? '',
@@ -317,6 +322,15 @@ export default function PatientBioData() {
 
   function toggleSection(section: keyof typeof openSections) {
     setOpenSections(current => ({ ...current, [section]: !current[section] }))
+  }
+
+  function handleProfileAction() {
+    if (hasPendingProfileChanges) {
+      void saveProfile()
+      return
+    }
+
+    setOpenSections(current => ({ ...current, about: true }))
   }
 
   return (
@@ -533,8 +547,8 @@ export default function PatientBioData() {
             <div style={{ color: '#6b7280', fontSize: 12 }}>
               Profile completion: {liveProfilePercent}%
             </div>
-            <Button loading={saving} onClick={saveProfile}>
-              Save
+            <Button loading={saving} onClick={handleProfileAction}>
+              {hasPendingProfileChanges ? 'Save' : 'Edit'}
             </Button>
           </div>
 

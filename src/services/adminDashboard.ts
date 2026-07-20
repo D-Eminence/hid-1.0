@@ -4,6 +4,8 @@ import type {
   AdminManagedUser,
   AdminOverviewWindow,
   AdminOutreachRolePolicy,
+  AdminPlatformAdminAction,
+  AdminPlatformAdminActionResponse,
   AdminPlatformControls,
   AdminPlatformControlsResponse,
   AdminRoleManagementResponse,
@@ -85,6 +87,9 @@ function sanitizeAdminDashboardMessage(raw: string, status: number, fallbackMess
   if (lower.includes('jwt') || lower.includes('refresh token')) {
     return 'Please sign in again to continue.'
   }
+  if (lower.includes('primary hid administrator')) {
+    return 'Platform-admin account management is restricted to the primary HID administrator.'
+  }
   if (lower.includes('provider request failed with status 401') || status === 401) {
     return 'Please sign in to open the admin dashboard.'
   }
@@ -102,6 +107,15 @@ function sanitizeAdminDashboardMessage(raw: string, status: number, fallbackMess
   }
   if (lower.includes('platform admin accounts cannot be modified')) {
     return 'Platform admin accounts cannot be changed from the dashboard.'
+  }
+  if (lower.includes('cannot change your own platform admin account')) {
+    return 'You cannot change your own platform admin account from the dashboard.'
+  }
+  if (lower.includes('keep at least one active platform admin')) {
+    return 'Keep at least one active platform admin account.'
+  }
+  if (lower.includes('deleted platform admin accounts cannot be restored')) {
+    return 'Deleted platform admin accounts cannot be restored from the dashboard.'
   }
   if (lower.includes('no users matched the selected export criteria')) {
     return 'No users matched the selected export criteria.'
@@ -149,6 +163,16 @@ function getAdminEndpointFallbackMessage(path: string, init: RequestInit, status
       if (status === 429) return 'Platform admin creation is being rate-limited right now. Please wait a moment and try again.'
       if (status >= 500) return 'The platform admin could not be created right now. Please try again shortly.'
       return 'The platform admin could not be created right now. Refresh and try again.'
+    }
+
+    if (action === 'lock_admin' || action === 'unlock_admin' || action === 'delete_admin') {
+      if (status === 401) return 'Please sign in to manage platform admin access.'
+      if (status === 403) return 'You cannot change your own platform admin account from the dashboard.'
+      if (status === 404) return 'That platform admin account could not be found.'
+      if (status === 408) return 'The platform admin access request took too long. Please try again.'
+      if (status === 429) return 'Platform admin access changes are being rate-limited right now. Please wait a moment and try again.'
+      if (status >= 500) return 'The platform admin access change could not be completed right now. Please try again shortly.'
+      return 'The platform admin access change could not be completed right now. Refresh and try again.'
     }
 
     if (action === 'update_staff_role_policy') {
@@ -629,7 +653,8 @@ export async function applyAdminUserAction(targetAuthUserId: string, action: Adm
 }
 
 export async function fetchAdminRoleManagement(options: { force?: boolean } = {}) {
-  const cacheKey = 'role-management'
+  const session = await getSafeSession()
+  const cacheKey = `role-management:${session?.user?.id ?? 'anonymous'}`
   if (!options.force) {
     const cached = roleManagementCache.get(cacheKey)
     if (cached && cached.expiresAt > Date.now()) {
@@ -675,6 +700,19 @@ export async function createPlatformAdmin(email: string, fullName: string) {
       action: 'create_admin',
       email,
       fullName,
+    }),
+  }, 500)
+
+  invalidateAdminDashboardCaches()
+  return data
+}
+
+export async function applyPlatformAdminAction(targetAuthUserId: string, action: AdminPlatformAdminAction) {
+  const data = await callAdminUserManagement<AdminPlatformAdminActionResponse>(requireSupabaseFunctionUrl('admin-role-management'), {
+    method: 'POST',
+    body: JSON.stringify({
+      action,
+      targetAuthUserId,
     }),
   }, 500)
 

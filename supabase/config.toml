@@ -63,6 +63,9 @@ verify_jwt = false
 [functions.patient-reset-start]
 verify_jwt = false
 
+[functions.admin-password-reset-start]
+verify_jwt = false
+
 [functions.patient-reset-verify]
 verify_jwt = false
 

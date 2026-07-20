@@ -299,9 +299,16 @@ export interface AdminPlatformAdmin {
   emailConfirmedAt: string | null
   lastSignInAt: string | null
   active: boolean
+  deletedAt: string | null
   mfaRequired: boolean
   createdAt: string
   updatedAt: string
+}
+
+export type AdminPlatformAdminAction = 'lock_admin' | 'unlock_admin' | 'delete_admin'
+
+export interface AdminPlatformAdminActionResponse {
+  admin: AdminPlatformAdmin
 }
 
 export interface AdminStaffRolePolicy {
@@ -329,6 +336,7 @@ export interface AdminOutreachRolePolicy {
 
 export interface AdminRoleManagementResponse {
   admins: AdminPlatformAdmin[]
+  canManagePlatformAdmins: boolean
   staffRolePolicies: AdminStaffRolePolicy[]
   outreachRolePolicies: AdminOutreachRolePolicy[]
 }

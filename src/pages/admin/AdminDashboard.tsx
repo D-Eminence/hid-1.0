@@ -11,6 +11,7 @@ import { signOutAndClearSessions } from '../../lib/auth'
 import { getSafeUser } from '../../lib/supabase'
 import {
   applyAdminUserAction,
+  applyPlatformAdminAction,
   createPlatformAdmin,
   downloadAdminUsersExport,
   fetchAdminPlatformControls,
@@ -28,6 +29,7 @@ import type {
   AdminOverviewWindow,
   AdminOutreachRolePolicy,
   AdminPlatformAdmin,
+  AdminPlatformAdminAction,
   AdminPlatformControls,
   AdminStaffRolePolicy,
   AdminUsersExportFilters,
@@ -331,6 +333,7 @@ const exportScopeOptions: Array<{
 
 export default function AdminDashboard() {
   const [viewerEmail, setViewerEmail] = useState<string | null>(null)
+  const [viewerAuthUserId, setViewerAuthUserId] = useState<string | null>(null)
   const [windowKey, setWindowKey] = useState<AdminOverviewWindow>('7d')
   const [selectedDate, setSelectedDate] = useState<string | null>(null)
   const [searchQuery, setSearchQuery] = useState('')
@@ -344,6 +347,7 @@ export default function AdminDashboard() {
   const [deletedDirectoryError, setDeletedDirectoryError] = useState<string | null>(null)
   const [actioning, setActioning] = useState<AdminUserManagementAction | null>(null)
   const [platformAdmins, setPlatformAdmins] = useState<AdminPlatformAdmin[]>([])
+  const [canManagePlatformAdmins, setCanManagePlatformAdmins] = useState(false)
   const [staffRolePolicies, setStaffRolePolicies] = useState<AdminStaffRolePolicy[]>([])
   const [outreachRolePolicies, setOutreachRolePolicies] = useState<AdminOutreachRolePolicy[]>([])
   const [platformControls, setPlatformControls] = useState<AdminPlatformControls | null>(null)
@@ -352,6 +356,7 @@ export default function AdminDashboard() {
   const [roleManagementError, setRoleManagementError] = useState<string | null>(null)
   const [platformControlsError, setPlatformControlsError] = useState<string | null>(null)
   const [creatingAdmin, setCreatingAdmin] = useState(false)
+  const [platformAdminActioning, setPlatformAdminActioning] = useState<string | null>(null)
   const [savingPlatformControls, setSavingPlatformControls] = useState(false)
   const [savingStaffRole, setSavingStaffRole] = useState<string | null>(null)
   const [savingOutreachRole, setSavingOutreachRole] = useState<string | null>(null)
@@ -425,6 +430,7 @@ export default function AdminDashboard() {
   async function loadViewer() {
     const user = await getSafeUser()
     setViewerEmail(user?.email ?? null)
+    setViewerAuthUserId(user?.id ?? null)
   }
 
   function resetExportFlow() {
@@ -609,6 +615,7 @@ export default function AdminDashboard() {
     try {
       const response = await fetchAdminRoleManagement({ force })
       setPlatformAdmins(response.admins)
+      setCanManagePlatformAdmins(response.canManagePlatformAdmins)
       setStaffRolePolicies(response.staffRolePolicies)
       setOutreachRolePolicies(response.outreachRolePolicies ?? [])
     } catch (reason) {
@@ -691,6 +698,37 @@ export default function AdminDashboard() {
       showToast(message, 'error')
     } finally {
       setCreatingAdmin(false)
+    }
+  }
+
+  async function handlePlatformAdminAction(admin: AdminPlatformAdmin, action: AdminPlatformAdminAction) {
+    const actionLabel = action === 'lock_admin'
+      ? 'limit access for this platform admin'
+      : action === 'unlock_admin'
+        ? 'restore access for this platform admin'
+        : 'delete this platform admin account'
+
+    if (!window.confirm(`Do you want to ${actionLabel}?`)) return
+
+    setPlatformAdminActioning(`${admin.authUserId}:${action}`)
+    try {
+      const result = await applyPlatformAdminAction(admin.authUserId, action)
+      setPlatformAdmins(current => current.map(item => (
+        item.authUserId === result.admin.authUserId ? result.admin : item
+      )))
+      showToast(
+        action === 'lock_admin'
+          ? 'Platform admin access limited successfully.'
+          : action === 'unlock_admin'
+            ? 'Platform admin access restored successfully.'
+            : 'Platform admin account deleted successfully.',
+        'success',
+      )
+    } catch (reason) {
+      const message = reason instanceof Error ? reason.message : 'The platform admin access change could not be completed right now.'
+      showToast(message, 'error')
+    } finally {
+      setPlatformAdminActioning(null)
     }
   }
 
@@ -1428,7 +1466,8 @@ export default function AdminDashboard() {
                 {roleManagementError}
               </div>
             )}
-            <div style={{ display: 'grid', gridTemplateColumns: viewportWidth < 1180 ? '1fr' : 'minmax(320px, 420px) minmax(0, 1fr)', gap: 12 }}>
+            {canManagePlatformAdmins ? (
+              <div style={{ display: 'grid', gridTemplateColumns: viewportWidth < 1180 ? '1fr' : 'minmax(320px, 420px) minmax(0, 1fr)', gap: 12 }}>
               <div style={{ border: '1px solid var(--admin-border)', borderRadius: 12, background: '#fbfdff', padding: 14 }}>
                 <div style={{ fontSize: 12, fontWeight: 700, marginBottom: 10 }}>Create Admin</div>
                 <div style={{ display: 'grid', gap: 10 }}>
@@ -1484,27 +1523,61 @@ export default function AdminDashboard() {
                   />
                 ) : (
                   <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-                    {platformAdmins.map(admin => (
-                      <div key={admin.authUserId} style={{ border: '1px solid #eef2f7', borderRadius: 10, padding: '10px 12px', display: 'grid', gap: 6 }}>
-                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, flexWrap: 'wrap' }}>
-                          <div style={{ minWidth: 0 }}>
-                            <div style={{ fontSize: 12.5, fontWeight: 700, wordBreak: 'break-word' }}>{admin.displayName ?? admin.email ?? 'Platform Admin'}</div>
-                            <div style={{ fontSize: 11, color: 'var(--admin-muted)', wordBreak: 'break-word' }}>{admin.email ?? 'No email'}</div>
+                    {platformAdmins.map(admin => {
+                      const isCurrentAdmin = admin.authUserId === viewerAuthUserId
+                      const isDeleted = Boolean(admin.deletedAt)
+                      const actionKey = (action: AdminPlatformAdminAction) => `${admin.authUserId}:${action}`
+
+                      return (
+                        <div key={admin.authUserId} style={{ border: '1px solid #eef2f7', borderRadius: 10, padding: '10px 12px', display: 'grid', gap: 8 }}>
+                          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, flexWrap: 'wrap' }}>
+                            <div style={{ minWidth: 0 }}>
+                              <div style={{ fontSize: 12.5, fontWeight: 700, wordBreak: 'break-word' }}>{admin.displayName ?? admin.email ?? 'Platform Admin'}</div>
+                              <div style={{ fontSize: 11, color: 'var(--admin-muted)', wordBreak: 'break-word' }}>{admin.email ?? 'No email'}</div>
+                            </div>
+                            <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', justifyContent: 'flex-end' }}>
+                              <Badge color={isDeleted ? 'red' : admin.active ? 'green' : 'amber'}>{isDeleted ? 'deleted' : admin.active ? 'active' : 'limited'}</Badge>
+                              <Badge color={admin.mfaRequired ? 'blue' : 'amber'}>{admin.mfaRequired ? 'mfa required' : 'mfa optional'}</Badge>
+                            </div>
                           </div>
-                          <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', justifyContent: 'flex-end' }}>
-                            <Badge color={admin.active ? 'green' : 'amber'}>{admin.active ? 'active' : 'inactive'}</Badge>
-                            <Badge color={admin.mfaRequired ? 'blue' : 'amber'}>{admin.mfaRequired ? 'mfa required' : 'mfa optional'}</Badge>
+                          <div style={{ fontSize: 10.5, color: 'var(--admin-muted)' }}>
+                            Created {formatRelativeTime(admin.createdAt)} • Last sign-in {formatRelativeTime(admin.lastSignInAt)}
                           </div>
+                          {!isCurrentAdmin && !isDeleted && (
+                            <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                loading={platformAdminActioning === actionKey(admin.active ? 'lock_admin' : 'unlock_admin')}
+                                onClick={() => void handlePlatformAdminAction(admin, admin.active ? 'lock_admin' : 'unlock_admin')}
+                              >
+                                {admin.active ? 'Limit Access' : 'Restore Access'}
+                              </Button>
+                              <Button
+                                size="sm"
+                                variant="danger"
+                                loading={platformAdminActioning === actionKey('delete_admin')}
+                                onClick={() => void handlePlatformAdminAction(admin, 'delete_admin')}
+                              >
+                                Delete Admin
+                              </Button>
+                            </div>
+                          )}
+                          {isCurrentAdmin && (
+                            <div style={{ fontSize: 10.5, color: 'var(--admin-muted)' }}>Your own admin account cannot be limited or deleted here.</div>
+                          )}
                         </div>
-                        <div style={{ fontSize: 10.5, color: 'var(--admin-muted)' }}>
-                          Created {formatRelativeTime(admin.createdAt)} • Last sign-in {formatRelativeTime(admin.lastSignInAt)}
-                        </div>
-                      </div>
-                    ))}
+                      )
+                    })}
                   </div>
                 )}
               </div>
-            </div>
+              </div>
+            ) : (
+              <div style={{ border: '1px solid var(--admin-border)', borderRadius: 12, background: '#fbfdff', padding: 14, fontSize: 11.5, color: 'var(--admin-muted)', lineHeight: 1.6 }}>
+                Platform-admin account management is restricted to the primary HID administrator.
+              </div>
+            )}
           </div>
 
           <div style={dualChartStyle}>

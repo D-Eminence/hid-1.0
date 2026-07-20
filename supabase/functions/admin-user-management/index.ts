@@ -668,6 +668,12 @@ async function performUserAction(
   if (!target.profile) throw new HttpError(404, 'We could not find this account.')
   const targetDeleted = Boolean(target.profile.deleted_at || target.patient?.deleted_at || target.staff?.deleted_at)
 
+  // Platform-admin accounts have a separate, primary-admin-only control path.
+  // Keeping them out of this generic endpoint prevents privilege bypasses.
+  if (target.profile.app_role === 'platform_admin') {
+    throw new HttpError(403, 'Platform admin accounts must be managed through the primary HID administrator controls.')
+  }
+
   if (targetAuthUserId === actor.userId && ['lock_profile', 'unlock_profile', 'delete_account', 'restore_account'].includes(action)) {
     throw new HttpError(403, 'You cannot modify your own admin account from the dashboard.')
   }

@@ -22,6 +22,10 @@ const OUTREACH_POLICY_FIELDS = [
   'can_view_campaign_data',
 ] as const
 
+// The primary administrator is the only account permitted to manage other
+// platform-admin accounts. Keep this server-side so UI changes cannot bypass it.
+const PRIMARY_PLATFORM_ADMIN_EMAIL = 'eminence742@gmail.com'
+
 type OutreachPolicyField = typeof OUTREACH_POLICY_FIELDS[number]
 
 type StaffRolePolicyRow = {
@@ -55,6 +59,7 @@ type PlatformAdminListRow = {
   email_confirmed_at: string | null
   last_sign_in_at: string | null
   active: boolean
+  deleted_at: string | null
   mfa_required: boolean
   created_at: string
   updated_at: string
@@ -65,17 +70,30 @@ type PlatformAdminProfileStateRow = {
   auth_user_id: string
   display_name: string | null
   active: boolean
+  deleted_at: string | null
+  deleted_reason: string | null
   mfa_required: boolean
   created_at: string
   updated_at: string
 }
 
 type Payload = {
-  action?: 'create_admin' | 'update_staff_role_policy' | 'update_outreach_role_policy'
+  action?: 'create_admin' | 'delete_admin' | 'lock_admin' | 'unlock_admin' | 'update_staff_role_policy' | 'update_outreach_role_policy'
   email?: string | null
   fullName?: string | null
   role?: string | null
   changes?: Record<string, unknown> | null
+  targetAuthUserId?: string | null
+}
+
+function canManagePlatformAdmins(email: string | null | undefined) {
+  return email?.trim().toLowerCase() === PRIMARY_PLATFORM_ADMIN_EMAIL
+}
+
+function requirePrimaryPlatformAdmin(email: string | null | undefined) {
+  if (!canManagePlatformAdmins(email)) {
+    throw new HttpError(403, 'Platform admin account management is restricted to the primary HID administrator.')
+  }
 }
 
 function delay(ms: number) {
@@ -106,6 +124,22 @@ function normalizeOutreachRolePolicy(row: OutreachRolePolicyRow) {
     canViewCampaignData: row.can_view_campaign_data,
     updatedAt: row.updated_at,
     updatedByUserProfileId: row.updated_by_user_profile_id,
+  }
+}
+
+function normalizePlatformAdmin(row: PlatformAdminListRow) {
+  return {
+    profileId: row.profile_id,
+    authUserId: row.auth_user_id,
+    displayName: row.display_name,
+    email: row.email,
+    emailConfirmedAt: row.email_confirmed_at,
+    lastSignInAt: row.last_sign_in_at,
+    active: row.active,
+    deletedAt: row.deleted_at,
+    mfaRequired: row.mfa_required,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
   }
 }
 
@@ -142,18 +176,7 @@ async function listPlatformAdmins(adminClient: ReturnType<typeof createAdminClie
   }
 
   const profiles = (profilesResult.data ?? []) as PlatformAdminListRow[]
-  return profiles.map(profile => ({
-      profileId: profile.profile_id,
-      authUserId: profile.auth_user_id,
-      displayName: profile.display_name,
-      email: profile.email,
-      emailConfirmedAt: profile.email_confirmed_at,
-      lastSignInAt: profile.last_sign_in_at,
-      active: profile.active,
-      mfaRequired: profile.mfa_required,
-      createdAt: profile.created_at,
-      updatedAt: profile.updated_at,
-    }))
+  return profiles.map(normalizePlatformAdmin)
 }
 
 async function listStaffRolePolicies(adminClient: ReturnType<typeof createAdminClient>) {
@@ -214,7 +237,7 @@ async function waitForPlatformAdminProfile(adminClient: ReturnType<typeof create
   for (let attempt = 0; attempt < 8; attempt += 1) {
     const result = await adminClient
       .from('hid_user_profiles')
-      .select('id, auth_user_id, display_name, active, mfa_required, created_at, updated_at')
+      .select('id, auth_user_id, display_name, active, deleted_at, deleted_reason, mfa_required, created_at, updated_at')
       .eq('auth_user_id', authUserId)
       .maybeSingle()
 
@@ -334,6 +357,7 @@ async function createPlatformAdmin(
       emailConfirmedAt: createResult.data.user.email_confirmed_at ?? null,
       lastSignInAt: createResult.data.user.last_sign_in_at ?? null,
       active: true,
+      deletedAt: null,
       mfaRequired: true,
       createdAt: profile.created_at,
       updatedAt: profile.updated_at,
@@ -348,6 +372,143 @@ async function createPlatformAdmin(
     await adminClient.auth.admin.deleteUser(authUserId).catch(() => undefined)
     throw error
   }
+}
+
+async function loadPlatformAdminTarget(adminClient: ReturnType<typeof createAdminClient>, authUserId: string) {
+  const result = await adminClient
+    .from('hid_user_profiles')
+    .select('id, auth_user_id, app_role, display_name, active, deleted_at, deleted_reason, mfa_required, created_at, updated_at')
+    .eq('auth_user_id', authUserId)
+    .maybeSingle()
+
+  if (result.error) throw new HttpError(400, result.error.message, result.error)
+  const profile = result.data as (PlatformAdminProfileStateRow & { app_role: string }) | null
+  if (!profile || profile.app_role !== 'platform_admin') {
+    throw new HttpError(404, 'We could not find that platform admin account.')
+  }
+
+  return profile
+}
+
+async function ensurePlatformAdminContinuity(adminClient: ReturnType<typeof createAdminClient>) {
+  const result = await adminClient
+    .from('hid_user_profiles')
+    .select('id', { count: 'exact', head: true })
+    .eq('app_role', 'platform_admin')
+    .eq('active', true)
+    .is('deleted_at', null)
+
+  if (result.error) throw new HttpError(400, result.error.message, result.error)
+  if ((result.count ?? 0) <= 1) {
+    throw new HttpError(409, 'Keep at least one active platform admin account.')
+  }
+}
+
+async function applyPlatformAdminAction(
+  adminClient: ReturnType<typeof createAdminClient>,
+  actor: { userId: string; profileId: string | null; role: string },
+  action: 'delete_admin' | 'lock_admin' | 'unlock_admin',
+  targetAuthUserId: string,
+) {
+  if (targetAuthUserId === actor.userId) {
+    throw new HttpError(403, 'You cannot change your own platform admin account from the dashboard.')
+  }
+
+  const target = await loadPlatformAdminTarget(adminClient, targetAuthUserId)
+  if (action === 'unlock_admin' && target.deleted_at) {
+    throw new HttpError(409, 'Deleted platform admin accounts cannot be restored from the dashboard.')
+  }
+  if (action !== 'unlock_admin' && target.deleted_at) {
+    throw new HttpError(409, 'This platform admin account is already deleted.')
+  }
+
+  if ((action === 'lock_admin' || action === 'delete_admin') && target.active) {
+    await ensurePlatformAdminContinuity(adminClient)
+  }
+
+  if (action === 'lock_admin') {
+    const profileUpdate = await adminClient
+      .from('hid_user_profiles')
+      .update({ active: false })
+      .eq('id', target.id)
+    if (profileUpdate.error) throw new HttpError(400, profileUpdate.error.message, profileUpdate.error)
+
+    const authUpdate = await adminClient.auth.admin.updateUserById(targetAuthUserId, { ban_duration: '876000h' })
+    if (authUpdate.error) {
+      await adminClient.from('hid_user_profiles').update({ active: target.active }).eq('id', target.id)
+      throw new HttpError(400, authUpdate.error.message, authUpdate.error)
+    }
+
+    await logAdminAuditEvent(adminClient, actor, {
+      action: 'admin_limit_platform_admin_access',
+      resourceId: target.id,
+      resourceType: 'user_profile',
+      reason: 'Platform admin access limited by another HID admin.',
+      metadata: { target_auth_user_id: targetAuthUserId },
+    })
+  }
+
+  if (action === 'unlock_admin') {
+    const profileUpdate = await adminClient
+      .from('hid_user_profiles')
+      .update({ active: true })
+      .eq('id', target.id)
+    if (profileUpdate.error) throw new HttpError(400, profileUpdate.error.message, profileUpdate.error)
+
+    const authUpdate = await adminClient.auth.admin.updateUserById(targetAuthUserId, { ban_duration: 'none' })
+    if (authUpdate.error) {
+      await adminClient.from('hid_user_profiles').update({ active: target.active }).eq('id', target.id)
+      throw new HttpError(400, authUpdate.error.message, authUpdate.error)
+    }
+
+    await logAdminAuditEvent(adminClient, actor, {
+      action: 'admin_restore_platform_admin_access',
+      resourceId: target.id,
+      resourceType: 'user_profile',
+      reason: 'Platform admin access restored by another HID admin.',
+      metadata: { target_auth_user_id: targetAuthUserId },
+    })
+  }
+
+  if (action === 'delete_admin') {
+    const deletedAt = new Date().toISOString()
+    const profileUpdate = await adminClient
+      .from('hid_user_profiles')
+      .update({
+        active: false,
+        deleted_at: deletedAt,
+        deleted_reason: 'Platform admin account deleted by another HID admin.',
+      })
+      .eq('id', target.id)
+    if (profileUpdate.error) throw new HttpError(400, profileUpdate.error.message, profileUpdate.error)
+
+    const authUpdate = await adminClient.auth.admin.updateUserById(targetAuthUserId, { ban_duration: '876000h' })
+    if (authUpdate.error) {
+      await adminClient
+        .from('hid_user_profiles')
+        .update({
+          active: target.active,
+          deleted_at: target.deleted_at,
+          deleted_reason: target.deleted_reason,
+        })
+        .eq('id', target.id)
+      throw new HttpError(400, authUpdate.error.message, authUpdate.error)
+    }
+
+    await logAdminAuditEvent(adminClient, actor, {
+      action: 'admin_delete_platform_admin',
+      resourceId: target.id,
+      resourceType: 'user_profile',
+      reason: 'Platform admin account deleted by another HID admin.',
+      metadata: { target_auth_user_id: targetAuthUserId },
+    })
+  }
+
+  const admins = await listPlatformAdmins(adminClient)
+  const admin = admins.find(item => item.authUserId === targetAuthUserId)
+  if (!admin) throw new HttpError(500, 'The platform admin account was updated, but could not be reloaded.')
+
+  return { admin }
 }
 
 async function updateStaffRolePolicy(
@@ -475,13 +636,14 @@ Deno.serve(req => withErrorHandling(req, async () => {
   const adminClient = createAdminClient()
 
   if (req.method === 'GET') {
+    const isPrimaryAdmin = canManagePlatformAdmins(auth.user.email)
     const [admins, staffRolePolicies, outreachRolePolicies] = await Promise.all([
-      listPlatformAdmins(adminClient),
+      isPrimaryAdmin ? listPlatformAdmins(adminClient) : Promise.resolve([]),
       listStaffRolePolicies(adminClient),
       listOutreachRolePolicies(adminClient),
     ])
 
-    return json({ data: { admins, staffRolePolicies, outreachRolePolicies } }, 200, buildCacheHeaders({
+    return json({ data: { admins, canManagePlatformAdmins: isPrimaryAdmin, staffRolePolicies, outreachRolePolicies } }, 200, buildCacheHeaders({
       maxAgeSeconds: 5,
       staleWhileRevalidateSeconds: 15,
     }))
@@ -497,8 +659,16 @@ Deno.serve(req => withErrorHandling(req, async () => {
     }
 
     if (action === 'create_admin') {
+      requirePrimaryPlatformAdmin(auth.user.email)
       const data = await createPlatformAdmin(req, adminClient, actor, body)
       return json({ data }, 201)
+    }
+
+    if (action === 'lock_admin' || action === 'unlock_admin' || action === 'delete_admin') {
+      requirePrimaryPlatformAdmin(auth.user.email)
+      const targetAuthUserId = asTrimmedString(body.targetAuthUserId, 'targetAuthUserId')
+      const data = await applyPlatformAdminAction(adminClient, actor, action, targetAuthUserId)
+      return json({ data })
     }
 
     if (action === 'update_staff_role_policy') {
