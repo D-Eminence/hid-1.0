@@ -126,7 +126,7 @@ export async function requireUser(req: Request): Promise<{
     )
 
   if (shouldRequireMfa) {
-    const assurance = await client.auth.mfa.getAuthenticatorAssuranceLevel(accessToken)
+    const assurance = await client.auth.mfa.getAuthenticatorAssuranceLevel()
     if (assurance.error) {
       throw new HttpError(400, 'We could not verify this account right now.', assurance.error)
     }

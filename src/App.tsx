@@ -8,6 +8,7 @@ import { ToastProvider } from './components/toast'
 import { captureException } from './lib/observabilityBridge'
 import {
   AdminDashboardPage,
+  AdminAiProcessingPage,
   AdminLoginPage,
   DoctorAccessPage,
   DoctorAuthPage,
@@ -16,6 +17,7 @@ import {
   DoctorHistoryPage,
   DoctorPatientRecordsPage,
   LandingPage,
+  MigratePage,
   PatientAuthPage,
   getRoutePreloadKeys,
   PatientBioDataPage,
@@ -32,6 +34,7 @@ import {
 } from './lib/routePreload'
 import {
   ADMIN_LOGIN_PATH,
+  ADMIN_AI_PROCESSING_PATH,
   ADMIN_OVERVIEW_PATH,
   ADMIN_ROOT_PATH,
 } from './lib/adminRoutes'
@@ -48,6 +51,7 @@ import {
   HOSPITAL_HISTORY_PATH,
   HOSPITAL_ROOT_PATH,
 } from './lib/hospitalRoutes'
+import { MIGRATE_DASHBOARD_PATH, MIGRATE_ROOT_PATH } from './lib/migrateRoutes'
 
 class ErrorBoundary extends Component<{ children: React.ReactNode }, { error: Error | null }> {
   state = { error: null as Error | null }
@@ -86,6 +90,8 @@ class ErrorBoundary extends Component<{ children: React.ReactNode }, { error: Er
 }
 
 function SetupBanner() {
+  const location = useLocation()
+  if (location.pathname.startsWith('/migrate')) return null
   if (isConfigured) return null
 
   return (
@@ -166,6 +172,7 @@ function requiresImmediateSessionBootstrap(pathname: string) {
     pathname.startsWith('/hospital/history') ||
     pathname.startsWith('/hospital/emergency') ||
     pathname.startsWith('/hospital/patient-records/') ||
+    pathname.startsWith('/migrate') ||
     pathname.startsWith('/eminence/') ||
     pathname.startsWith('/outreach')
   )
@@ -256,6 +263,7 @@ export default function App() {
             <Route path={ADMIN_ROOT_PATH} element={<Navigate to={ADMIN_LOGIN_PATH} replace />} />
             <Route path={ADMIN_LOGIN_PATH} element={<AdminLoginPage />} />
             <Route path={ADMIN_OVERVIEW_PATH} element={<AdminDashboardPage />} />
+            <Route path={ADMIN_AI_PROCESSING_PATH} element={<AdminAiProcessingPage />} />
             <Route path={HOSPITAL_ROOT_PATH} element={<Navigate to={HOSPITAL_AUTH_PATH} replace />} />
             <Route path={HOSPITAL_AUTH_PATH} element={<DoctorAuthPage />} />
             <Route path={HOSPITAL_DASHBOARD_PATH} element={<DoctorDashboardPage />} />
@@ -268,6 +276,8 @@ export default function App() {
             <Route path={OUTREACH_SIGNUP_PATH} element={<OutreachSignupPage />} />
             <Route path={OUTREACH_VERIFY_PATH} element={<OutreachVerifyPage />} />
             <Route path={OUTREACH_JOIN_PATH} element={<OutreachJoinPage />} />
+            <Route path={MIGRATE_ROOT_PATH} element={<Navigate to={MIGRATE_DASHBOARD_PATH} replace />} />
+            <Route path="/migrate/*" element={<MigratePage />} />
             <Route path="/patient/auth" element={<Navigate to="/patient" replace />} />
             <Route path="/doctor/auth" element={<Navigate to={HOSPITAL_AUTH_PATH} replace />} />
             <Route path="/doctor/access" element={<Navigate to={HOSPITAL_ACCESS_PATH} replace />} />

@@ -63,6 +63,7 @@ export const PatientHistoryPage = lazyWithPreload(() => import('../pages/patient
 export const PatientNotificationsPage = lazyWithPreload(() => import('../pages/patient/PatientNotifications'))
 export const AdminLoginPage = lazyWithPreload(() => import('../pages/admin/AdminLogin'))
 export const AdminDashboardPage = lazyWithPreload(() => import('../pages/admin/AdminDashboard'))
+export const AdminAiProcessingPage = lazyWithPreload(() => import('../pages/admin/AdminAiProcessing'))
 export const DoctorAuthPage = lazyWithPreload(() => import('../pages/doctor/DoctorAuth'))
 export const DoctorDashboardPage = lazyWithPreload(() => import('../pages/doctor/HospitalDashboard'))
 export const DoctorAccessPage = lazyWithPreload(() => import('../pages/doctor/DoctorPortal'))
@@ -74,6 +75,7 @@ export const OutreachSignupPage = lazyWithPreload(() => import('../pages/Outreac
 export const OutreachJoinPage = lazyWithPreload(() => import('../pages/OutreachJoin'))
 export const OutreachLoginPage = lazyWithPreload(() => import('../pages/OutreachLogin'))
 export const OutreachVerifyPage = lazyWithPreload(() => import('../pages/OutreachVerify'))
+export const MigratePage = lazyWithPreload(() => import('../features/migrate/ui/MigratePage'))
 
 const routeLoaders = {
   landing: LandingPage.preload,
@@ -85,6 +87,7 @@ const routeLoaders = {
   patientNotifications: PatientNotificationsPage.preload,
   adminLogin: AdminLoginPage.preload,
   adminDashboard: AdminDashboardPage.preload,
+  adminAiProcessing: AdminAiProcessingPage.preload,
   doctorAuth: DoctorAuthPage.preload,
   doctorDashboard: DoctorDashboardPage.preload,
   doctorAccess: DoctorAccessPage.preload,
@@ -96,6 +99,7 @@ const routeLoaders = {
   outreachJoin: OutreachJoinPage.preload,
   outreachLogin: OutreachLoginPage.preload,
   outreachVerify: OutreachVerifyPage.preload,
+  migrate: MigratePage.preload,
 }
 
 export type RoutePreloadKey = keyof typeof routeLoaders
@@ -154,12 +158,14 @@ export function getRoutePreloadKeys(path: string): RoutePreloadKey[] {
   if (path.startsWith('/patient/biodata')) return ['patientProfile', 'patientRecords', 'patientHistory', 'patientNotifications']
   if (path.startsWith('/patient/notifications')) return ['patientProfile', 'patientRecords', 'patientHistory', 'patientBioData']
   if (path === '/eminence' || path.startsWith('/eminence/login')) return ['adminDashboard']
+  if (path.startsWith('/eminence/ai-processing')) return ['adminAiProcessing']
   if (path.startsWith('/eminence/')) return ['adminLogin']
   if (path === '/outreach/login') return ['outreachLogin', 'outreachSignup', 'outreachJoin']
   if (path === '/outreach/signup') return ['outreachSignup', 'outreachLogin', 'outreachJoin']
   if (path === '/outreach/verify') return ['outreachVerify']
   if (path === '/outreach/join' || path.startsWith('/outreach/join')) return ['outreachJoin', 'outreachLogin', 'outreachSignup']
   if (path === '/outreach' || path.startsWith('/outreach')) return ['outreach']
+  if (path === '/migrate' || path.startsWith('/migrate/')) return ['migrate']
   if (path === '/hospital' || path.startsWith('/hospital/auth') || path.startsWith('/doctor/auth')) {
     return ['doctorDashboard', 'doctorAccess', 'doctorHistory', 'doctorEmergency', 'outreach']
   }

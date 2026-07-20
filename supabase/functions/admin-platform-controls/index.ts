@@ -11,6 +11,7 @@ const CONTROL_FIELDS = [
   'hospital_portal_enabled',
   'outreach_signup_enabled',
   'outreach_portal_enabled',
+  'migrate_portal_enabled',
   'break_glass_enabled',
   'uploads_enabled',
 ] as const
@@ -117,6 +118,7 @@ async function decorateControls(adminClient: ReturnType<typeof createAdminClient
     hospitalPortalEnabled: controls.hospital_portal_enabled,
     outreachSignupEnabled: controls.outreach_signup_enabled,
     outreachPortalEnabled: controls.outreach_portal_enabled,
+    migratePortalEnabled: controls.migrate_portal_enabled,
     breakGlassEnabled: controls.break_glass_enabled,
     uploadsEnabled: controls.uploads_enabled,
     updatedAt: controls.updated_at,

@@ -293,6 +293,9 @@ export function isMedicationRecord(record: MedicalRecord): boolean {
 }
 
 export function getRecordSourceBadge(record: MedicalRecord): RecordSourceBadgeInfo {
+  if (record.source_provenance?.import_item_id) {
+    return { label: 'Validated archive import', color: 'blue' }
+  }
   const role = record.added_by_role ?? 'patient'
   const verified = record.created_by_verified ?? false
   switch (role) {

@@ -1,0 +1,6 @@
+import{supabase}from'../../../lib/supabase'
+export type MatchCandidate={id:string;source_folder_id:string;patient_id:string;score:number;band:'exact'|'strong'|'possible'|'weak';features:Record<string,number>;conflicts:string[];masked_patient_snapshot:{hid_code:string;full_name:string;dob:string|null;gender:string|null;phone:string|null;email:string|null}}
+export type MatchDecision={id:string;decision:string;patient_id:string|null}
+async function invoke<T>(name:string,options:Parameters<typeof supabase.functions.invoke>[1]){const result=await supabase.functions.invoke(name,options);if(result.error)throw new Error(result.error.message);return result.data as T}
+export async function getMatches(projectId:string,folderId:string){return invoke<{data:{candidates:MatchCandidate[];decision:MatchDecision|null}}>(`migration-matching?project_id=${encodeURIComponent(projectId)}&source_folder_id=${encodeURIComponent(folderId)}`,{method:'GET'})}
+export async function matchingCommand<T>(projectId:string,folderId:string,action:string,payload:Record<string,unknown>={}){return invoke<{data:T}>('migration-matching',{method:'POST',body:{project_id:projectId,source_folder_id:folderId,action,...payload}})}

@@ -9,6 +9,7 @@
     "perf:load": "node ./scripts/load-test.mjs",
     "security:audit": "npm audit --audit-level=high",
     "security:deps": "npm outdated"
+    ,"verify:migrate": "node ./scripts/verify-migrate-contracts.mjs"
   },
   "overrides": {
     "dompurify": "^3.4.11",
@@ -16,6 +17,7 @@
   },
   "dependencies": {
     "@fontsource/inter": "^5.2.8",
+    "@fontsource/jetbrains-mono": "^5.2.8",
     "@sentry/react": "^10.58.0",
     "@supabase/supabase-js": "^2.108.2",
     "posthog-js": "^1.388.1",

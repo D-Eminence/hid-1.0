@@ -1,5 +1,6 @@
 import type {
   AdminCreatePlatformAdminResponse,
+  AdminAiProcessingOverview,
   AdminDashboardOverview,
   AdminManagedUser,
   AdminOverviewWindow,
@@ -343,6 +344,28 @@ export function invalidateAdminDashboardCaches() {
   inflightRoleManagementRequest.clear()
   platformControlsCache.clear()
   inflightPlatformControlsRequest.clear()
+}
+
+export async function fetchAdminAiProcessing() {
+  return callAdminUserManagement<AdminAiProcessingOverview>(
+    requireSupabaseFunctionUrl('admin-ai-processing'),
+    { method: 'GET' },
+    503,
+  )
+}
+
+export async function runAdminAiProcessingAction<T = Record<string, unknown>>(
+  action: string,
+  values: Record<string, unknown> = {},
+) {
+  return callAdminUserManagement<T>(
+    requireSupabaseFunctionUrl('admin-ai-processing'),
+    {
+      method: 'POST',
+      body: JSON.stringify({ action, ...values }),
+    },
+    503,
+  )
 }
 
 async function callAdminUserManagement<T>(path: string, init: RequestInit, statusFallback: number) {
@@ -852,7 +875,7 @@ export async function fetchAdminPlatformControls(options: { force?: boolean } = 
 }
 
 export async function updateAdminPlatformControls(
-  controls: Partial<Pick<AdminPlatformControls, 'maintenanceMode' | 'patientSignupEnabled' | 'hospitalSignupEnabled' | 'patientPortalEnabled' | 'hospitalPortalEnabled' | 'outreachSignupEnabled' | 'outreachPortalEnabled' | 'breakGlassEnabled' | 'uploadsEnabled'>>,
+  controls: Partial<Pick<AdminPlatformControls, 'maintenanceMode' | 'patientSignupEnabled' | 'hospitalSignupEnabled' | 'patientPortalEnabled' | 'hospitalPortalEnabled' | 'outreachSignupEnabled' | 'outreachPortalEnabled' | 'migratePortalEnabled' | 'breakGlassEnabled' | 'uploadsEnabled'>>,
 ) {
   const data = await callAdminUserManagement<AdminPlatformControlsResponse>(requireSupabaseFunctionUrl('admin-platform-controls'), {
     method: 'POST',
@@ -866,6 +889,7 @@ export async function updateAdminPlatformControls(
         hospital_portal_enabled: controls.hospitalPortalEnabled,
         outreach_signup_enabled: controls.outreachSignupEnabled,
         outreach_portal_enabled: controls.outreachPortalEnabled,
+        migrate_portal_enabled: controls.migratePortalEnabled,
         break_glass_enabled: controls.breakGlassEnabled,
         uploads_enabled: controls.uploadsEnabled,
       },

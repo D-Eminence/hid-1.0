@@ -1215,6 +1215,8 @@ function toLegacyMedicalRecord(
     structured_data: version?.structured_data ?? null,
     created_by_org: version?.created_by_org ?? bundle.record.created_by_org ?? null,
     created_by_verified: version?.created_by_verified ?? bundle.record.created_by_verified ?? false,
+    source_provenance: bundle.record.source_provenance ?? null,
+    structured_schema_version: bundle.record.structured_schema_version ?? null,
   }
 }
 

@@ -1,0 +1,31 @@
+{
+  "version": "5",
+  "remote": {
+    "https://esm.sh/@supabase/supabase-js@2.49.8": "fd72c6e822ed41d5fe7ad3bbe3a48420abbb21a579c73d532b36a6467f5b5f7d"
+  },
+  "workspace": {
+    "packageJson": {
+      "dependencies": [
+        "npm:@fontsource/inter@^5.2.8",
+        "npm:@fontsource/jetbrains-mono@^5.2.8",
+        "npm:@sentry/react@^10.58.0",
+        "npm:@supabase/supabase-js@^2.108.2",
+        "npm:@types/react-dom@^18.2.0",
+        "npm:@types/react@^18.2.0",
+        "npm:@vitejs/plugin-legacy@^8.0.2",
+        "npm:@vitejs/plugin-react@^6.0.2",
+        "npm:posthog-js@^1.388.1",
+        "npm:posthog-node@^5.38.0",
+        "npm:react-dom@^18.2.0",
+        "npm:react-router-dom@^6.21.0",
+        "npm:react@^18.2.0",
+        "npm:typescript@^5.3.0",
+        "npm:vite@^8.0.16"
+      ],
+      "overrides": {
+        "dompurify": "^3.4.11",
+        "protobufjs": "^7.6.4"
+      }
+    }
+  }
+}

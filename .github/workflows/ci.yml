@@ -30,5 +30,26 @@ jobs:
       - name: Run security audit
         run: npm run security:audit
 
+      - name: Verify HID Migrate contracts
+        run: npm run verify:migrate
+
+      - name: Setup Deno
+        uses: denoland/setup-deno@v2
+        with:
+          deno-version: v2.x
+
+      - name: Type-check Migrate and AI processing Edge Functions
+        run: >-
+          deno check
+          supabase/functions/admin-ai-processing/index.ts
+          supabase/functions/migration-context/index.ts
+          supabase/functions/migration-operations/index.ts
+          supabase/functions/migration-capture/index.ts
+          supabase/functions/migration-processing/index.ts
+          supabase/functions/migration-worker-jobs/index.ts
+          supabase/functions/migration-review/index.ts
+          supabase/functions/migration-matching/index.ts
+          supabase/functions/migration-imports/index.ts
+
       - name: Build application
         run: npm run build

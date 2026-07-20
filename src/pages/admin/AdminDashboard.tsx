@@ -15,6 +15,7 @@ import {
   createPlatformAdmin,
   downloadAdminUsersExport,
   fetchAdminPlatformControls,
+  fetchAdminAiProcessing,
   fetchAdminRoleManagement,
   fetchDeletedAdminUsers,
   searchAdminUsers,
@@ -25,6 +26,7 @@ import {
 } from '../../services/adminDashboard'
 import type {
   AdminAlert,
+  AdminAiProcessingOverview,
   AdminManagedUser,
   AdminOverviewWindow,
   AdminOutreachRolePolicy,
@@ -52,6 +54,7 @@ const sidebarSections: AdminSidebarSection[] = [
   { id: 'providers', label: 'Providers' },
   { id: 'security', label: 'Security' },
   { id: 'analytics', label: 'Analytics' },
+  { id: 'ai-processing', label: 'AI & Processing', href: '/eminence/ai-processing' },
   { id: 'settings', label: 'Settings' },
 ]
 
@@ -292,7 +295,7 @@ const outreachRoleCapabilityFields: Array<{
 ]
 
 const platformControlFields: Array<{
-  key: keyof Pick<AdminPlatformControls, 'maintenanceMode' | 'patientSignupEnabled' | 'hospitalSignupEnabled' | 'patientPortalEnabled' | 'hospitalPortalEnabled' | 'outreachSignupEnabled' | 'outreachPortalEnabled' | 'breakGlassEnabled' | 'uploadsEnabled'>
+  key: keyof Pick<AdminPlatformControls, 'maintenanceMode' | 'patientSignupEnabled' | 'hospitalSignupEnabled' | 'patientPortalEnabled' | 'hospitalPortalEnabled' | 'outreachSignupEnabled' | 'outreachPortalEnabled' | 'migratePortalEnabled' | 'breakGlassEnabled' | 'uploadsEnabled'>
   label: string
   helper: string
 }> = [
@@ -303,6 +306,7 @@ const platformControlFields: Array<{
   { key: 'hospitalPortalEnabled', label: 'Hospital Portal', helper: 'Allow hospital portal sign-in and API access' },
   { key: 'outreachSignupEnabled', label: 'Outreach Signup', helper: 'Allow outreach campaign admins and invited workers to join' },
   { key: 'outreachPortalEnabled', label: 'Outreach Portal', helper: 'Keep outreach workspace access enabled for field teams' },
+  { key: 'migratePortalEnabled', label: 'Migrate Portal', helper: 'Allow assigned staff to open protected Migrate workspaces' },
   { key: 'breakGlassEnabled', label: 'Break Glass', helper: 'Allow emergency access requests' },
   { key: 'uploadsEnabled', label: 'File Uploads', helper: 'Allow medical record file uploads' },
 ]
@@ -375,6 +379,7 @@ export default function AdminDashboard() {
   const [selectedStaffRole, setSelectedStaffRole] = useState('')
   const [selectedOutreachRole, setSelectedOutreachRole] = useState('')
   const [activeSection, setActiveSection] = useState('dashboard')
+  const [aiProcessingOverview, setAiProcessingOverview] = useState<AdminAiProcessingOverview | null>(null)
   const [viewportWidth, setViewportWidth] = useState(() => (typeof window !== 'undefined' ? window.innerWidth : 1440))
   const { data, error, loading, refreshing, refresh } = useAdminDashboard(windowKey, selectedDate)
 
@@ -383,6 +388,7 @@ export default function AdminDashboard() {
     void loadDeletedDirectory()
     void loadRoleManagement()
     void loadPlatformControlsState()
+    void fetchAdminAiProcessing().then(setAiProcessingOverview).catch(() => undefined)
   }, [])
 
   useEffect(() => {
@@ -811,6 +817,7 @@ export default function AdminDashboard() {
         hospitalPortalEnabled: platformControls.hospitalPortalEnabled,
         outreachSignupEnabled: platformControls.outreachSignupEnabled,
         outreachPortalEnabled: platformControls.outreachPortalEnabled,
+        migratePortalEnabled: platformControls.migratePortalEnabled,
         breakGlassEnabled: platformControls.breakGlassEnabled,
         uploadsEnabled: platformControls.uploadsEnabled,
       })
@@ -1124,6 +1131,21 @@ export default function AdminDashboard() {
               <AdminMetricCard accent="var(--admin-accent)" icon={metricIcon('storage')} title="Storage Used" value={data?.records.storageBytes ?? null} valueFormatter={formatStorage} trendLabel="Attachment footprint" trendTone="neutral" helper="Total storage usage" />
               <AdminMetricCard accent="var(--admin-accent)" icon={metricIcon('providers')} title="Total Providers" value={data?.providers.totalProviders ?? null} trendLabel={`${formatCompact(data?.providers.totalOrganizations ?? null)} organizations`} trendTone="positive" helper="Hospitals and clinicians onboarded" />
               <AdminMetricCard accent="var(--admin-accent)" icon={metricIcon('provider-active')} title="Active Providers" value={data?.providers.activeProviders ?? null} trendLabel={`${formatCompact(data?.providers.recordsUploadedByProviders ?? null)} uploads`} trendTone="positive" helper="Providers currently active" />
+            </div>
+          </div>
+
+          <div>
+            {sectionLabel('HID Migrate & AI Infrastructure')}
+            <div style={metricGridStyle}>
+              <AdminMetricCard accent="var(--admin-accent)" icon={metricIcon('records')} title="Patients Migrated" value={aiProcessingOverview?.migrate.patients_migrated ?? null} trendLabel={`${formatCompact(aiProcessingOverview?.migrate.pages_processed ?? null)} pages processed`} trendTone="positive" helper="Canonical patients with completed migration imports" />
+              <AdminMetricCard accent="var(--admin-accent)" icon={metricIcon('activity')} title="Processing Health" value={aiProcessingOverview ? 1 : null} valueFormatter={() => aiProcessingOverview ? formatRoleLabel(aiProcessingOverview.processing.health) : 'N/A'} trendLabel={`${formatCompact(aiProcessingOverview?.processing.queued ?? null)} queued`} trendTone={aiProcessingOverview?.processing.health === 'healthy' ? 'positive' : 'critical'} helper="OCR and AI durable-job health" />
+              <AdminMetricCard accent="var(--admin-accent)" icon={metricIcon('api')} title="Providers Online" value={aiProcessingOverview?.providers.filter(provider => provider.status === 'active' && provider.last_success_at).length ?? null} trendLabel={`${formatCompact(aiProcessingOverview?.providers.length ?? null)} configured`} trendTone="positive" helper="Providers with a successful real connection test" />
+              <AdminMetricCard accent="var(--admin-accent)" icon={metricIcon('analytics')} title="AI Spend This Month" value={aiProcessingOverview?.usage.month.estimated_cost_minor ?? null} valueFormatter={value => value == null ? 'N/A' : new Intl.NumberFormat(undefined, { style: 'currency', currency: 'USD' }).format(value / 100)} trendLabel={`${formatCompact(aiProcessingOverview?.usage.month.requests ?? null)} requests`} trendTone="neutral" helper="Estimated usage-event cost" />
+            </div>
+            <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 10 }}>
+              <Button size="sm" variant="outline" onClick={() => window.location.assign('/eminence/ai-processing')}>
+                View AI & Processing
+              </Button>
             </div>
           </div>
         </section>

@@ -92,6 +92,13 @@ export type Database = {
           structured_data: Record<string, unknown> | null
           created_by_org: string | null
           created_by_verified: boolean
+          source_provenance?: {
+            migration_project_id?: string
+            source_folder_id?: string
+            source_document_id?: string
+            import_item_id?: string
+          } | null
+          structured_schema_version?: string | null
         }
         Insert: {
           id?: string
@@ -111,6 +118,13 @@ export type Database = {
           structured_data?: Record<string, unknown> | null
           created_by_org?: string | null
           created_by_verified?: boolean
+          source_provenance?: {
+            migration_project_id?: string
+            source_folder_id?: string
+            source_document_id?: string
+            import_item_id?: string
+          } | null
+          structured_schema_version?: string | null
         }
         Update: Partial<Database['public']['Tables']['medical_records']['Insert']>
       }

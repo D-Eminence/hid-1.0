@@ -4,6 +4,7 @@ import { HIDLogo } from './HIDLogo'
 export type AdminSidebarSection = {
   id: string
   label: string
+  href?: string
 }
 
 const themeVars = {
@@ -82,6 +83,15 @@ function sidebarIcon(id: string, active: boolean) {
           <path d="M11 11V7" {...common} />
         </svg>
       )
+    case 'ai-processing':
+    case 'migrate-overview':
+    case 'routing':
+      return (
+        <svg width="14" height="14" viewBox="0 0 16 16" fill="none">
+          <rect x="4" y="4" width="8" height="8" rx="2" {...common} />
+          <path d="M6.5 8h3M8 6.5v3M2.5 6h1.5M2.5 10h1.5M12 6h1.5M12 10h1.5M6 2.5V4M10 2.5V4M6 12v1.5M10 12v1.5" {...common} />
+        </svg>
+      )
     case 'settings':
       return (
         <svg width="14" height="14" viewBox="0 0 16 16" fill="none">
@@ -138,7 +148,12 @@ export function AdminLayout({
     return () => window.removeEventListener('resize', handleResize)
   }, [])
 
-  function scrollToSection(id: string) {
+  function openSection(section: AdminSidebarSection) {
+    if (section.href) {
+      window.location.assign(section.href)
+      return
+    }
+    const { id } = section
     document.getElementById(id)?.scrollIntoView({ behavior: 'smooth', block: 'start' })
     setMenuOpen(false)
   }
@@ -210,7 +225,7 @@ export function AdminLayout({
             return (
               <button
                 key={section.id}
-                onClick={() => scrollToSection(section.id)}
+                onClick={() => openSection(section)}
                 style={{
                   border: 'none',
                   borderRadius: 12,

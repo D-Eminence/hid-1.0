@@ -15,6 +15,7 @@ export type PlatformControlsRow = {
   hospital_portal_enabled: boolean
   outreach_signup_enabled: boolean
   outreach_portal_enabled: boolean
+  migrate_portal_enabled: boolean
   break_glass_enabled: boolean
   uploads_enabled: boolean
   updated_at: string
@@ -49,6 +50,7 @@ const DEFAULT_PLATFORM_CONTROLS: PlatformControlsRow = {
   hospital_portal_enabled: true,
   outreach_signup_enabled: true,
   outreach_portal_enabled: true,
+  migrate_portal_enabled: false,
   break_glass_enabled: true,
   uploads_enabled: true,
   updated_at: new Date(0).toISOString(),
@@ -109,7 +111,7 @@ export async function loadPlatformControls(adminClient: AdminClient) {
 
   const response = await adminClient
     .from('hid_platform_controls')
-    .select('maintenance_mode, patient_signup_enabled, hospital_signup_enabled, patient_portal_enabled, hospital_portal_enabled, outreach_signup_enabled, outreach_portal_enabled, break_glass_enabled, uploads_enabled, updated_at, updated_by_user_profile_id')
+    .select('maintenance_mode, patient_signup_enabled, hospital_signup_enabled, patient_portal_enabled, hospital_portal_enabled, outreach_signup_enabled, outreach_portal_enabled, migrate_portal_enabled, break_glass_enabled, uploads_enabled, updated_at, updated_by_user_profile_id')
     .eq('id', true)
     .maybeSingle()
 
@@ -117,10 +119,10 @@ export async function loadPlatformControls(adminClient: AdminClient) {
     throw new HttpError(400, response.error.message, response.error)
   }
 
-  const controls = {
+  const controls: PlatformControlsRow = {
     ...DEFAULT_PLATFORM_CONTROLS,
-    ...(response.data ?? {}),
-  } satisfies PlatformControlsRow
+    ...((response.data ?? {}) as Partial<PlatformControlsRow>),
+  }
 
   platformControlsCache = writeCacheEntry(controls, PLATFORM_CONTROLS_TTL_MS)
   return controls
@@ -146,7 +148,7 @@ export async function assertPlatformPortalAccess(adminClient: AdminClient, role:
 
 export async function assertPlatformFeatureEnabled(
   adminClient: AdminClient,
-  feature: 'break_glass' | 'uploads',
+  feature: 'break_glass' | 'uploads' | 'migrate',
 ) {
   const controls = await loadPlatformControls(adminClient)
 
@@ -156,6 +158,10 @@ export async function assertPlatformFeatureEnabled(
 
   if (feature === 'uploads' && !controls.uploads_enabled) {
     throw new HttpError(503, 'Record file uploads are temporarily disabled by HID platform controls.')
+  }
+
+  if (feature === 'migrate' && !controls.migrate_portal_enabled) {
+    throw new HttpError(503, 'HID Migrate is not enabled for this environment right now.')
   }
 
   return controls

@@ -99,6 +99,13 @@ export interface HidMedicalRecord {
   created_by_role?: string | null
   created_by_org?: string | null
   created_by_verified?: boolean
+  source_provenance?: {
+    migration_project_id?: string
+    source_folder_id?: string
+    source_document_id?: string
+    import_item_id?: string
+  } | null
+  structured_schema_version?: string | null
 }
 
 export interface HidMedicalRecordVersion {

@@ -356,6 +356,7 @@ export interface AdminPlatformControls {
   hospitalPortalEnabled: boolean
   outreachSignupEnabled: boolean
   outreachPortalEnabled: boolean
+  migratePortalEnabled: boolean
   breakGlassEnabled: boolean
   uploadsEnabled: boolean
   updatedAt: string
@@ -402,6 +403,156 @@ export interface AdminPlatformControls {
       active: boolean
     }>
   }
+}
+
+export type AdminAiWorkload =
+  | 'ocr'
+  | 'handwriting_recognition'
+  | 'document_classification'
+  | 'structured_data_extraction'
+  | 'clinical_entity_extraction'
+  | 'document_summarization'
+  | 'patient_matching_assistance'
+  | 'image_understanding'
+
+export interface AdminAiProvider {
+  id: string
+  name: string
+  provider_type: 'nvidia' | 'deepseek' | 'anthropic' | 'openai' | 'google' | 'other'
+  provider_kind: 'ocr' | 'ai' | 'multimodal' | 'compatible'
+  api_base_url: string | null
+  api_version: string | null
+  organization_reference: string | null
+  project_reference: string | null
+  request_timeout_ms: number
+  max_retry_count: number
+  status: 'active' | 'disabled' | 'degraded'
+  priority: number
+  api_key_masked: string | null
+  has_api_key: boolean
+  last_success_at: string | null
+  last_failure_at: string | null
+  last_failure_code: string | null
+  average_latency_ms: number | null
+  configuration_version: number
+  created_at: string
+  updated_at: string
+}
+
+export interface AdminAiModel {
+  id: string
+  provider_id: string
+  display_name: string
+  model_id: string
+  model_version: string | null
+  purposes: AdminAiWorkload[]
+  status: 'active' | 'disabled' | 'degraded'
+  priority: number
+  input_cost_per_million_minor: number | null
+  output_cost_per_million_minor: number | null
+  page_cost_minor: number | null
+  currency: string
+  configuration_version: number
+  last_used_at: string | null
+  provider?: { id: string; name: string; provider_type: string } | null
+}
+
+export interface AdminAiWorkloadRoute {
+  workload: AdminAiWorkload
+  processing_strategy: 'ocr_then_ai' | 'direct_multimodal'
+  primary_model_id: string | null
+  fallback_model_id: string | null
+  configuration_version: number
+  primary_model?: { id: string; display_name: string; model_id: string; provider?: { id: string; name: string } | null } | null
+  fallback_model?: { id: string; display_name: string; model_id: string; provider?: { id: string; name: string } | null } | null
+}
+
+export interface AdminAiUsageSummary {
+  requests: number
+  successful_requests: number
+  failed_requests: number
+  rate_limited_requests?: number
+  timed_out_requests?: number
+  retries: number
+  input_tokens: number
+  output_tokens: number
+  pages_processed: number
+  estimated_cost_minor: number
+  average_latency_ms: number
+}
+
+export interface AdminAiProjectUsage extends AdminAiUsageSummary {
+  id: string
+  name: string
+  project_reference: string
+  organization_name: string | null
+  pages_scanned: number
+  folders_scanned: number
+  patients_migrated: number
+  failed_jobs: number
+  retrying_jobs: number
+  cost_per_page_minor: number
+  cost_per_patient_minor: number
+}
+
+export interface AdminAiProcessingOverview {
+  providers: AdminAiProvider[]
+  models: AdminAiModel[]
+  routes: AdminAiWorkloadRoute[]
+  budgets: Array<Record<string, unknown>>
+  usage: {
+    today: AdminAiUsageSummary
+    month: AdminAiUsageSummary
+    by_provider: Array<AdminAiUsageSummary & { key: string; provider_quota?: Record<string, unknown> }>
+    today_by_provider: Array<AdminAiUsageSummary & { key: string; provider_quota?: Record<string, unknown> }>
+    by_workload: Array<AdminAiUsageSummary & { key: string }>
+    projects: AdminAiProjectUsage[]
+    quota_note: string
+  }
+  processing: {
+    health: 'healthy' | 'degraded' | 'issues_detected'
+    queued: number
+    processing: number
+    retrying: number
+    dead_letter: number
+    oldest_queued_at: string | null
+    failures: {
+      ocr: number
+      classification: number
+      extraction: number
+      provider_errors: number
+      rate_limit_errors: number
+      timeouts: number
+      low_confidence_results: number
+      human_review: number
+    }
+    failed_jobs: Array<{
+      id: string
+      job_type: string
+      provider: string | null
+      attempt_count: number
+      created_at: string
+      migration_project_id: string
+      status: string
+    }>
+  }
+  migrate: {
+    active_projects: number
+    patients_migrated: number
+    folders_scanned: number
+    pages_processed: number
+    pending_validation: number
+    import_success_rate: number
+    estimated_processing_cost_minor: number
+  }
+  budget: {
+    monthly_budget_minor: number
+    spent_minor: number
+    remaining_minor: number
+    warning_threshold_percent: number
+    critical_threshold_percent: number
+  } | null
+  checked_at: string
 }
 
 export interface AdminPlatformControlsResponse {

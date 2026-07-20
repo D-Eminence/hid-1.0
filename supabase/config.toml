@@ -147,6 +147,9 @@ verify_jwt = true
 [functions.admin-platform-controls]
 verify_jwt = true
 
+[functions.admin-ai-processing]
+verify_jwt = true
+
 [functions.send-email]
 verify_jwt = false
 
@@ -172,4 +175,28 @@ verify_jwt = true
 verify_jwt = true
 
 [functions.share-create]
+verify_jwt = true
+
+[functions.migration-context]
+verify_jwt = true
+
+[functions.migration-operations]
+verify_jwt = true
+
+[functions.migration-capture]
+verify_jwt = true
+
+[functions.migration-processing]
+verify_jwt = true
+
+[functions.migration-worker-jobs]
+verify_jwt = false
+
+[functions.migration-review]
+verify_jwt = true
+
+[functions.migration-matching]
+verify_jwt = true
+
+[functions.migration-imports]
 verify_jwt = true
