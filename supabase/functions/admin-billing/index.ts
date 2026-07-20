@@ -1,0 +1,26 @@
+import { createAdminClient, requireRole } from '../_shared/auth.ts'
+import { HttpError, json, readJson, withErrorHandling } from '../_shared/http.ts'
+
+const allowedProductFields = ['name','description','status','available_standalone','available_addon','public_visible','trial_eligible','subscription_type','default_billing_cycle','setup_fee_minor','currency','display_order']
+function pick(input: Record<string,unknown>, fields: string[]) { return Object.fromEntries(fields.filter(field => field in input).map(field => [field,input[field]])) }
+async function audit(admin:any, auth:any, action:string, resource_type:string, resource_id:string|null, before:unknown, after:unknown) { const { error }=await admin.from('hid_audit_events').insert({actor_user_id:auth.user.id,actor_profile_id:auth.profile?.id??null,actor_role:auth.role,action,resource_type,resource_id,reason:'Platform billing administration',metadata:{before,after}}); if(error) throw new HttpError(400,error.message,error) }
+async function overview(admin:any) {
+  const [products,prices,plans,subscriptions,invoices,payments,organizations,settings]=await Promise.all([
+    admin.from('hid_commercial_products').select('*').order('display_order'), admin.from('hid_commercial_prices').select('*'), admin.from('hid_subscription_plans').select('*').order('name'),
+    admin.from('hid_organization_subscriptions').select('*,organization:hid_organizations(id,name),plan:hid_subscription_plans(id,name)').order('updated_at',{ascending:false}),
+    admin.from('hid_platform_invoices').select('*').order('created_at',{ascending:false}).limit(100), admin.from('hid_platform_payments').select('*').order('created_at',{ascending:false}).limit(100),
+    admin.from('hid_organizations').select('id,name').order('name'), admin.from('hid_platform_billing_settings').select('*').eq('id',true).single(),
+  ]); for(const result of [products,prices,plans,subscriptions,invoices,payments,organizations,settings]) if(result.error) throw new HttpError(400,result.error.message,result.error)
+  const active=(subscriptions.data??[]).filter((s:any)=>s.status==='active'); const mrr=active.reduce((sum:number,s:any)=>sum+Number(s.override_price_minor??s.plan?.monthly_price_minor??0),0)
+  const outstanding=(invoices.data??[]).reduce((sum:number,i:any)=>sum+Number(i.balance_minor??0),0)
+  return {products:products.data,prices:prices.data,plans:plans.data,subscriptions:subscriptions.data,invoices:invoices.data,payments:payments.data,organizations:organizations.data,settings:settings.data,metrics:{mrr_minor:mrr,arr_minor:mrr*12,active_subscriptions:active.length,trials:(subscriptions.data??[]).filter((s:any)=>s.status==='trial').length,past_due:(subscriptions.data??[]).filter((s:any)=>['past_due','grace_period'].includes(s.status)).length,suspended:(subscriptions.data??[]).filter((s:any)=>s.status==='suspended').length,outstanding_minor:outstanding}}
+}
+Deno.serve(withErrorHandling(async req=>{
+  if(req.method==='OPTIONS') return new Response(null,{status:204}); const auth=await requireRole(req,['platform_admin']); const admin=createAdminClient()
+  if(req.method==='GET') return json(await overview(admin),200)
+  const body=await readJson(req) as Record<string,any>; const action=`${body.action??''}`
+  if(action==='save_product'){ const id=body.product_id||null; const changes=pick(body.product??{},allowedProductFields); let before=null,result; if(id){before=(await admin.from('hid_commercial_products').select('*').eq('id',id).single()).data; result=await admin.from('hid_commercial_products').update({...changes,updated_at:new Date().toISOString(),updated_by:auth.user.id}).eq('id',id).select().single()}else{result=await admin.from('hid_commercial_products').insert({...changes,slug:body.product.slug,updated_by:auth.user.id}).select().single()} if(result.error) throw new HttpError(400,result.error.message,result.error); await audit(admin,auth,id?'billing.product.updated':'billing.product.created','commercial_product',result.data.id,before,result.data); return json({product:result.data}) }
+  if(action==='save_price'){ const payload=pick(body.price??{},['product_id','context','visibility','amount_minor','currency','billing_period','unit','active']); const {data,error}=await admin.from('hid_commercial_prices').upsert(payload,{onConflict:'product_id,context'}).select().single(); if(error) throw new HttpError(400,error.message,error); await audit(admin,auth,'billing.price.updated','commercial_price',data.id,null,data); return json({price:data}) }
+  if(action==='set_subscription_status'){ const status=`${body.status??''}`; if(!['trial','active','past_due','grace_period','restricted','suspended','cancelled','expired'].includes(status)) throw new HttpError(400,'Invalid subscription status.'); const before=(await admin.from('hid_organization_subscriptions').select('*').eq('id',body.subscription_id).single()).data; const {data,error}=await admin.from('hid_organization_subscriptions').update({status,updated_at:new Date().toISOString()}).eq('id',body.subscription_id).select().single(); if(error) throw new HttpError(400,error.message,error); await audit(admin,auth,'billing.subscription.status_changed','organization_subscription',data.id,before,data); return json({subscription:data}) }
+  throw new HttpError(400,'Unsupported billing action.')
+}))

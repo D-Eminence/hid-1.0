@@ -54,6 +54,7 @@ const sidebarSections: AdminSidebarSection[] = [
   { id: 'providers', label: 'Providers' },
   { id: 'security', label: 'Security' },
   { id: 'analytics', label: 'Analytics' },
+  { id: 'billing', label: 'Billing', href: '/eminence/billing' },
   { id: 'ai-processing', label: 'AI & Processing', href: '/eminence/ai-processing' },
   { id: 'settings', label: 'Settings' },
 ]

@@ -9,6 +9,7 @@ import { captureException } from './lib/observabilityBridge'
 import {
   AdminDashboardPage,
   AdminAiProcessingPage,
+  AdminBillingPage,
   AdminLoginPage,
   DoctorAccessPage,
   DoctorAuthPage,
@@ -18,6 +19,9 @@ import {
   DoctorPatientRecordsPage,
   LandingPage,
   MigratePage,
+  CommercialProductsPage,
+  EmrConfiguratorPage,
+  PricingPage,
   PatientAuthPage,
   getRoutePreloadKeys,
   PatientBioDataPage,
@@ -35,6 +39,7 @@ import {
 import {
   ADMIN_LOGIN_PATH,
   ADMIN_AI_PROCESSING_PATH,
+  ADMIN_BILLING_PATH,
   ADMIN_OVERVIEW_PATH,
   ADMIN_ROOT_PATH,
 } from './lib/adminRoutes'
@@ -247,6 +252,12 @@ export default function App() {
         <Suspense fallback={<RouteLoadingScreen />}>
           <Routes>
             <Route path="/" element={<LandingPage />} />
+            <Route path="/products" element={<CommercialProductsPage />} />
+            <Route path="/products/:slug" element={<CommercialProductsPage />} />
+            <Route path="/solutions" element={<CommercialProductsPage />} />
+            <Route path="/developers" element={<CommercialProductsPage />} />
+            <Route path="/pricing" element={<PricingPage />} />
+            <Route path="/configure-emr" element={<EmrConfiguratorPage />} />
             <Route path="/signup" element={<Navigate to="/patient" replace />} />
             <Route path="/login" element={<Navigate to="/patient" replace />} />
             <Route path="/dashboard" element={<Navigate to={HOSPITAL_DASHBOARD_PATH} replace />} />
@@ -264,6 +275,7 @@ export default function App() {
             <Route path={ADMIN_LOGIN_PATH} element={<AdminLoginPage />} />
             <Route path={ADMIN_OVERVIEW_PATH} element={<AdminDashboardPage />} />
             <Route path={ADMIN_AI_PROCESSING_PATH} element={<AdminAiProcessingPage />} />
+            <Route path={ADMIN_BILLING_PATH} element={<AdminBillingPage />} />
             <Route path={HOSPITAL_ROOT_PATH} element={<Navigate to={HOSPITAL_AUTH_PATH} replace />} />
             <Route path={HOSPITAL_AUTH_PATH} element={<DoctorAuthPage />} />
             <Route path={HOSPITAL_DASHBOARD_PATH} element={<DoctorDashboardPage />} />

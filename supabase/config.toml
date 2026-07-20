@@ -150,6 +150,9 @@ verify_jwt = true
 [functions.admin-ai-processing]
 verify_jwt = true
 
+[functions.admin-billing]
+verify_jwt = true
+
 [functions.send-email]
 verify_jwt = false
 

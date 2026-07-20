@@ -388,6 +388,8 @@ export default function Landing() {
     { icon: 'lab', title: 'HID Lab', desc: 'Laboratory operations, diagnostics management, and fast, reliable result reporting.' },
     { icon: 'pharmacy', title: 'HID Pharmacy', desc: 'Prescription management, dispensing workflows, and real-time inventory across branches.' },
     { icon: 'outreach', title: 'HID Outreach', desc: 'Tools to run medical outreaches, community health programs, and population health initiatives.' },
+    { icon: 'emr', title: 'HID Migrate', desc: 'Digitize physical folders with scanning, OCR, AI-assisted extraction, human validation, and patient matching.' },
+    { icon: 'identity', title: 'HID API', desc: 'Connect existing EMRs, laboratory systems, pharmacies, HMOs, and external health applications.' },
   ]
 
   const operationsScreens: Array<{ src: string; tag: string; title: string; desc: string; flip: boolean }> = [
@@ -473,10 +475,11 @@ export default function Landing() {
   const stackedGridColumns = isNarrow ? '1fr' : 'repeat(auto-fit, minmax(260px, 1fr))'
 
   const navLinks = [
-    { label: 'Why HID', href: '#why-hid' },
-    { label: 'Ecosystem', href: '#ecosystem' },
-    { label: 'How it Works', href: '#how-it-works' },
-    { label: 'Security', href: '#security' },
+    { label: 'Products', href: '/products' },
+    { label: 'Solutions', href: '/solutions' },
+    { label: 'Developers', href: '/developers' },
+    { label: 'Pricing', href: '/pricing' },
+    { label: 'Company', href: '#company' },
   ]
 
   useEffect(() => {
@@ -551,6 +554,7 @@ export default function Landing() {
             >
               Hospital / Provider Access
             </Cta>
+            <Cta variant="primary" size="sm" href={DEMO_HREF}>Book a Demo</Cta>
           </div>
         )}
 
@@ -635,10 +639,10 @@ export default function Landing() {
             Connected Healthcare Infrastructure
           </span>
           <h1 style={{ fontSize: isNarrow ? 30 : 36, fontWeight: 800, lineHeight: 1.15, letterSpacing: isNarrow ? 0 : '-0.8px', marginBottom: 14 }}>
-            One Patient. One ID.<br /><span style={{ color: '#1a6fd4' }}>Better Healthcare Everywhere.</span>
+            One Health Identity.<br /><span style={{ color: '#1a6fd4' }}>Connected Care. Accessible Records.</span>
           </h1>
           <p style={{ fontSize: 14, color: '#6b7280', lineHeight: 1.7, marginBottom: 28, maxWidth: 420, margin: '0 auto 28px' }}>
-            HID gives every patient a secure health identity, and connects the hospitals, laboratories, pharmacies, and outreach programs that care for them. One record, accessible across the systems that matter, anywhere care happens.
+            HID provides the digital infrastructure healthcare organizations need to manage care, digitize legacy records, connect operations, and build a more connected patient journey.
           </p>
           <div style={{ display: 'grid', gridTemplateColumns: isNarrow ? '1fr' : 'repeat(auto-fit, minmax(200px, 1fr))', gap: 12, marginTop: 18 }}>
             <Cta
@@ -678,6 +682,30 @@ export default function Landing() {
           </div>
         </div>
       </div>
+
+      <section style={{ padding: responsiveSectionPadding, background: '#f8fbff' }}>
+        <div style={{ maxWidth: 960, margin: '0 auto' }}>
+          <div style={{ textAlign: 'center', marginBottom: 34 }}>
+            <div style={{ color: '#1a6fd4', fontSize: 12, fontWeight: 800, textTransform: 'uppercase', letterSpacing: '.08em' }}>One connected ecosystem</div>
+            <h2 style={{ fontSize: isNarrow ? 25 : 34, fontWeight: 800, letterSpacing: '-.04em', margin: '10px 0' }}>One ecosystem. Built for healthcare.</h2>
+            <p style={{ fontSize: 14, color: '#6b7280', lineHeight: 1.7, maxWidth: 680, margin: '0 auto' }}>Use HID as a complete hospital operating environment, activate individual standalone products, or connect the healthcare software you already use.</p>
+          </div>
+          <div style={{ display: 'grid', gridTemplateColumns: stackedGridColumns, gap: 14 }}>
+            {[
+              ['HID EMR Core', 'The modular core subscription for hospital clinical and operational workflows.', '/products/emr'],
+              ['Add only what you need', 'Laboratory, Pharmacy, Migrate, HMO & Claims, and Analytics can extend HID EMR.', '/configure-emr'],
+              ['Standalone or connected', 'Laboratories, pharmacies, outreach teams, migration projects, and existing systems can join independently.', '/products'],
+            ].map(([title, description, href]) => <a key={title} href={href} style={{ background: '#fff', border: '1px solid #e1e8f0', borderRadius: 16, padding: 22, color: '#111827', textDecoration: 'none', boxShadow: '0 8px 24px rgba(15,23,42,.04)' }}><h3 style={{ margin: 0 }}>{title}</h3><p style={{ color: '#6b7280', fontSize: 14, lineHeight: 1.6 }}>{description}</p><span style={{ color: '#1a6fd4', fontWeight: 700, fontSize: 13 }}>Explore →</span></a>)}
+          </div>
+        </div>
+      </section>
+
+      <section style={{ padding: responsiveSectionPadding, background: '#0f2742', color: '#fff' }}>
+        <div style={{ maxWidth: 960, margin: '0 auto', display: 'grid', gridTemplateColumns: isNarrow ? '1fr' : 'minmax(0,1fr) minmax(300px,.8fr)', gap: 36, alignItems: 'center' }}>
+          <div><div style={{ color: '#82b9f5', fontSize: 12, fontWeight: 800, textTransform: 'uppercase', letterSpacing: '.08em' }}>HID Migrate</div><h2 style={{ fontSize: isNarrow ? 25 : 36, lineHeight: 1.15, letterSpacing: '-.04em' }}>Your old records don&apos;t have to stay on paper.</h2><p style={{ color: '#c8d6e6', lineHeight: 1.7 }}>Move years of patient records into a structured digital healthcare system without starting from zero.</p><a href="/products/migrate" style={{ display: 'inline-flex', background: '#fff', color: '#1a6fd4', padding: '11px 17px', borderRadius: 10, fontWeight: 700, textDecoration: 'none' }}>Digitize Your Records</a></div>
+          <div style={{ background: 'rgba(255,255,255,.08)', border: '1px solid rgba(255,255,255,.12)', borderRadius: 18, padding: 24, lineHeight: 2, fontFamily: 'JetBrains Mono, monospace', fontSize: 13 }}>Paper Folder<br/>↓ Scan<br/>↓ OCR & AI Extraction<br/>↓ Human Validation<br/>↓ Patient Matching<br/>↓ Digital Patient Folder</div>
+        </div>
+      </section>
 
       <section id="why-hid" style={{ padding: responsiveSectionPadding, background: '#f8f9fb' }}>
         <div style={{ maxWidth: 900, margin: '0 auto' }}>

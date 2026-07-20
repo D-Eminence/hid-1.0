@@ -83,6 +83,17 @@ function sidebarIcon(id: string, active: boolean) {
           <path d="M11 11V7" {...common} />
         </svg>
       )
+    case 'billing':
+    case 'billing-overview':
+    case 'subscriptions':
+    case 'invoices':
+    case 'payments':
+      return (
+        <svg width="14" height="14" viewBox="0 0 16 16" fill="none">
+          <rect x="2.5" y="3.5" width="11" height="9" rx="1.7" {...common} />
+          <path d="M2.8 6.5h10.4M5 10h2.4" {...common} />
+        </svg>
+      )
     case 'ai-processing':
     case 'migrate-overview':
     case 'routing':

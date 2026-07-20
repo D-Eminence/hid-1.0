@@ -76,6 +76,10 @@ export const OutreachJoinPage = lazyWithPreload(() => import('../pages/OutreachJ
 export const OutreachLoginPage = lazyWithPreload(() => import('../pages/OutreachLogin'))
 export const OutreachVerifyPage = lazyWithPreload(() => import('../pages/OutreachVerify'))
 export const MigratePage = lazyWithPreload(() => import('../features/migrate/ui/MigratePage'))
+export const CommercialProductsPage = lazyWithPreload(() => import('../pages/CommercialProducts'))
+export const EmrConfiguratorPage = lazyWithPreload(() => import('../pages/EmrConfigurator'))
+export const PricingPage = lazyWithPreload(() => import('../pages/Pricing'))
+export const AdminBillingPage = lazyWithPreload(() => import('../pages/admin/AdminBilling'))
 
 const routeLoaders = {
   landing: LandingPage.preload,
@@ -100,6 +104,10 @@ const routeLoaders = {
   outreachLogin: OutreachLoginPage.preload,
   outreachVerify: OutreachVerifyPage.preload,
   migrate: MigratePage.preload,
+  commercialProducts: CommercialProductsPage.preload,
+  emrConfigurator: EmrConfiguratorPage.preload,
+  pricing: PricingPage.preload,
+  adminBilling: AdminBillingPage.preload,
 }
 
 export type RoutePreloadKey = keyof typeof routeLoaders
@@ -159,6 +167,10 @@ export function getRoutePreloadKeys(path: string): RoutePreloadKey[] {
   if (path.startsWith('/patient/notifications')) return ['patientProfile', 'patientRecords', 'patientHistory', 'patientBioData']
   if (path === '/eminence' || path.startsWith('/eminence/login')) return ['adminDashboard']
   if (path.startsWith('/eminence/ai-processing')) return ['adminAiProcessing']
+  if (path.startsWith('/eminence/billing')) return ['adminBilling']
+  if (path.startsWith('/configure-emr')) return ['emrConfigurator']
+  if (path.startsWith('/pricing')) return ['pricing']
+  if (path.startsWith('/products') || path.startsWith('/solutions') || path.startsWith('/developers')) return ['commercialProducts']
   if (path.startsWith('/eminence/')) return ['adminLogin']
   if (path === '/outreach/login') return ['outreachLogin', 'outreachSignup', 'outreachJoin']
   if (path === '/outreach/signup') return ['outreachSignup', 'outreachLogin', 'outreachJoin']

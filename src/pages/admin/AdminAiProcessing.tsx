@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react'
 import { AdminLayout, type AdminSidebarSection } from '../../components/AdminLayout'
 import { Badge, Button, EmptyState, Input, Modal, PageLoader, Select, showToast } from '../../components/ui'
-import { ADMIN_LOGIN_PATH, ADMIN_OVERVIEW_PATH } from '../../lib/adminRoutes'
+import { ADMIN_BILLING_PATH, ADMIN_LOGIN_PATH, ADMIN_OVERVIEW_PATH } from '../../lib/adminRoutes'
 import { signOutAndClearSessions } from '../../lib/auth'
 import { getSafeUser } from '../../lib/supabase'
 import { fetchAdminAiProcessing, runAdminAiProcessingAction } from '../../services/adminDashboard'
@@ -14,6 +14,7 @@ import type {
 
 const sections: AdminSidebarSection[] = [
   { id: 'dashboard', label: 'Dashboard', href: ADMIN_OVERVIEW_PATH },
+  { id: 'billing', label: 'Billing', href: ADMIN_BILLING_PATH },
   { id: 'migrate-overview', label: 'HID Migrate' },
   { id: 'providers', label: 'Providers' },
   { id: 'models', label: 'Models' },
