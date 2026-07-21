@@ -25,6 +25,7 @@ const OUTREACH_POLICY_FIELDS = [
 // The primary administrator is the only account permitted to manage other
 // platform-admin accounts. Keep this server-side so UI changes cannot bypass it.
 const PRIMARY_PLATFORM_ADMIN_EMAIL = 'eminence742@gmail.com'
+const MEDICAL_RECORD_FILES_BUCKET = 'medical-record-files'
 
 type OutreachPolicyField = typeof OUTREACH_POLICY_FIELDS[number]
 
@@ -98,6 +99,37 @@ function requirePrimaryPlatformAdmin(email: string | null | undefined) {
 
 function delay(ms: number) {
   return new Promise(resolve => globalThis.setTimeout(resolve, ms))
+}
+
+function chunk<T>(items: T[], size: number) {
+  const chunks: T[][] = []
+  for (let index = 0; index < items.length; index += size) {
+    chunks.push(items.slice(index, index + size))
+  }
+  return chunks
+}
+
+async function removeProfileMedicalRecordFiles(
+  adminClient: ReturnType<typeof createAdminClient>,
+  profileId: string,
+) {
+  const filesResult = await adminClient
+    .from('hid_medical_record_files')
+    .select('storage_path')
+    .eq('uploaded_by_user_profile_id', profileId)
+
+  if (filesResult.error) throw new HttpError(400, filesResult.error.message, filesResult.error)
+
+  const storagePaths = [...new Set(
+    (filesResult.data ?? [])
+      .map(file => file.storage_path)
+      .filter((path): path is string => Boolean(path)),
+  )]
+
+  for (const paths of chunk(storagePaths, 100)) {
+    const { error } = await adminClient.storage.from(MEDICAL_RECORD_FILES_BUCKET).remove(paths)
+    if (error) throw new HttpError(400, error.message, error)
+  }
 }
 
 function normalizeRolePolicy(row: StaffRolePolicyRow) {
@@ -471,6 +503,18 @@ async function applyPlatformAdminAction(
   }
 
   if (action === 'delete_admin') {
+    await removeProfileMedicalRecordFiles(adminClient, target.id)
+
+    const { data, error } = await adminClient.rpc('hid_permanently_delete_account_by_auth_user_id', {
+      p_allow_platform_admin: true,
+      p_auth_user_id: targetAuthUserId,
+    })
+    if (error) throw new HttpError(400, error.message, error)
+    const permanentlyDeleted = (data as { deleted?: boolean } | null)?.deleted ?? false
+    if (!permanentlyDeleted) {
+      throw new HttpError(404, 'This platform admin account could not be permanently deleted right now.')
+    }
+
     await logAdminAuditEvent(adminClient, actor, {
       action: 'admin_permanently_delete_platform_admin',
       resourceId: target.id,
@@ -478,9 +522,6 @@ async function applyPlatformAdminAction(
       reason: 'Platform admin account permanently deleted by another HID admin.',
       metadata: { target_auth_user_id: targetAuthUserId },
     })
-
-    const authDelete = await adminClient.auth.admin.deleteUser(targetAuthUserId)
-    if (authDelete.error) throw new HttpError(400, authDelete.error.message, authDelete.error)
 
     return { admin: null, deletedAuthUserId: targetAuthUserId }
   }

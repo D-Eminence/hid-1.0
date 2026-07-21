@@ -32,8 +32,20 @@ function isSafariBrowser() {
 }
 
 function isStaleInstallPromptError(error: unknown) {
-  if (!error || typeof error !== 'object') return false
-  const text = JSON.stringify(error).toLowerCase()
+  if (!error) return false
+
+  // Browser install-prompt errors can carry circular Event objects. Reading the
+  // small public fields avoids recursively serializing browser internals.
+  const text = error instanceof Error
+    ? `${error.name} ${error.message}`.toLowerCase()
+    : typeof error === 'object'
+      ? [
+          'name' in error && typeof error.name === 'string' ? error.name : '',
+          'message' in error && typeof error.message === 'string' ? error.message : '',
+          'code' in error && typeof error.code === 'string' ? error.code : '',
+        ].join(' ').toLowerCase()
+      : String(error).toLowerCase()
+
   return (
     text.includes('object not found matching id') &&
     text.includes('methodname:update')

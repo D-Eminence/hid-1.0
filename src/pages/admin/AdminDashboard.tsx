@@ -840,6 +840,7 @@ export default function AdminDashboard() {
       close_patient_access: 'close this patient access',
       delete_account: 'delete this account',
       lock_profile: 'lock this profile',
+      permanently_delete_account: 'permanently delete this account and its stored data',
       restore_account: 'restore this account',
       restore_staff_access: 'restore this hospital access',
       restrict_staff_access: 'restrict this hospital access',
@@ -852,7 +853,12 @@ export default function AdminDashboard() {
     setActioning(action)
     try {
       const result = await applyAdminUserAction(selectedDirectoryUser.id, action)
-      if (result.deleted) {
+      if (result.permanentlyDeleted) {
+        setDirectoryResults(current => current.filter(item => item.id !== result.targetAuthUserId))
+        setDeletedDirectoryResults(current => current.filter(item => item.id !== result.targetAuthUserId))
+        setSelectedDirectoryUserId(null)
+        showToast('Account permanently deleted successfully.', 'success')
+      } else if (result.deleted) {
         if (result.user) {
           const nextUser = result.user
           setDirectoryResults(current => current.map(item => item.id === nextUser.id ? nextUser : item))
@@ -1473,9 +1479,19 @@ export default function AdminDashboard() {
                         >
                           {selectedDirectoryUser.flags.deleted ? 'Restore Account' : 'Delete Account'}
                         </Button>
+                        {selectedDirectoryUser.flags.deleted && (
+                          <Button
+                            variant="danger"
+                            loading={actioning === 'permanently_delete_account'}
+                            onClick={() => void handleDirectoryAction('permanently_delete_account')}
+                            disabled={!selectedDirectoryUser.flags.permanentlyDeletable}
+                          >
+                            Permanently Delete
+                          </Button>
+                        )}
                       </div>
                       <div style={{ fontSize: 11, color: 'var(--admin-muted)', marginTop: 10, lineHeight: 1.6 }}>
-                        Locking blocks the profile immediately. Restricting staff access disables hospital access and revokes active grants. Closing patient access revokes current provider access for that patient. Deleting keeps the account for admin recovery while removing user access.
+                        Locking blocks the profile immediately. Restricting staff access disables hospital access and revokes active grants. Deleting keeps the account for recovery while removing user access. Permanently deleting a deleted account removes its account data and cannot be undone.
                       </div>
                     </div>
                   </div>

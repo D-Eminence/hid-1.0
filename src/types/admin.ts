@@ -160,6 +160,7 @@ export type AdminUserManagementAction =
   | 'close_patient_access'
   | 'restore_account'
   | 'delete_account'
+  | 'permanently_delete_account'
 
 export interface AdminManagedUserProfile {
   id: string
@@ -238,6 +239,7 @@ export interface AdminManagedUserFlags {
   deleted: boolean
   locked: boolean
   deletable: boolean
+  permanentlyDeletable: boolean
   lockable: boolean
   patientAccessOpen: boolean | null
   restrictable: boolean
@@ -287,6 +289,7 @@ export interface AdminUsersExportStartResponse {
 
 export interface AdminUserActionResponse {
   deleted: boolean
+  permanentlyDeleted: boolean
   targetAuthUserId: string
   user: AdminManagedUser | null
 }

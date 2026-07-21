@@ -172,6 +172,7 @@ function getAdminEndpointFallbackMessage(path: string, init: RequestInit, status
       if (status === 404) return 'That platform admin account could not be found.'
       if (status === 408) return 'The platform admin access request took too long. Please try again.'
       if (status === 429) return 'Platform admin access changes are being rate-limited right now. Please wait a moment and try again.'
+      if (status === 400 && action === 'delete_admin') return 'The platform admin could not be permanently deleted right now. Please try again shortly.'
       if (status >= 500) return 'The platform admin access change could not be completed right now. Please try again shortly.'
       return 'The platform admin access change could not be completed right now. Refresh and try again.'
     }

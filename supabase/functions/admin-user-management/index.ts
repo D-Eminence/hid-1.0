@@ -4,6 +4,7 @@ import { asTrimmedString } from '../_shared/validation.ts'
 
 const USER_LIST_PAGE_SIZE = 200
 const LOCK_BAN_DURATION = '876000h'
+const MEDICAL_RECORD_FILES_BUCKET = 'medical-record-files'
 
 type AdminUserManagementAction =
   | 'lock_profile'
@@ -13,10 +14,51 @@ type AdminUserManagementAction =
   | 'close_patient_access'
   | 'restore_account'
   | 'delete_account'
+  | 'permanently_delete_account'
 
 type SearchPayload = {
   action?: AdminUserManagementAction
   targetAuthUserId?: string
+}
+
+function chunk<T>(items: T[], size: number) {
+  const chunks: T[][] = []
+  for (let index = 0; index < items.length; index += size) {
+    chunks.push(items.slice(index, index + size))
+  }
+  return chunks
+}
+
+async function removeAccountMedicalRecordFiles(
+  adminClient: ReturnType<typeof createAdminClient>,
+  profileId: string,
+  patientId: string | null,
+) {
+  const [profileFilesResult, patientFilesResult] = await Promise.all([
+    adminClient
+      .from('hid_medical_record_files')
+      .select('storage_path')
+      .eq('uploaded_by_user_profile_id', profileId),
+    patientId
+      ? adminClient
+          .from('hid_medical_record_files')
+          .select('storage_path')
+          .eq('patient_id', patientId)
+      : Promise.resolve({ data: [], error: null }),
+  ])
+
+  if (profileFilesResult.error) throw new HttpError(400, profileFilesResult.error.message, profileFilesResult.error)
+  if (patientFilesResult.error) throw new HttpError(400, patientFilesResult.error.message, patientFilesResult.error)
+
+  const storagePaths = [...new Set([
+    ...(profileFilesResult.data ?? []),
+    ...(patientFilesResult.data ?? []),
+  ].map(file => file.storage_path).filter((path): path is string => Boolean(path)))]
+
+  for (const paths of chunk(storagePaths, 100)) {
+    const { error } = await adminClient.storage.from(MEDICAL_RECORD_FILES_BUCKET).remove(paths)
+    if (error) throw new HttpError(400, error.message, error)
+  }
 }
 
 type ProfileRow = {
@@ -506,6 +548,7 @@ async function loadManagedUsersByAuthIds(
         deleted,
         locked: deleted ? false : profile ? !profile.active : false,
         deletable: !deleted,
+        permanentlyDeletable: deleted,
         lockable: !deleted,
         patientAccessOpen: patient ? activeGrantCount > 0 || pendingRequestCount > 0 : null,
         restrictable: Boolean(staff) && !deleted,
@@ -674,11 +717,11 @@ async function performUserAction(
     throw new HttpError(403, 'Platform admin accounts must be managed through the primary HID administrator controls.')
   }
 
-  if (targetAuthUserId === actor.userId && ['lock_profile', 'unlock_profile', 'delete_account', 'restore_account'].includes(action)) {
+  if (targetAuthUserId === actor.userId && ['lock_profile', 'unlock_profile', 'delete_account', 'restore_account', 'permanently_delete_account'].includes(action)) {
     throw new HttpError(403, 'You cannot modify your own admin account from the dashboard.')
   }
 
-  if (targetDeleted && !['restore_account', 'delete_account'].includes(action)) {
+  if (targetDeleted && !['restore_account', 'delete_account', 'permanently_delete_account'].includes(action)) {
     throw new HttpError(409, 'This account is unavailable right now.')
   }
 
@@ -1063,8 +1106,35 @@ async function performUserAction(
     const updated = await loadManagedUserByAuthId(adminClient, targetAuthUserId)
     return {
       deleted: true,
+      permanentlyDeleted: false,
       targetAuthUserId,
       user: updated,
+    }
+  }
+
+  if (action === 'permanently_delete_account') {
+    if (!targetDeleted) {
+      throw new HttpError(409, 'Delete the account first before permanently removing it.')
+    }
+
+    await removeAccountMedicalRecordFiles(adminClient, target.profile.id, target.patient?.id ?? null)
+
+    const { data, error } = await adminClient.rpc('hid_permanently_delete_account_by_auth_user_id', {
+      p_allow_platform_admin: false,
+      p_auth_user_id: targetAuthUserId,
+    })
+
+    if (error) throw new HttpError(400, error.message, error)
+    const permanentlyDeleted = (data as { deleted?: boolean } | null)?.deleted ?? false
+    if (!permanentlyDeleted) {
+      throw new HttpError(404, 'This account could not be permanently deleted right now.')
+    }
+
+    return {
+      deleted: false,
+      permanentlyDeleted: true,
+      targetAuthUserId,
+      user: null,
     }
   }
 
@@ -1106,6 +1176,7 @@ async function performUserAction(
   const updated = await loadManagedUserByAuthId(adminClient, targetAuthUserId)
   return {
     deleted: false,
+    permanentlyDeleted: false,
     targetAuthUserId,
     user: updated,
   }
