@@ -278,7 +278,7 @@ export function PortalShell({
 
   return (
     <div style={{ minHeight: '100vh', background: '#fff' }}>
-      <div style={{ maxWidth: 1360, margin: '0 auto', padding: 'clamp(20px, 5vw, 36px) clamp(14px, 3vw, 46px)' }}>
+      <div className="hid-portal-shell" style={{ maxWidth: 1360, margin: '0 auto', padding: 'clamp(20px, 5vw, 36px) clamp(14px, 3vw, 46px)' }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 16, flexWrap: 'wrap' }}>
           <div
             style={{ cursor: 'pointer' }}

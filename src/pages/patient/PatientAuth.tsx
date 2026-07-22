@@ -513,7 +513,7 @@ export default function PatientAuth() {
 
   const introBlock = (
     <div style={{ textAlign: 'center', marginBottom: 18 }}>
-      <div style={{ fontSize: 30, fontWeight: 700, color: '#111827', lineHeight: 1.15 }}>Create your Health ID</div>
+      <div className="hid-auth-title" style={{ fontSize: 30, fontWeight: 700, color: '#111827', lineHeight: 1.15 }}>Create your Health ID</div>
       <p style={{ color: '#7d8797', marginTop: 8, fontSize: 12, lineHeight: 1.6 }}>
         Your health data. Safely stored. Instantly accessible. Always in your control.
       </p>
@@ -525,7 +525,7 @@ export default function PatientAuth() {
       <AuthShell mode="patient">
         {introBlock}
         <SegmentedTabs active="signup" onChange={next => setStep(next)} />
-        <div style={{ display: 'grid', gridTemplateColumns: 'minmax(130px, .8fr) minmax(130px, .8fr) minmax(240px, 1.5fr)', gap: 12, marginTop: 18 }}>
+        <div className="hid-responsive-grid" style={{ display: 'grid', gridTemplateColumns: 'minmax(0, .8fr) minmax(0, .8fr) minmax(0, 1.5fr)', gap: 12, marginTop: 18 }}>
           <Input placeholder="First Name" value={signup.firstName} onChange={e => setSignup(v => ({ ...v, firstName: e.target.value }))} />
           <Input placeholder="Last Name" value={signup.lastName} onChange={e => setSignup(v => ({ ...v, lastName: e.target.value }))} />
           <Input placeholder="Email Address" type="email" value={signup.email} onChange={e => setSignup(v => ({ ...v, email: e.target.value }))} />
@@ -555,7 +555,7 @@ export default function PatientAuth() {
     return (
       <AuthShell mode="patient">
         <div style={{ flex: 1, display: 'flex', flexDirection: 'column', justifyContent: 'center', textAlign: 'center' }}>
-          <div style={{ fontSize: 30, fontWeight: 700, color: '#111827' }}>Create a secure password</div>
+          <div className="hid-auth-title" style={{ fontSize: 30, fontWeight: 700, color: '#111827' }}>Create a secure password</div>
           <p style={{ color: '#7d8797', marginTop: 10, fontSize: 12, lineHeight: 1.6 }}>
             Use a strong password to protect your Health ID account.
           </p>

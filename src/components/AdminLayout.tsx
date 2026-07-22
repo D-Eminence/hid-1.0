@@ -333,7 +333,7 @@ export function AdminLayout({
                   </svg>
                 </button>
               )}
-              <div style={{ position: 'relative', minWidth: 220, flex: '1 1 320px', maxWidth: 360 }}>
+              <div className="hid-admin-search" style={{ position: 'relative', minWidth: 220, flex: '1 1 320px', maxWidth: 360 }}>
                 <input
                   value={searchQuery}
                   onChange={event => onSearchChange(event.target.value)}

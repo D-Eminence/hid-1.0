@@ -676,7 +676,7 @@ export default function DoctorAuth() {
           </>
         ) : (
           <>
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(210px, 1fr))', gap: 12, marginTop: 22 }}>
+            <div className="hid-responsive-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(210px, 100%), 1fr))', gap: 12, marginTop: 22 }}>
               <Input placeholder="Hospital Name" value={signupForm.hospitalName} onChange={e => setSignupForm(v => ({ ...v, hospitalName: e.target.value }))} />
               <Input placeholder="Gmail address" type="email" value={signupForm.email} onChange={e => setSignupForm(v => ({ ...v, email: e.target.value }))} />
               <Select
