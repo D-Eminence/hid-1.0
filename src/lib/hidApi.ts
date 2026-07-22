@@ -482,6 +482,23 @@ function formatLockedAccountMessage(message: string) {
   return null
 }
 
+function formatTechnicalApiMessage(message: string, status: number) {
+  const lower = message.toLowerCase()
+  if (lower.includes('foreign key') || lower.includes('violates') && lower.includes('constraint')) {
+    return 'This action cannot be completed because other records still depend on this information.'
+  }
+  if (lower.includes('platform admin') && lower.includes('delete')) {
+    return 'The platform admin could not be permanently deleted right now. Please try again shortly.'
+  }
+  if (lower.includes('failed to fetch') || lower.includes('network')) {
+    return 'We could not reach the service right now. Check your connection and try again.'
+  }
+  if (status >= 500 && (lower.includes('supabase') || lower.includes('postgres') || lower.includes('database'))) {
+    return 'The service is temporarily unavailable. Please try again shortly.'
+  }
+  return null
+}
+
 async function getAccessToken() {
   const session = await getSafeSession()
   return session?.access_token ?? null
@@ -575,10 +592,13 @@ async function edgeRequest<T>(functionName: string, options: EdgeRequestOptions 
           ? parsedPayload.error
           : fallbackMessage || response.statusText || ''
       const normalizedAccountStateMessage = formatDeletedAccountMessage(rawResponseMessage) ?? formatLockedAccountMessage(rawResponseMessage)
+      const technicalMessage = formatTechnicalApiMessage(rawResponseMessage, response.status)
       const responseMessage = isBannedAuthMessage(rawResponseMessage)
         ? BANNED_ACCOUNT_MESSAGE
         : normalizedAccountStateMessage
           ? normalizedAccountStateMessage
+          : technicalMessage
+            ? technicalMessage
           : rawResponseMessage && !isLowSignalErrorMessage(rawResponseMessage)
             ? rawResponseMessage
             : fallbackErrorMessageForStatus(response.status)
