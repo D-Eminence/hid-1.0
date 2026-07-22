@@ -151,6 +151,21 @@ async function removeProfileMedicalRecordFiles(
   }
 }
 
+function permanentDeleteErrorMessage(error: unknown) {
+  const message = error instanceof Error ? error.message.toLowerCase() : ''
+  if (
+    message.includes('hid_commercial_products') ||
+    message.includes('hid_platform_billing_settings') ||
+    message.includes('updated_by')
+  ) {
+    return 'This platform admin is still referenced by billing configuration. The billing history is retained, but its editor reference could not be cleared. Please retry after the latest platform billing migration is applied.'
+  }
+  if (message.includes('foreign key') || message.includes('violates')) {
+    return 'This platform admin still has dependent platform data. The account was not deleted; resolve the dependency and retry.'
+  }
+  return 'The platform admin could not be permanently deleted because dependent platform data could not be detached. Please retry or contact support.'
+}
+
 function normalizeRolePolicy(row: StaffRolePolicyRow) {
   return {
     role: row.role,
@@ -528,7 +543,7 @@ async function applyPlatformAdminAction(
       p_allow_platform_admin: true,
       p_auth_user_id: targetAuthUserId,
     })
-    if (error) throw new HttpError(400, error.message, error)
+    if (error) throw new HttpError(409, permanentDeleteErrorMessage(error), error)
     const permanentlyDeleted = (data as { deleted?: boolean } | null)?.deleted ?? false
     if (!permanentlyDeleted) {
       throw new HttpError(404, 'This platform admin account could not be permanently deleted right now.')

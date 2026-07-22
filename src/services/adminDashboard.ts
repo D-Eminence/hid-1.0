@@ -118,6 +118,12 @@ function sanitizeAdminDashboardMessage(raw: string, status: number, fallbackMess
   if (lower.includes('deleted platform admin accounts cannot be restored')) {
     return 'Deleted platform admin accounts cannot be restored from the dashboard.'
   }
+  if (lower.includes('still referenced by billing configuration')) {
+    return 'This platform admin is still linked to billing configuration. Billing history is retained; apply the latest platform billing migration, then retry.'
+  }
+  if (lower.includes('dependent platform data')) {
+    return 'This platform admin still has dependent platform data. The account was not deleted; resolve the dependency and retry.'
+  }
   if (lower.includes('no users matched the selected export criteria')) {
     return 'No users matched the selected export criteria.'
   }
@@ -172,6 +178,7 @@ function getAdminEndpointFallbackMessage(path: string, init: RequestInit, status
       if (status === 404) return 'That platform admin account could not be found.'
       if (status === 408) return 'The platform admin access request took too long. Please try again.'
       if (status === 429) return 'Platform admin access changes are being rate-limited right now. Please wait a moment and try again.'
+      if (status === 409 && action === 'delete_admin') return 'The platform admin could not be permanently deleted because dependent platform data could not be detached. Please retry or contact support.'
       if (status === 400 && action === 'delete_admin') return 'The platform admin could not be permanently deleted right now. Please try again shortly.'
       if (status >= 500) return 'The platform admin access change could not be completed right now. Please try again shortly.'
       return 'The platform admin access change could not be completed right now. Refresh and try again.'
