@@ -8,8 +8,8 @@
     "preview": "vite preview",
     "perf:load": "node ./scripts/load-test.mjs",
     "security:audit": "npm audit --audit-level=high",
-    "security:deps": "npm outdated"
-    ,"verify:migrate": "node ./scripts/verify-migrate-contracts.mjs"
+    "security:deps": "npm outdated",
+    "verify:migrate": "node ./scripts/verify-migrate-contracts.mjs"
   },
   "overrides": {
     "dompurify": "^3.4.11",
@@ -24,7 +24,8 @@
     "posthog-node": "^5.38.0",
     "react": "^18.2.0",
     "react-dom": "^18.2.0",
-    "react-router-dom": "^6.21.0"
+    "react-router-dom": "^6.21.0",
+    "xlsx": "^0.18.5"
   },
   "devDependencies": {
     "@types/react": "^18.2.0",

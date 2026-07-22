@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { AuthLegalConsent } from '../../components/AuthLegalConsent'
 import { AuthShell } from '../../components/AuthShell'
+import { FacilityPicker } from '../../components/FacilityPicker'
 import { OtpInputs } from '../../components/OtpInputs'
 import { TurnstileWidget } from '../../components/TurnstileWidget'
 import { Button, Input, Select, showToast } from '../../components/ui'
@@ -15,6 +16,7 @@ import {
   startPatientPasswordReset,
   verifyPatientSignupOtp,
   verifyPatientPasswordResetCode,
+  signInWithGoogle,
 } from '../../lib/hidApi'
 import { trackEvent } from '../../lib/observabilityBridge'
 import { hasStoredSupabaseAuthSession } from '../../lib/supabase'
@@ -88,6 +90,11 @@ function looksLikeEmail(value: string) {
   return /\S+@\S+\.\S+/.test(value.trim())
 }
 
+function looksLikePhone(value: string) {
+  const digits = value.replace(/\D/g, '')
+  return digits.length >= 7 && digits.length <= 15
+}
+
 export default function PatientAuth() {
   const navigate = useNavigate()
   const existingSession = useMemo(() => getPatientSession(), [])
@@ -125,7 +132,7 @@ export default function PatientAuth() {
     runWithCaptcha,
   } = useCaptchaGate()
 
-  const canStartSignup = !!signup.firstName.trim() && !!signup.lastName.trim() && !!signup.email.trim() && !!signup.phone.trim() && !!signup.gender && signupAccepted
+  const canStartSignup = !!signup.firstName.trim() && !!signup.lastName.trim() && looksLikeEmail(signup.email) && looksLikePhone(signup.phone) && !!signup.gender && signupAccepted
   const canSignIn = !!signin.identifier.trim() && !!signin.password
   const canFinishSignup = signupAccepted && isStrongPassword(signup.password) && signup.password === signup.confirmPassword
   const canStartForgot = !!forgot.identifier.trim()
@@ -182,10 +189,14 @@ export default function PatientAuth() {
       return
     }
     if (!canStartSignup) {
-      showToast('Fill in first name, last name, email, phone number, and gender', 'error')
+      showToast('Enter a valid name, email, phone number, and gender', 'error')
       return
     }
     setStep('password')
+  }
+
+  async function continueWithGoogle() {
+    try { await signInWithGoogle('patient') } catch (error) { showToast(error instanceof Error ? error.message : 'Unable to continue with Google.', 'error') }
   }
 
   function finishSignup() {
@@ -478,14 +489,14 @@ export default function PatientAuth() {
       <AuthShell mode="patient">
         {introBlock}
         <SegmentedTabs active="signup" onChange={next => setStep(next)} />
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 12, marginTop: 18 }}>
+        <div style={{ display: 'grid', gridTemplateColumns: 'minmax(130px, .8fr) minmax(130px, .8fr) minmax(240px, 1.5fr)', gap: 12, marginTop: 18 }}>
           <Input placeholder="First Name" value={signup.firstName} onChange={e => setSignup(v => ({ ...v, firstName: e.target.value }))} />
           <Input placeholder="Last Name" value={signup.lastName} onChange={e => setSignup(v => ({ ...v, lastName: e.target.value }))} />
           <Input placeholder="Email Address" type="email" value={signup.email} onChange={e => setSignup(v => ({ ...v, email: e.target.value }))} />
         </div>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 12, marginTop: 12 }}>
-          <Input placeholder="Phone Number" value={signup.phone} onChange={e => setSignup(v => ({ ...v, phone: e.target.value }))} />
-          <Input placeholder="Current Hospital" value={signup.hospitalCurrentlyUsing} onChange={e => setSignup(v => ({ ...v, hospitalCurrentlyUsing: e.target.value }))} />
+          <div style={{ maxWidth: 220 }}><Input placeholder="Phone Number" type="tel" inputMode="numeric" maxLength={15} value={signup.phone} onChange={e => setSignup(v => ({ ...v, phone: e.target.value.replace(/[^0-9+]/g, '') }))} /></div>
+          <FacilityPicker value={signup.hospitalCurrentlyUsing} onChange={value => setSignup(v => ({ ...v, hospitalCurrentlyUsing: value }))} />
           <Select
             placeholder="Gender"
             value={signup.gender}
@@ -499,6 +510,7 @@ export default function PatientAuth() {
         </div>
         <AuthLegalConsent checked={signupAccepted} onChange={setSignupAccepted} />
         <Button disabled={!canStartSignup} onClick={goToSignUpPassword} style={actionButtonStyle(canStartSignup)}>Continue</Button>
+        <button type="button" onClick={() => void continueWithGoogle()} style={{ marginTop: 12, minHeight: 42, border: '1px solid #d7dde6', borderRadius: 8, background: '#fff', color: '#374151', fontWeight: 600 }}>Continue with Google</button>
       </AuthShell>
     )
   }
@@ -604,6 +616,7 @@ export default function PatientAuth() {
           visible={captchaVisible}
         />
         <Button loading={loading} onClick={signIn} style={actionButtonStyle(canSignIn)}>Sign in</Button>
+        <button type="button" onClick={() => void continueWithGoogle()} style={{ marginTop: 12, minHeight: 42, border: '1px solid #d7dde6', borderRadius: 8, background: '#fff', color: '#374151', fontWeight: 600 }}>Sign in with Google</button>
         <p style={{ marginTop: 14, color: '#7d8797', fontSize: 11, lineHeight: 1.7 }}>
           Sign in with your HID code or your email address together with your password.
         </p>
