@@ -1414,7 +1414,9 @@ export async function fetchMyPatient() {
   }
 
   return loadCachedView(`patient:${userId}`, async () => {
-    const bundle = await ensurePatientProfileRegistered()
+    // Loading an authenticated user must never create an app profile. OAuth
+    // users complete onboarding explicitly through completeGooglePatientSignup.
+    const bundle = await fetchPatientProfileBundle()
     return toLegacyPatient(bundle.patient)
   })
 }
