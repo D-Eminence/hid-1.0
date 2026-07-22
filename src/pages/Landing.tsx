@@ -680,7 +680,8 @@ export default function Landing() {
             Connected Healthcare Infrastructure
           </span>
           <h1 style={{ fontSize: isNarrow ? 30 : 36, fontWeight: 800, lineHeight: 1.15, letterSpacing: isNarrow ? 0 : '-0.8px', marginBottom: 14 }}>
-            Health Identity Directory<br /><span style={{ color: '#1a6fd4' }}>One Identity. Connected Records. Better Care.</span>
+            <span style={{ display: 'block' }}>Health Identity Directory</span>
+            <span style={{ display: 'block', color: '#1a6fd4' }}>One Identity. Connected Records. Better Care.</span>
           </h1>
           <p style={{ fontSize: 14, color: '#6b7280', lineHeight: 1.7, marginBottom: 28, maxWidth: 420, margin: '0 auto 28px' }}>
             Health Identity Directory (HID) is building the digital infrastructure for connected healthcare by providing every patient with a secure, lifelong Health ID that enables seamless and secure access to medical records, empowering patients and helping healthcare providers deliver faster, safer, and more coordinated care.
