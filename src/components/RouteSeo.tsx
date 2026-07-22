@@ -19,7 +19,7 @@ function resolveRouteMeta(pathname: string): RouteMeta {
       canonical: `${SITE_ORIGIN}/`,
       description: DEFAULT_DESCRIPTION,
       robots: INDEX_ROBOTS,
-      title: 'HID | Health Identity Directory',
+      title: 'Health Identity Directory',
     }
   }
 
