@@ -1373,6 +1373,19 @@ export async function ensurePatientProfileRegistered(override?: PendingPatientSi
   return fetchPatientProfileBundleWithRetry()
 }
 
+export async function completeGooglePatientSignup(params: PendingPatientSignup) {
+  const normalizedPhone = normalizeOptionalText(normalizePhone(params.phone ?? ''))
+  return ensurePatientProfileRegistered({
+    email: normalizeOptionalText(params.email?.trim().toLowerCase()),
+    firstName: params.firstName.trim(),
+    lastName: params.lastName.trim(),
+    hospitalCurrentlyUsing: normalizeOptionalText(params.hospitalCurrentlyUsing),
+    gender: normalizeOptionalText(params.gender),
+    dob: normalizeOptionalText(params.dob),
+    phone: normalizedPhone,
+  })
+}
+
 export async function fetchMyPatient() {
   const session = await getSafeSession()
   const userId = session?.user.id

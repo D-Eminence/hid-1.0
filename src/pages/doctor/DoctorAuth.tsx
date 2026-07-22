@@ -23,7 +23,7 @@ import {
   signInWithGoogle,
 } from '../../lib/hidApi'
 import { trackEvent } from '../../lib/observabilityBridge'
-import { hasStoredSupabaseAuthSession, supabase } from '../../lib/supabase'
+import { supabase } from '../../lib/supabase'
 import { COUNTRIES, PASSWORD_REQUIREMENTS_TEXT, STATES_BY_COUNTRY, isStrongPassword, maskEmailAddress } from '../../lib/utils'
 
 type DoctorStep = 'login' | 'signup' | 'verify' | 'forgot' | 'reset' | 'mfa-enroll' | 'mfa-verify'
@@ -128,13 +128,9 @@ export default function DoctorAuth() {
 
   useEffect(() => {
     if (inRecoveryMode) return
-    if (!existingSession && !hasStoredSupabaseAuthSession()) {
-      clearStaffSession()
-      return
-    }
 
     let active = true
-    void (async () => {
+    const loadAuthenticatedStaff = async () => {
       try {
         const staffAccount = await fetchMyStaffAccount()
         if (!active || !staffAccount) return
@@ -143,9 +139,14 @@ export default function DoctorAuth() {
         if (!active) return
         clearStaffSession()
       }
-    })()
+    }
 
-    return () => { active = false }
+    void loadAuthenticatedStaff()
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(() => {
+      window.setTimeout(() => { void loadAuthenticatedStaff() }, 0)
+    })
+
+    return () => { active = false; subscription.unsubscribe() }
   }, [existingSession, inRecoveryMode, navigate])
 
   useEffect(() => {

@@ -10,6 +10,7 @@ import { useCaptchaGate } from '../../hooks/useCaptchaGate'
 import { clearPatientSession, getPatientSession, setPatientSession } from '../../lib/auth'
 import {
   completePatientPasswordReset,
+  completeGooglePatientSignup,
   fetchMyPatient,
   patientSignIn,
   patientSignUpWithPassword,
@@ -19,7 +20,7 @@ import {
   signInWithGoogle,
 } from '../../lib/hidApi'
 import { trackEvent } from '../../lib/observabilityBridge'
-import { hasStoredSupabaseAuthSession } from '../../lib/supabase'
+import { getSafeUser, supabase } from '../../lib/supabase'
 import { PASSWORD_REQUIREMENTS_TEXT, isStrongPassword, maskEmailAddress } from '../../lib/utils'
 
 type Step = 'signup' | 'password' | 'verify' | 'success' | 'signin' | 'forgot'
@@ -119,6 +120,7 @@ export default function PatientAuth() {
   const [forgot, setForgot] = useState<ForgotState>(() => emptyForgotState())
   const [forgotOtpVerified, setForgotOtpVerified] = useState(false)
   const [signupVerification, setSignupVerification] = useState({ challengeId: '', email: '', password: '', code: '' })
+  const [googleOnboarding, setGoogleOnboarding] = useState(false)
   const signupVerifyInFlightRef = useRef(false)
   const {
     captchaNotice,
@@ -142,15 +144,9 @@ export default function PatientAuth() {
   const forgotCaptchaReady = step === 'forgot' && !forgot.challengeId && canStartForgot
 
   useEffect(() => {
-    if (!existingSession && !hasStoredSupabaseAuthSession()) {
-      clearPatientSession()
-      setStep('signup')
-      return
-    }
-
     let active = true
 
-    void (async () => {
+    const loadAuthenticatedPatient = async () => {
       try {
         const patient = await fetchMyPatient()
         if (!active) return
@@ -159,15 +155,30 @@ export default function PatientAuth() {
           phone: patient.phone ?? '',
           fullName: patient.full_name,
         })
-        navigate('/patient/profile')
+        navigate('/patient/profile', { replace: true })
       } catch {
         if (!active) return
         clearPatientSession()
+        const user = await getSafeUser()
+        if (!active) return
+        const isGoogleUser = Boolean(user?.identities?.some(identity => identity.provider === 'google') || user?.app_metadata?.provider === 'google')
+        setGoogleOnboarding(isGoogleUser)
+        setSignup(current => ({
+          ...current,
+          email: user?.email ?? current.email,
+          firstName: current.firstName || user?.user_metadata?.full_name?.split(' ')[0] || user?.user_metadata?.name?.split(' ')[0] || '',
+          lastName: current.lastName || user?.user_metadata?.full_name?.split(' ').slice(1).join(' ') || user?.user_metadata?.name?.split(' ').slice(1).join(' ') || '',
+        }))
         setStep(existingSession ? 'signin' : 'signup')
       }
-    })()
+    }
 
-    return () => { active = false }
+    void loadAuthenticatedPatient()
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(() => {
+      window.setTimeout(() => { void loadAuthenticatedPatient() }, 0)
+    })
+
+    return () => { active = false; subscription.unsubscribe() }
   }, [existingSession, navigate])
 
   useEffect(() => {
@@ -192,7 +203,32 @@ export default function PatientAuth() {
       showToast('Enter a valid name, email, phone number, and gender', 'error')
       return
     }
+    if (googleOnboarding) {
+      void completeGoogleSignup()
+      return
+    }
     setStep('password')
+  }
+
+  async function completeGoogleSignup() {
+    setLoading(true)
+    try {
+      const profile = await completeGooglePatientSignup({
+        email: signup.email,
+        firstName: signup.firstName,
+        lastName: signup.lastName,
+        phone: signup.phone,
+        hospitalCurrentlyUsing: signup.hospitalCurrentlyUsing,
+        gender: signup.gender,
+      })
+      setPatientSession({ hidCode: profile.patient.hid_code, phone: profile.patient.phone_e164 ?? '', fullName: profile.patient.full_name })
+      trackEvent('patient_signup_completed')
+      navigate('/patient/profile', { replace: true })
+    } catch (error) {
+      showToast(error instanceof Error ? error.message : 'Unable to finish Google sign-up.', 'error')
+    } finally {
+      setLoading(false)
+    }
   }
 
   async function continueWithGoogle() {
@@ -250,7 +286,7 @@ export default function PatientAuth() {
         fullName: result.profile.patient.full_name,
       })
       showToast('Your HID is ready and has been sent to your email.', 'success')
-      setStep('success')
+      navigate('/patient/profile', { replace: true })
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Unable to create the account right now.'
       showToast(message, 'error')
@@ -313,7 +349,7 @@ export default function PatientAuth() {
         fullName: profile.patient.full_name,
       })
       showToast('Email verified. Your HID is ready and has been sent to your email.', 'success')
-      setStep('success')
+      navigate('/patient/profile', { replace: true })
     } catch (error) {
       const message = error instanceof Error ? error.message : 'The verification code is not correct.'
       showToast(message, 'error')
@@ -509,7 +545,7 @@ export default function PatientAuth() {
           />
         </div>
         <AuthLegalConsent checked={signupAccepted} onChange={setSignupAccepted} />
-        <Button disabled={!canStartSignup} onClick={goToSignUpPassword} style={actionButtonStyle(canStartSignup)}>Continue</Button>
+        <Button disabled={!canStartSignup || loading} onClick={goToSignUpPassword} style={actionButtonStyle(canStartSignup && !loading)}>{googleOnboarding ? 'Complete sign up' : 'Continue'}</Button>
         <button type="button" onClick={() => void continueWithGoogle()} style={{ marginTop: 12, minHeight: 42, border: '1px solid #d7dde6', borderRadius: 8, background: '#fff', color: '#374151', fontWeight: 600 }}>Continue with Google</button>
       </AuthShell>
     )
