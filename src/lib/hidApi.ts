@@ -655,7 +655,13 @@ export async function signInWithGoogle(path: 'patient' | 'hospital') {
       queryParams: { access_type: 'offline', prompt: 'select_account' },
     },
   })
-  if (error) throw new HidApiError(400, error.message, error)
+  if (error) {
+    const message = error.message.toLowerCase()
+    if (message.includes('unsupported provider') || message.includes('provider is not enabled')) {
+      throw new HidApiError(503, 'Google sign-in is not enabled for HID yet. Enable Google under Supabase Auth → Providers, then try again.', error)
+    }
+    throw new HidApiError(400, error.message, error)
+  }
 }
 
 async function getCurrentUserSecurityProfile() {
