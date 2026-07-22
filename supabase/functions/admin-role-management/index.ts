@@ -87,12 +87,31 @@ type Payload = {
   targetAuthUserId?: string | null
 }
 
-function canManagePlatformAdmins(email: string | null | undefined) {
+function isPrimaryPlatformAdminEmail(email: string | null | undefined) {
   return email?.trim().toLowerCase() === PRIMARY_PLATFORM_ADMIN_EMAIL
 }
 
-function requirePrimaryPlatformAdmin(email: string | null | undefined) {
-  if (!canManagePlatformAdmins(email)) {
+async function canManagePlatformAdmins(
+  adminClient: ReturnType<typeof createAdminClient>,
+  authUserId: string,
+  email: string | null | undefined,
+) {
+  if (isPrimaryPlatformAdminEmail(email)) return true
+
+  // For this privileged operation, confirm a non-matching session identity
+  // against Auth before denying access. This avoids relying on stale token data.
+  const { data, error } = await adminClient.auth.admin.getUserById(authUserId)
+  if (error) throw new HttpError(400, 'We could not verify this administrator right now.', error)
+
+  return isPrimaryPlatformAdminEmail(data.user?.email)
+}
+
+async function requirePrimaryPlatformAdmin(
+  adminClient: ReturnType<typeof createAdminClient>,
+  authUserId: string,
+  email: string | null | undefined,
+) {
+  if (!await canManagePlatformAdmins(adminClient, authUserId, email)) {
     throw new HttpError(403, 'Platform admin account management is restricted to the primary HID administrator.')
   }
 }
@@ -658,7 +677,7 @@ Deno.serve(req => withErrorHandling(req, async () => {
   const adminClient = createAdminClient()
 
   if (req.method === 'GET') {
-    const isPrimaryAdmin = canManagePlatformAdmins(auth.user.email)
+    const isPrimaryAdmin = await canManagePlatformAdmins(adminClient, auth.user.id, auth.user.email)
     const [admins, staffRolePolicies, outreachRolePolicies] = await Promise.all([
       isPrimaryAdmin ? listPlatformAdmins(adminClient) : Promise.resolve([]),
       listStaffRolePolicies(adminClient),
@@ -681,13 +700,13 @@ Deno.serve(req => withErrorHandling(req, async () => {
     }
 
     if (action === 'create_admin') {
-      requirePrimaryPlatformAdmin(auth.user.email)
+      await requirePrimaryPlatformAdmin(adminClient, auth.user.id, auth.user.email)
       const data = await createPlatformAdmin(req, adminClient, actor, body)
       return json({ data }, 201)
     }
 
     if (action === 'lock_admin' || action === 'unlock_admin' || action === 'delete_admin') {
-      requirePrimaryPlatformAdmin(auth.user.email)
+      await requirePrimaryPlatformAdmin(adminClient, auth.user.id, auth.user.email)
       const targetAuthUserId = asTrimmedString(body.targetAuthUserId, 'targetAuthUserId')
       const data = await applyPlatformAdminAction(adminClient, actor, action, targetAuthUserId)
       return json({ data })
