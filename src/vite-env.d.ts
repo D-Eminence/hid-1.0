@@ -5,6 +5,7 @@ interface ImportMetaEnv {
   readonly HID_TURNSTILE_SITE_KEY?: string
   readonly TURNSTILE_SITE_KEY?: string
   readonly VITE_TURNSTILE_SITE_KEY?: string
+  readonly VITE_GOOGLE_CLIENT_ID?: string
 }
 
 interface ImportMeta {

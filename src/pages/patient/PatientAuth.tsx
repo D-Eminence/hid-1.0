@@ -19,6 +19,7 @@ import {
   signInWithGoogle,
 } from '../../lib/hidApi'
 import { trackEvent } from '../../lib/observabilityBridge'
+import { prefillWithGoogleIdentity } from '../../lib/googleIdentity'
 import { getSafeUser, supabase } from '../../lib/supabase'
 import { PASSWORD_REQUIREMENTS_TEXT, isStrongPassword, maskEmailAddress } from '../../lib/utils'
 
@@ -202,8 +203,26 @@ export default function PatientAuth() {
     setStep('password')
   }
 
-  async function continueWithGoogle() {
+  async function continueWithGoogleSignIn() {
     try { await signInWithGoogle('patient') } catch (error) { showToast(error instanceof Error ? error.message : 'Unable to continue with Google.', 'error') }
+  }
+
+  async function prefillSignupWithGoogle() {
+    setLoading(true)
+    try {
+      const identity = await prefillWithGoogleIdentity()
+      setSignup(current => ({
+        ...current,
+        email: identity.email,
+        firstName: identity.firstName || current.firstName,
+        lastName: identity.lastName || current.lastName,
+      }))
+      showToast('Google details added. Complete the form to continue sign-up.', 'success')
+    } catch (error) {
+      showToast(error instanceof Error ? error.message : 'Unable to read your Google details.', 'error')
+    } finally {
+      setLoading(false)
+    }
   }
 
   function finishSignup() {
@@ -517,7 +536,7 @@ export default function PatientAuth() {
         </div>
         <AuthLegalConsent checked={signupAccepted} onChange={setSignupAccepted} />
         <Button disabled={!canStartSignup || loading} onClick={goToSignUpPassword} style={actionButtonStyle(canStartSignup && !loading)}>Continue</Button>
-        <button type="button" onClick={() => void continueWithGoogle()} style={{ marginTop: 12, minHeight: 42, border: '1px solid #d7dde6', borderRadius: 8, background: '#fff', color: '#374151', fontWeight: 600 }}>Continue with Google</button>
+        <button type="button" disabled={loading} onClick={() => void prefillSignupWithGoogle()} style={{ marginTop: 12, minHeight: 42, border: '1px solid #d7dde6', borderRadius: 8, background: '#fff', color: '#374151', fontWeight: 600 }}>Continue with Google</button>
       </AuthShell>
     )
   }
@@ -623,7 +642,7 @@ export default function PatientAuth() {
           visible={captchaVisible}
         />
         <Button loading={loading} onClick={signIn} style={actionButtonStyle(canSignIn)}>Sign in</Button>
-        <button type="button" onClick={() => void continueWithGoogle()} style={{ marginTop: 12, minHeight: 42, border: '1px solid #d7dde6', borderRadius: 8, background: '#fff', color: '#374151', fontWeight: 600 }}>Sign in with Google</button>
+        <button type="button" onClick={() => void continueWithGoogleSignIn()} style={{ marginTop: 12, minHeight: 42, border: '1px solid #d7dde6', borderRadius: 8, background: '#fff', color: '#374151', fontWeight: 600 }}>Sign in with Google</button>
         <p style={{ marginTop: 14, color: '#7d8797', fontSize: 11, lineHeight: 1.7 }}>
           Sign in with your HID code or your email address together with your password.
         </p>
