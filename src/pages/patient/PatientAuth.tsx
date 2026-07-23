@@ -10,6 +10,7 @@ import { useCaptchaGate } from '../../hooks/useCaptchaGate'
 import { clearPatientSession, getPatientSession, setPatientSession } from '../../lib/auth'
 import {
   completePatientPasswordReset,
+  assertGoogleSignInEligibility,
   fetchMyPatient,
   patientSignIn,
   patientSignUpWithPassword,
@@ -204,7 +205,12 @@ export default function PatientAuth() {
   }
 
   async function continueWithGoogleSignIn() {
-    try { await signInWithGoogle('patient') } catch (error) { showToast(error instanceof Error ? error.message : 'Unable to continue with Google.', 'error') }
+    try {
+      await assertGoogleSignInEligibility('patient', signin.identifier)
+      await signInWithGoogle('patient')
+    } catch (error) {
+      showToast(error instanceof Error ? error.message : 'Unable to continue with Google.', 'error')
+    }
   }
 
   async function prefillSignupWithGoogle() {

@@ -684,6 +684,22 @@ export async function signInWithGoogle(path: 'patient' | 'hospital') {
   }
 }
 
+export async function assertGoogleSignInEligibility(path: 'patient' | 'hospital', email: string) {
+  const normalizedEmail = email.trim().toLowerCase()
+  if (!looksLikeEmailIdentifier(normalizedEmail)) {
+    throw new HidApiError(400, 'Enter the email address already registered on HID before using Google sign-in.')
+  }
+
+  const result = await edgeRequest<{ registered: boolean }>('google-signin-eligibility', {
+    method: 'POST',
+    requireAuth: false,
+    body: { accountType: path === 'hospital' ? 'hospital' : 'patient', email: normalizedEmail },
+  })
+  if (!result.registered) {
+    throw new HidApiError(404, 'This Google email is not registered on HID. Use Sign Up first.')
+  }
+}
+
 async function getCurrentUserSecurityProfile() {
   const user = await getSafeUser()
   if (!user) return null
