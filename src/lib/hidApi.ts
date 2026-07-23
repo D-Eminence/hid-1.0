@@ -1393,19 +1393,6 @@ export async function ensurePatientProfileRegistered(override?: PendingPatientSi
   return fetchPatientProfileBundleWithRetry()
 }
 
-export async function completeGooglePatientSignup(params: PendingPatientSignup) {
-  const normalizedPhone = normalizeOptionalText(normalizePhone(params.phone ?? ''))
-  return ensurePatientProfileRegistered({
-    email: normalizeOptionalText(params.email?.trim().toLowerCase()),
-    firstName: params.firstName.trim(),
-    lastName: params.lastName.trim(),
-    hospitalCurrentlyUsing: normalizeOptionalText(params.hospitalCurrentlyUsing),
-    gender: normalizeOptionalText(params.gender),
-    dob: normalizeOptionalText(params.dob),
-    phone: normalizedPhone,
-  })
-}
-
 export async function fetchMyPatient() {
   const session = await getSafeSession()
   const userId = session?.user.id
@@ -1415,7 +1402,7 @@ export async function fetchMyPatient() {
 
   return loadCachedView(`patient:${userId}`, async () => {
     // Loading an authenticated user must never create an app profile. OAuth
-    // users complete onboarding explicitly through completeGooglePatientSignup.
+    // users complete onboarding explicitly through password and OTP signup.
     const bundle = await fetchPatientProfileBundle()
     return toLegacyPatient(bundle.patient)
   })
