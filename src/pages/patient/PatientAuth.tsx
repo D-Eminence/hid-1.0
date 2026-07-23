@@ -10,7 +10,6 @@ import { useCaptchaGate } from '../../hooks/useCaptchaGate'
 import { clearPatientSession, getPatientSession, setPatientSession } from '../../lib/auth'
 import {
   completePatientPasswordReset,
-  completeGooglePatientSignup,
   fetchMyPatient,
   patientSignIn,
   patientSignUpWithPassword,
@@ -120,7 +119,6 @@ export default function PatientAuth() {
   const [forgot, setForgot] = useState<ForgotState>(() => emptyForgotState())
   const [forgotOtpVerified, setForgotOtpVerified] = useState(false)
   const [signupVerification, setSignupVerification] = useState({ challengeId: '', email: '', password: '', code: '' })
-  const [googleOnboarding, setGoogleOnboarding] = useState(false)
   const signupVerifyInFlightRef = useRef(false)
   const {
     captchaNotice,
@@ -161,8 +159,6 @@ export default function PatientAuth() {
         clearPatientSession()
         const user = await getSafeUser()
         if (!active) return
-        const isGoogleUser = Boolean(user?.identities?.some(identity => identity.provider === 'google') || user?.app_metadata?.provider === 'google')
-        setGoogleOnboarding(isGoogleUser)
         setSignup(current => ({
           ...current,
           email: user?.email ?? current.email,
@@ -203,32 +199,7 @@ export default function PatientAuth() {
       showToast('Enter a valid name, email, phone number, and gender', 'error')
       return
     }
-    if (googleOnboarding) {
-      void completeGoogleSignup()
-      return
-    }
     setStep('password')
-  }
-
-  async function completeGoogleSignup() {
-    setLoading(true)
-    try {
-      const profile = await completeGooglePatientSignup({
-        email: signup.email,
-        firstName: signup.firstName,
-        lastName: signup.lastName,
-        phone: signup.phone,
-        hospitalCurrentlyUsing: signup.hospitalCurrentlyUsing,
-        gender: signup.gender,
-      })
-      setPatientSession({ hidCode: profile.patient.hid_code, phone: profile.patient.phone_e164 ?? '', fullName: profile.patient.full_name })
-      trackEvent('patient_signup_completed')
-      navigate('/patient/profile', { replace: true })
-    } catch (error) {
-      showToast(error instanceof Error ? error.message : 'Unable to finish Google sign-up.', 'error')
-    } finally {
-      setLoading(false)
-    }
   }
 
   async function continueWithGoogle() {
@@ -545,7 +516,7 @@ export default function PatientAuth() {
           />
         </div>
         <AuthLegalConsent checked={signupAccepted} onChange={setSignupAccepted} />
-        <Button disabled={!canStartSignup || loading} onClick={goToSignUpPassword} style={actionButtonStyle(canStartSignup && !loading)}>{googleOnboarding ? 'Complete sign up' : 'Continue'}</Button>
+        <Button disabled={!canStartSignup || loading} onClick={goToSignUpPassword} style={actionButtonStyle(canStartSignup && !loading)}>Continue</Button>
         <button type="button" onClick={() => void continueWithGoogle()} style={{ marginTop: 12, minHeight: 42, border: '1px solid #d7dde6', borderRadius: 8, background: '#fff', color: '#374151', fontWeight: 600 }}>Continue with Google</button>
       </AuthShell>
     )
