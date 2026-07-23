@@ -708,7 +708,36 @@ async function performUserAction(
   targetAuthUserId: string,
 ) {
   const target = await loadActionTarget(adminClient, targetAuthUserId)
-  if (!target.profile) throw new HttpError(404, 'We could not find this account.')
+  if (!target.profile) {
+    // OAuth prefill attempts from before the prefill-only flow may leave an
+    // auth.users row without an HID profile. They have no HID data to soft
+    // delete, but a platform admin must still be able to remove the orphan.
+    if (action !== 'delete_account' && action !== 'permanently_delete_account') {
+      throw new HttpError(404, 'We could not find this HID account.')
+    }
+
+    const authUserResult = await adminClient.auth.admin.getUserById(targetAuthUserId)
+    if (authUserResult.error) throw new HttpError(400, authUserResult.error.message, authUserResult.error)
+    if (!authUserResult.data.user) throw new HttpError(404, 'We could not find this account.')
+
+    const deleteResult = await adminClient.auth.admin.deleteUser(targetAuthUserId)
+    if (deleteResult.error) throw new HttpError(400, deleteResult.error.message, deleteResult.error)
+
+    await logAdminAuditEvent(adminClient, actor, {
+      action: 'admin_permanently_delete_orphan_auth_account',
+      reason: 'Orphaned authentication account removed by HID admin.',
+      resourceId: targetAuthUserId,
+      resourceType: 'auth_user',
+      metadata: { target_auth_user_id: targetAuthUserId },
+    })
+
+    return {
+      deleted: false,
+      permanentlyDeleted: true,
+      targetAuthUserId,
+      user: null,
+    }
+  }
   const targetDeleted = Boolean(target.profile.deleted_at || target.patient?.deleted_at || target.staff?.deleted_at)
 
   // Platform-admin accounts have a separate, primary-admin-only control path.

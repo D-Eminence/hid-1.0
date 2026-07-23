@@ -136,6 +136,9 @@ function sanitizeAdminDashboardMessage(raw: string, status: number, fallbackMess
   if (lower.includes('patient account could not be found')) {
     return 'We could not find that patient account right now.'
   }
+  if (lower.includes('could not find this hid account') || lower.includes('could not find this account')) {
+    return 'We could not find that account right now. Refresh the directory and try again.'
+  }
   if (lower.includes('account was already deleted')) {
     return 'This account has already been deleted.'
   }
