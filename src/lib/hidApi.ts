@@ -667,12 +667,17 @@ function authRedirectUrl(path: 'patient' | 'hospital') {
   return `${window.location.origin}/patient`
 }
 
-export async function signInWithGoogle(path: 'patient' | 'hospital') {
+export async function signInWithGoogle(path: 'patient' | 'hospital', email?: string | null) {
+  const loginHint = normalizeOptionalText(email?.trim().toLowerCase())
   const { error } = await supabase.auth.signInWithOAuth({
     provider: 'google',
     options: {
       redirectTo: authRedirectUrl(path),
-      queryParams: { access_type: 'offline', prompt: 'select_account' },
+      queryParams: {
+        access_type: 'offline',
+        prompt: 'select_account',
+        ...(loginHint ? { login_hint: loginHint } : {}),
+      },
     },
   })
   if (error) {
@@ -698,6 +703,13 @@ export async function assertGoogleSignInEligibility(path: 'patient' | 'hospital'
   if (!result.registered) {
     throw new HidApiError(404, 'This Google email is not registered on HID. Use Sign Up first.')
   }
+}
+
+export async function finalizeGoogleSignIn(path: 'patient' | 'hospital') {
+  return edgeRequest<{ registered: boolean }>('google-signin-finalize', {
+    method: 'POST',
+    body: { accountType: path === 'hospital' ? 'hospital' : 'patient' },
+  })
 }
 
 async function getCurrentUserSecurityProfile() {

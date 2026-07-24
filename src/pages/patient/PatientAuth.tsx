@@ -12,6 +12,7 @@ import {
   completePatientPasswordReset,
   assertGoogleSignInEligibility,
   fetchMyPatient,
+  finalizeGoogleSignIn,
   patientSignIn,
   patientSignUpWithPassword,
   startPatientPasswordReset,
@@ -21,7 +22,7 @@ import {
 } from '../../lib/hidApi'
 import { trackEvent } from '../../lib/observabilityBridge'
 import { prefillWithGoogleIdentity } from '../../lib/googleIdentity'
-import { getSafeUser, supabase } from '../../lib/supabase'
+import { getSafeUser, safeSignOut, supabase } from '../../lib/supabase'
 import { PASSWORD_REQUIREMENTS_TEXT, isStrongPassword, maskEmailAddress } from '../../lib/utils'
 
 type Step = 'signup' | 'password' | 'verify' | 'success' | 'signin' | 'forgot'
@@ -161,6 +162,28 @@ export default function PatientAuth() {
         clearPatientSession()
         const user = await getSafeUser()
         if (!active) return
+        const isGoogleUser = Boolean(
+          user?.identities?.some(identity => identity.provider === 'google') ||
+          user?.app_metadata?.provider === 'google',
+        )
+        if (user && isGoogleUser) {
+          try {
+            const result = await finalizeGoogleSignIn('patient')
+            if (!result.registered) {
+              await safeSignOut().catch(() => {})
+              if (!active) return
+              clearPatientSession()
+              setStep('signin')
+              showToast('This Google account is not registered on HID. Use Sign Up first.', 'error')
+              return
+            }
+          } catch (error) {
+            if (!active) return
+            showToast(error instanceof Error ? error.message : 'Unable to verify this Google account.', 'error')
+            setStep('signin')
+            return
+          }
+        }
         setSignup(current => ({
           ...current,
           email: user?.email ?? current.email,
@@ -207,7 +230,7 @@ export default function PatientAuth() {
   async function continueWithGoogleSignIn() {
     try {
       await assertGoogleSignInEligibility('patient', signin.identifier)
-      await signInWithGoogle('patient')
+      await signInWithGoogle('patient', signin.identifier)
     } catch (error) {
       showToast(error instanceof Error ? error.message : 'Unable to continue with Google.', 'error')
     }
