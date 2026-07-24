@@ -308,7 +308,12 @@ export interface AdminPlatformAdmin {
   updatedAt: string
 }
 
-export type AdminPlatformAdminAction = 'lock_admin' | 'unlock_admin' | 'delete_admin'
+export type AdminPlatformAdminAction =
+  | 'lock_admin'
+  | 'unlock_admin'
+  | 'delete_admin'
+  | 'restore_admin'
+  | 'permanently_delete_admin'
 
 export interface AdminPlatformAdminActionResponse {
   admin: AdminPlatformAdmin | null

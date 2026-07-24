@@ -79,7 +79,15 @@ type PlatformAdminProfileStateRow = {
 }
 
 type Payload = {
-  action?: 'create_admin' | 'delete_admin' | 'lock_admin' | 'unlock_admin' | 'update_staff_role_policy' | 'update_outreach_role_policy'
+  action?:
+    | 'create_admin'
+    | 'delete_admin'
+    | 'lock_admin'
+    | 'unlock_admin'
+    | 'restore_admin'
+    | 'permanently_delete_admin'
+    | 'update_staff_role_policy'
+    | 'update_outreach_role_policy'
   email?: string | null
   fullName?: string | null
   role?: string | null
@@ -473,7 +481,7 @@ async function ensurePlatformAdminContinuity(adminClient: ReturnType<typeof crea
 async function applyPlatformAdminAction(
   adminClient: ReturnType<typeof createAdminClient>,
   actor: { userId: string; profileId: string | null; role: string },
-  action: 'delete_admin' | 'lock_admin' | 'unlock_admin',
+  action: 'delete_admin' | 'lock_admin' | 'unlock_admin' | 'restore_admin' | 'permanently_delete_admin',
   targetAuthUserId: string,
 ) {
   if (targetAuthUserId === actor.userId) {
@@ -486,6 +494,15 @@ async function applyPlatformAdminAction(
   }
   if (action === 'lock_admin' && target.deleted_at) {
     throw new HttpError(409, 'This platform admin account is already deleted.')
+  }
+  if (action === 'delete_admin' && target.deleted_at) {
+    throw new HttpError(409, 'This platform admin account is already deleted. Restore it or permanently delete it.')
+  }
+  if (action === 'restore_admin' && !target.deleted_at) {
+    throw new HttpError(409, 'This platform admin account has not been deleted.')
+  }
+  if (action === 'permanently_delete_admin' && !target.deleted_at) {
+    throw new HttpError(409, 'Delete the platform admin account first before permanently removing it.')
   }
 
   if ((action === 'lock_admin' || action === 'delete_admin') && target.active) {
@@ -537,6 +554,66 @@ async function applyPlatformAdminAction(
   }
 
   if (action === 'delete_admin') {
+    const { data, error } = await adminClient.rpc('hid_soft_delete_account_by_auth_user_id', {
+      p_actor_profile_id: actor.profileId,
+      p_auth_user_id: targetAuthUserId,
+      p_reason: 'Platform admin account deleted by the primary HID administrator.',
+    })
+    if (error) throw new HttpError(400, error.message, error)
+    const deleted = (data as { deleted?: boolean } | null)?.deleted ?? false
+    if (!deleted) {
+      throw new HttpError(409, 'This platform admin account could not be deleted right now.')
+    }
+
+    const authUpdate = await adminClient.auth.admin.updateUserById(targetAuthUserId, { ban_duration: '876000h' })
+    if (authUpdate.error) {
+      await adminClient.rpc('hid_restore_account_by_auth_user_id', {
+        p_actor_profile_id: actor.profileId,
+        p_auth_user_id: targetAuthUserId,
+      })
+      throw new HttpError(400, authUpdate.error.message, authUpdate.error)
+    }
+
+    await logAdminAuditEvent(adminClient, actor, {
+      action: 'admin_soft_delete_platform_admin',
+      resourceId: target.id,
+      resourceType: 'user_profile',
+      reason: 'Platform admin account deleted by the primary HID administrator.',
+      metadata: { target_auth_user_id: targetAuthUserId },
+    })
+  }
+
+  if (action === 'restore_admin') {
+    const { data, error } = await adminClient.rpc('hid_restore_account_by_auth_user_id', {
+      p_actor_profile_id: actor.profileId,
+      p_auth_user_id: targetAuthUserId,
+    })
+    if (error) throw new HttpError(400, error.message, error)
+    const restored = (data as { restored?: boolean } | null)?.restored ?? false
+    if (!restored) {
+      throw new HttpError(409, 'This platform admin account could not be restored right now.')
+    }
+
+    const authUpdate = await adminClient.auth.admin.updateUserById(targetAuthUserId, { ban_duration: 'none' })
+    if (authUpdate.error) {
+      await adminClient.rpc('hid_soft_delete_account_by_auth_user_id', {
+        p_actor_profile_id: actor.profileId,
+        p_auth_user_id: targetAuthUserId,
+        p_reason: target.deleted_reason ?? 'Platform admin account deletion restored after an access update failed.',
+      })
+      throw new HttpError(400, authUpdate.error.message, authUpdate.error)
+    }
+
+    await logAdminAuditEvent(adminClient, actor, {
+      action: 'admin_restore_deleted_platform_admin',
+      resourceId: target.id,
+      resourceType: 'user_profile',
+      reason: 'Deleted platform admin account restored by the primary HID administrator.',
+      metadata: { target_auth_user_id: targetAuthUserId },
+    })
+  }
+
+  if (action === 'permanently_delete_admin') {
     await removeProfileMedicalRecordFiles(adminClient, target.id)
 
     const { data, error } = await adminClient.rpc('hid_permanently_delete_account_by_auth_user_id', {
@@ -720,7 +797,13 @@ Deno.serve(req => withErrorHandling(req, async () => {
       return json({ data }, 201)
     }
 
-    if (action === 'lock_admin' || action === 'unlock_admin' || action === 'delete_admin') {
+    if (
+      action === 'lock_admin' ||
+      action === 'unlock_admin' ||
+      action === 'delete_admin' ||
+      action === 'restore_admin' ||
+      action === 'permanently_delete_admin'
+    ) {
       await requirePrimaryPlatformAdmin(adminClient, auth.user.id, auth.user.email)
       const targetAuthUserId = asTrimmedString(body.targetAuthUserId, 'targetAuthUserId')
       const data = await applyPlatformAdminAction(adminClient, actor, action, targetAuthUserId)

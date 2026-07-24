@@ -713,7 +713,11 @@ export default function AdminDashboard() {
       ? 'limit access for this platform admin'
       : action === 'unlock_admin'
         ? 'restore access for this platform admin'
-        : 'permanently delete this platform admin account'
+        : action === 'delete_admin'
+          ? 'delete this platform admin account'
+          : action === 'restore_admin'
+            ? 'restore this deleted platform admin account'
+            : 'permanently delete this platform admin account and all of its account data'
 
     if (!window.confirm(`Do you want to ${actionLabel}?`)) return
 
@@ -733,7 +737,11 @@ export default function AdminDashboard() {
           ? 'Platform admin access limited successfully.'
           : action === 'unlock_admin'
             ? 'Platform admin access restored successfully.'
-            : 'Platform admin account permanently deleted successfully.',
+            : action === 'delete_admin'
+              ? 'Platform admin account deleted successfully. It can now be restored or permanently deleted.'
+              : action === 'restore_admin'
+                ? 'Platform admin account restored successfully.'
+                : 'Platform admin account permanently deleted successfully.',
         'success',
       )
     } catch (reason) {
@@ -1503,7 +1511,7 @@ export default function AdminDashboard() {
           <div style={panelStyle()}>
             {sectionTitle('Platform Admins')}
             <div style={{ fontSize: 11.5, color: 'var(--admin-muted)', marginBottom: 12, lineHeight: 1.6 }}>
-              Create dedicated admin accounts without touching patient or hospital users. New admins receive a one-time password setup link and must complete MFA after signing in.
+              Create dedicated admin accounts without touching patient or hospital users. New admins receive a one-time password setup link and must complete MFA after signing in. Account removal is two-stage: delete first, then restore or permanently delete.
             </div>
             {roleManagementError && (
               <div style={{ ...alertToneStyle('warning'), borderRadius: 10, padding: '10px 12px', marginBottom: 12, fontSize: 11.5 }}>
@@ -1590,23 +1598,45 @@ export default function AdminDashboard() {
                           {!isCurrentAdmin && (
                             <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
                               {!isDeleted && (
-                                <Button
-                                  size="sm"
-                                  variant="outline"
-                                  loading={platformAdminActioning === actionKey(admin.active ? 'lock_admin' : 'unlock_admin')}
-                                  onClick={() => void handlePlatformAdminAction(admin, admin.active ? 'lock_admin' : 'unlock_admin')}
-                                >
-                                  {admin.active ? 'Limit Access' : 'Restore Access'}
-                                </Button>
+                                <>
+                                  <Button
+                                    size="sm"
+                                    variant="outline"
+                                    loading={platformAdminActioning === actionKey(admin.active ? 'lock_admin' : 'unlock_admin')}
+                                    onClick={() => void handlePlatformAdminAction(admin, admin.active ? 'lock_admin' : 'unlock_admin')}
+                                  >
+                                    {admin.active ? 'Limit Access' : 'Restore Access'}
+                                  </Button>
+                                  <Button
+                                    size="sm"
+                                    variant="danger"
+                                    loading={platformAdminActioning === actionKey('delete_admin')}
+                                    onClick={() => void handlePlatformAdminAction(admin, 'delete_admin')}
+                                  >
+                                    Delete Account
+                                  </Button>
+                                </>
                               )}
-                              <Button
-                                size="sm"
-                                variant="danger"
-                                loading={platformAdminActioning === actionKey('delete_admin')}
-                                onClick={() => void handlePlatformAdminAction(admin, 'delete_admin')}
-                              >
-                                Permanently Delete
-                              </Button>
+                              {isDeleted && (
+                                <>
+                                  <Button
+                                    size="sm"
+                                    variant="secondary"
+                                    loading={platformAdminActioning === actionKey('restore_admin')}
+                                    onClick={() => void handlePlatformAdminAction(admin, 'restore_admin')}
+                                  >
+                                    Restore Account
+                                  </Button>
+                                  <Button
+                                    size="sm"
+                                    variant="danger"
+                                    loading={platformAdminActioning === actionKey('permanently_delete_admin')}
+                                    onClick={() => void handlePlatformAdminAction(admin, 'permanently_delete_admin')}
+                                  >
+                                    Permanently Delete
+                                  </Button>
+                                </>
+                              )}
                             </div>
                           )}
                           {isCurrentAdmin && (

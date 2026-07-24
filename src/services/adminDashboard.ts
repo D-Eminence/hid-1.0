@@ -178,14 +178,22 @@ function getAdminEndpointFallbackMessage(path: string, init: RequestInit, status
       return 'The platform admin could not be created right now. Refresh and try again.'
     }
 
-    if (action === 'lock_admin' || action === 'unlock_admin' || action === 'delete_admin') {
+    if (
+      action === 'lock_admin' ||
+      action === 'unlock_admin' ||
+      action === 'delete_admin' ||
+      action === 'restore_admin' ||
+      action === 'permanently_delete_admin'
+    ) {
       if (status === 401) return 'Please sign in to manage platform admin access.'
       if (status === 403) return 'You cannot change your own platform admin account from the dashboard.'
       if (status === 404) return 'That platform admin account could not be found.'
       if (status === 408) return 'The platform admin access request took too long. Please try again.'
       if (status === 429) return 'Platform admin access changes are being rate-limited right now. Please wait a moment and try again.'
-      if (status === 409 && action === 'delete_admin') return 'The platform admin could not be permanently deleted because dependent platform data could not be detached. Please retry or contact support.'
-      if (status === 400 && action === 'delete_admin') return 'The platform admin could not be permanently deleted right now. Please try again shortly.'
+      if (status === 409 && action === 'permanently_delete_admin') return 'Delete the platform admin account first. If it is already deleted, dependent platform data may still need to be detached before permanent deletion.'
+      if (status === 400 && action === 'permanently_delete_admin') return 'The deleted platform admin could not be permanently removed right now. Please try again shortly.'
+      if (status === 409 && action === 'delete_admin') return 'The platform admin account is already deleted or could not be moved to deleted status.'
+      if (status === 409 && action === 'restore_admin') return 'The platform admin account is not deleted or could not be restored right now.'
       if (status >= 500) return 'The platform admin access change could not be completed right now. Please try again shortly.'
       return 'The platform admin access change could not be completed right now. Refresh and try again.'
     }
