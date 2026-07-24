@@ -203,3 +203,9 @@ verify_jwt = true
 
 [functions.migration-imports]
 verify_jwt = true
+
+[functions.google-signin-eligibility]
+verify_jwt = false
+
+[functions.google-signin-finalize]
+verify_jwt = true
