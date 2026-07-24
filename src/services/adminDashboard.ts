@@ -139,6 +139,9 @@ function sanitizeAdminDashboardMessage(raw: string, status: number, fallbackMess
   if (lower.includes('could not find this hid account') || lower.includes('could not find this account')) {
     return 'We could not find that account right now. Refresh the directory and try again.'
   }
+  if (lower.includes('authentication-only record') && lower.includes('soft delete')) {
+    return 'This is an orphaned login record, not a completed HID account. Use Permanent delete to remove it.'
+  }
   if (lower.includes('account was already deleted')) {
     return 'This account has already been deleted.'
   }

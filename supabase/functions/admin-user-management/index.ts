@@ -547,12 +547,12 @@ async function loadManagedUsersByAuthIds(
       flags: {
         deleted,
         locked: deleted ? false : profile ? !profile.active : false,
-        deletable: !deleted,
-        permanentlyDeletable: deleted,
-        lockable: !deleted,
+        deletable: Boolean(profile) && !deleted,
+        permanentlyDeletable: profile ? deleted : true,
+        lockable: Boolean(profile) && !deleted,
         patientAccessOpen: patient ? activeGrantCount > 0 || pendingRequestCount > 0 : null,
         restrictable: Boolean(staff) && !deleted,
-        restorable: deleted,
+        restorable: Boolean(profile) && deleted,
         staffAccessRestricted: staff ? (!deleted && (!staff.active || activeMembershipCount === 0)) : null,
       },
     } satisfies ManagedUser
@@ -712,7 +712,10 @@ async function performUserAction(
     // OAuth prefill attempts from before the prefill-only flow may leave an
     // auth.users row without an HID profile. They have no HID data to soft
     // delete, but a platform admin must still be able to remove the orphan.
-    if (action !== 'delete_account' && action !== 'permanently_delete_account') {
+    if (action === 'delete_account') {
+      throw new HttpError(409, 'This authentication-only record has no HID account to soft delete. Use permanent delete to remove the orphaned login record.')
+    }
+    if (action !== 'permanently_delete_account') {
       throw new HttpError(404, 'We could not find this HID account.')
     }
 
