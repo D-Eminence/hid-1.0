@@ -1,6 +1,6 @@
-import{createAdminClient,requireUser}from'../_shared/auth.ts'
-import{buildCacheHeaders,HttpError,json,readJson,withErrorHandling}from'../_shared/http.ts'
-import{assertPlatformFeatureEnabled}from'../_shared/platform.ts'
+import { createAdminClient, requireUser } from '../_shared/auth.ts'
+import { buildCacheHeaders, HttpError, json, readJson, withErrorHandling } from '../_shared/http.ts'
+import { assertPlatformFeatureEnabled } from '../_shared/platform.ts'
 type AdminClient=any
 const required=(v:unknown,n:string)=>{const s=`${v??''}`.trim();if(!s)throw new HttpError(400,`${n} is required.`);return s}
 const text=(v:unknown)=>`${v??''}`.trim()

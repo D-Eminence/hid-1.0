@@ -29,6 +29,9 @@ for (const file of functionEntries) {
   if (/Access-Control-Allow-Origin[^\n]*['"]\*['"]/.test(source)) {
     failures.push(`${name} allows every CORS origin`)
   }
+  if (/\bfrom['"]/.test(source)) {
+    failures.push(`${name} uses import formatting that the remote function bundler cannot resolve`)
+  }
 }
 
 const httpSource = await readFile(join(functionsRoot, '_shared', 'http.ts'), 'utf8')
