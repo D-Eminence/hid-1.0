@@ -1,4 +1,5 @@
 import { Session } from '@supabase/supabase-js'
+import { createApiRequestId, readFunctionInvokeError, unwrapApiData } from './apiResponse'
 import { supabase } from './supabase'
 import type { Database } from '../types/database'
 import type {
@@ -17,45 +18,126 @@ const OUTREACH_INVITE_COLUMNS = 'id, campaign_id, created_by, code, role, max_us
 const OUTREACH_SYNC_QUEUE_COLUMNS = 'id, campaign_id, worker_id, entity, action, payload, status, error, created_at, synced_at'
 const OUTREACH_WORKER_COLUMNS = 'id, auth_user_id, campaign_id, display_name, role, created_at'
 
+export class OutreachApiError extends Error {
+  status: number
+  code: string | null
+  requestId: string | null
+  retryable: boolean
+  details: unknown
+
+  constructor(
+    message: string,
+    options: {
+      status?: number
+      code?: string | null
+      requestId?: string | null
+      retryable?: boolean
+      details?: unknown
+    } = {},
+  ) {
+    super(message)
+    this.name = 'OutreachApiError'
+    this.status = options.status ?? 500
+    this.code = options.code ?? null
+    this.requestId = options.requestId ?? null
+    this.retryable = options.retryable ?? this.status >= 500
+    this.details = options.details ?? null
+  }
+}
+
+function outreachDataError(error: unknown, fallbackMessage: string) {
+  const candidate = error && typeof error === 'object' ? error as Record<string, unknown> : null
+  const rawMessage = error instanceof Error
+    ? error.message
+    : typeof candidate?.message === 'string'
+      ? candidate.message
+      : ''
+  const lower = rawMessage.toLowerCase()
+  const rawCode = typeof candidate?.code === 'string' ? candidate.code.toUpperCase() : ''
+
+  if (lower.includes('failed to fetch') || lower.includes('network') || lower.includes('timed out')) {
+    return new OutreachApiError('We could not reach the service right now. Check your connection and try again.', {
+      status: 503,
+      code: 'NETWORK_ERROR',
+      retryable: true,
+      details: error,
+    })
+  }
+  if (lower.includes('jwt') || lower.includes('refresh token') || lower.includes('not authenticated')) {
+    return new OutreachApiError('Your session has expired. Please sign in again.', {
+      status: 401,
+      code: 'AUTH_REQUIRED',
+      retryable: false,
+      details: error,
+    })
+  }
+  if (rawCode === '23505' || lower.includes('duplicate key')) {
+    return new OutreachApiError('That information is already in use. Review it and try again.', {
+      status: 409,
+      code: 'CONFLICT',
+      retryable: false,
+      details: error,
+    })
+  }
+  if (rawCode === '42501' || lower.includes('row-level security') || lower.includes('permission denied')) {
+    return new OutreachApiError('This account is not allowed to perform that action.', {
+      status: 403,
+      code: 'FORBIDDEN',
+      retryable: false,
+      details: error,
+    })
+  }
+
+  return new OutreachApiError(fallbackMessage, {
+    status: 500,
+    code: 'DATA_REQUEST_FAILED',
+    retryable: true,
+    details: error,
+  })
+}
+
 async function callEdgeFunction<T>(name: string, body: unknown): Promise<T> {
   let result: { data: unknown; error: unknown }
+  const requestId = createApiRequestId()
 
   try {
-    result = await supabase.functions.invoke(name, { body: body as Record<string, unknown> })
-  } catch {
-    throw new Error("We're having trouble connecting right now. Please check your internet connection and try again.")
+    result = await supabase.functions.invoke(name, {
+      body: body as Record<string, unknown>,
+      headers: {
+        'X-Request-ID': requestId,
+      },
+    })
+  } catch (error) {
+    throw new OutreachApiError("We're having trouble connecting right now. Please check your internet connection and try again.", {
+      status: 503,
+      code: 'NETWORK_ERROR',
+      requestId,
+      retryable: true,
+      details: error,
+    })
   }
 
   if (result.error) {
-    // FunctionsHttpError.message is the raw response body — parse the friendly error out of it
-    let message = ''
-    const rawErr = result.error
-    if (rawErr && typeof rawErr === 'object' && 'message' in rawErr) {
-      const raw = String((rawErr as { message: unknown }).message ?? '')
-      try {
-        const parsed = JSON.parse(raw)
-        message = String(parsed?.error ?? parsed?.message ?? raw)
-      } catch {
-        message = raw
-      }
-    } else {
-      message = String(rawErr)
-    }
+    const errorInfo = await readFunctionInvokeError(result.error, 'Something went wrong on our end. Please try again in a moment.')
+    const lower = errorInfo.message.toLowerCase()
+    const message = !errorInfo.message ||
+      lower.includes('failed to fetch') ||
+      lower.includes('edge function returned') ||
+      lower.includes('supabase')
+      ? 'Something went wrong on our end. Please try again in a moment.'
+      : errorInfo.message
 
-    const lower = message.toLowerCase()
-    if (!message || lower.includes('fetch') || lower.includes('supabase') || lower.includes('function') || lower.includes('{')) {
-      throw new Error('Something went wrong on our end. Please try again in a moment.')
-    }
-    throw new Error(message)
+    throw new OutreachApiError(message, {
+      status: errorInfo.status,
+      code: errorInfo.code,
+      requestId: errorInfo.requestId ?? requestId,
+      retryable: errorInfo.retryable,
+      details: errorInfo.details,
+    })
   }
 
-  // supabase.functions.invoke returns the full response body as data.
-  // Our functions wrap payload in { data: {...} } — unwrap it.
-  const raw = result.data
-  const unwrapped = raw && typeof raw === 'object' && 'data' in (raw as object)
-    ? (raw as { data: unknown }).data
-    : raw
-  return unwrapped as T
+  const unwrapped = unwrapApiData<T>(result.data)
+  return (unwrapped.found ? unwrapped.value : result.data) as T
 }
 
 export type OutreachSignupPayload = {
@@ -120,7 +202,7 @@ export async function loginOutreachWorker(email: string, password: string): Prom
     if (error.message?.toLowerCase().includes('invalid login credentials')) {
       throw new Error("We couldn't find an outreach account with those details. Check your email and password and try again.")
     }
-    throw new Error(error.message ?? 'Sign-in failed. Please try again.')
+    throw outreachDataError(error, 'Outreach sign-in could not be completed right now. Please try again.')
   }
 
   const userId = data.session?.user.id
@@ -152,7 +234,7 @@ export async function fetchOutreachWorker(userId: string): Promise<OutreachWorke
     .maybeSingle()
 
   if (error) {
-    throw new Error(error.message)
+    throw outreachDataError(error, 'Your outreach profile could not be loaded right now.')
   }
 
   return data as OutreachWorker | null
@@ -165,7 +247,7 @@ export async function fetchOutreachCampaigns(campaignId?: string): Promise<Outre
   }
   const { data, error } = await query.order('starts_at', { ascending: false })
   if (error) {
-    throw new Error(error.message)
+    throw outreachDataError(error, 'Outreach campaigns could not be loaded right now.')
   }
   return data as OutreachCampaign[]
 }
@@ -178,7 +260,7 @@ export async function fetchOutreachEncounters(campaignId: string): Promise<Outre
     .order('created_at', { ascending: false })
 
   if (error) {
-    throw new Error(error.message)
+    throw outreachDataError(error, 'Outreach encounters could not be loaded right now.')
   }
 
   return data as OutreachEncounter[]
@@ -192,7 +274,7 @@ export async function fetchOutreachSyncQueue(campaignId: string): Promise<Outrea
     .order('created_at', { ascending: false })
 
   if (error) {
-    throw new Error(error.message)
+    throw outreachDataError(error, 'The outreach sync queue could not be loaded right now.')
   }
 
   return data as OutreachSyncQueueItem[]
@@ -221,7 +303,7 @@ export async function createOutreachEncounter(
     .single()
 
   if (error) {
-    throw new Error(error.message)
+    throw outreachDataError(error, 'The outreach encounter could not be saved right now.')
   }
 
   return data as OutreachEncounter
@@ -237,7 +319,7 @@ export async function createOutreachCampaign(
     .insert({ name, org, location, starts_at: startsAt, status: 'planned', services: ['registration'] })
     .select(OUTREACH_CAMPAIGN_COLUMNS)
     .single()
-  if (error) throw new Error(error.message)
+  if (error) throw outreachDataError(error, 'The outreach campaign could not be created right now.')
   return data as OutreachCampaign
 }
 
@@ -251,7 +333,7 @@ export async function createOutreachWorker(
     .insert({ auth_user_id: authUserId, campaign_id: campaignId, display_name: displayName, role })
     .select(OUTREACH_WORKER_COLUMNS)
     .single()
-  if (error) throw new Error(error.message)
+  if (error) throw outreachDataError(error, 'The outreach worker could not be created right now.')
   return data as OutreachWorker
 }
 
@@ -274,12 +356,12 @@ export async function createInviteCode(
     .insert({ campaign_id: campaignId, created_by: workerId, code, role, max_uses: 50 })
     .select(OUTREACH_INVITE_COLUMNS)
     .single()
-  if (error) throw new Error(error.message)
+  if (error) throw outreachDataError(error, 'The outreach invite could not be created right now.')
   return data as OutreachInvite
 }
 
 export async function fetchCampaignInvite(campaignId: string, workerId: string): Promise<OutreachInvite | null> {
-  const { data } = await supabase
+  const { data, error } = await supabase
     .from('hid_outreach_invites')
     .select(OUTREACH_INVITE_COLUMNS)
     .eq('campaign_id', campaignId)
@@ -287,6 +369,7 @@ export async function fetchCampaignInvite(campaignId: string, workerId: string):
     .order('created_at', { ascending: false })
     .limit(1)
     .maybeSingle()
+  if (error) throw outreachDataError(error, 'The outreach invite could not be loaded right now.')
   return data as OutreachInvite | null
 }
 
@@ -297,7 +380,7 @@ export async function fetchInviteByCode(rawCode: string): Promise<OutreachInvite
     .select(OUTREACH_INVITE_COLUMNS)
     .eq('code', code)
     .maybeSingle()
-  if (error) throw new Error(error.message)
+  if (error) throw outreachDataError(error, 'The outreach invite could not be verified right now.')
   return data as OutreachInvite | null
 }
 
@@ -307,20 +390,22 @@ export async function fetchCampaignById(id: string): Promise<OutreachCampaign | 
     .select(OUTREACH_CAMPAIGN_COLUMNS)
     .eq('id', id)
     .maybeSingle()
-  if (error) throw new Error(error.message)
+  if (error) throw outreachDataError(error, 'The outreach campaign could not be loaded right now.')
   return data as OutreachCampaign | null
 }
 
 export async function incrementInviteUseCount(inviteId: string): Promise<void> {
-  const { data } = await supabase
+  const { data, error } = await supabase
     .from('hid_outreach_invites')
     .select('use_count')
     .eq('id', inviteId)
     .single()
+  if (error) throw outreachDataError(error, 'The outreach invite could not be updated right now.')
   if (!data) return
-  await (supabase.from('hid_outreach_invites') as any)
+  const update = await (supabase.from('hid_outreach_invites') as any)
     .update({ use_count: (data as { use_count: number }).use_count + 1 })
     .eq('id', inviteId)
+  if (update.error) throw outreachDataError(update.error, 'The outreach invite could not be updated right now.')
 }
 
 export async function markSyncQueueAsSynced(campaignId: string): Promise<void> {
@@ -331,6 +416,6 @@ export async function markSyncQueueAsSynced(campaignId: string): Promise<void> {
     .eq('status', 'queued')
 
   if (error) {
-    throw new Error(error.message)
+    throw outreachDataError(error, 'The outreach sync queue could not be updated right now.')
   }
 }

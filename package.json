@@ -9,6 +9,7 @@
     "perf:load": "node ./scripts/load-test.mjs",
     "security:audit": "npm audit --audit-level=high",
     "security:deps": "npm outdated",
+    "verify:api": "node ./scripts/verify-api-response-contracts.mjs",
     "verify:migrate": "node ./scripts/verify-migrate-contracts.mjs"
   },
   "overrides": {

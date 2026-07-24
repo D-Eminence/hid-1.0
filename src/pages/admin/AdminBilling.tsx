@@ -2,8 +2,10 @@ import React, { useEffect, useState } from 'react'
 import { AdminLayout, type AdminSidebarSection } from '../../components/AdminLayout'
 import { Badge, Button, EmptyState, Input, PageLoader, Select, showToast } from '../../components/ui'
 import { ADMIN_AI_PROCESSING_PATH, ADMIN_BILLING_PATH, ADMIN_LOGIN_PATH, ADMIN_OVERVIEW_PATH } from '../../lib/adminRoutes'
+import { unwrapApiData } from '../../lib/apiResponse'
 import { signOutAndClearSessions } from '../../lib/auth'
-import { getSafeUser, supabase } from '../../lib/supabase'
+import { invokeApiFunction } from '../../lib/functionApi'
+import { getSafeUser } from '../../lib/supabase'
 
 type Overview = { products:any[]; prices:any[]; plans:any[]; subscriptions:any[]; invoices:any[]; payments:any[]; organizations:any[]; settings:any; metrics:{mrr_minor:number;arr_minor:number;active_subscriptions:number;trials:number;past_due:number;suspended:number;outstanding_minor:number} }
 const sections: AdminSidebarSection[]=[{id:'dashboard',label:'Dashboard',href:ADMIN_OVERVIEW_PATH},{id:'billing-overview',label:'Overview',href:ADMIN_BILLING_PATH},{id:'products',label:'Products'},{id:'plans',label:'Plans'},{id:'organizations',label:'Organizations'},{id:'subscriptions',label:'Subscriptions'},{id:'invoices',label:'Invoices'},{id:'payments',label:'Payments'},{id:'settings',label:'Settings'},{id:'ai-processing',label:'AI & Processing',href:ADMIN_AI_PROCESSING_PATH}]
@@ -13,9 +15,9 @@ const money=(minor:number,currency='NGN')=>new Intl.NumberFormat('en-NG',{style:
 
 export default function AdminBilling(){
   const [data,setData]=useState<Overview|null>(null); const [loading,setLoading]=useState(true); const [error,setError]=useState(''); const [viewer,setViewer]=useState<string|null>(null); const [search,setSearch]=useState(''); const [saving,setSaving]=useState('')
-  async function load(){setLoading(true);setError('');const {data:result,error:requestError}=await supabase.functions.invoke('admin-billing',{method:'GET'});if(requestError)setError(requestError.message);else setData(result as Overview);setLoading(false)}
+  async function load(){setLoading(true);setError('');try{const result=await invokeApiFunction<unknown>('admin-billing',{method:'GET'},'Billing data could not be loaded right now.');const unwrapped=unwrapApiData<Overview>(result);setData((unwrapped.found?unwrapped.value:result) as Overview)}catch(error){setError(error instanceof Error?error.message:'Billing data could not be reached right now. Check your connection and try again.')}finally{setLoading(false)}}
   useEffect(()=>{void getSafeUser().then(user=>setViewer(user?.email??null));void load()},[])
-  async function action(body:any){setSaving(body.product_id??body.subscription_id??body.action);const {error:requestError}=await supabase.functions.invoke('admin-billing',{body});setSaving('');if(requestError){showToast(requestError.message,'error');return}showToast('Billing configuration saved.','success');await load()}
+  async function action(body:any){setSaving(body.product_id??body.subscription_id??body.action);try{await invokeApiFunction('admin-billing',{body},'Billing configuration could not be saved right now.');showToast('Billing configuration saved.','success');await load()}catch(error){showToast(error instanceof Error?error.message:'Billing configuration could not be reached right now. Check your connection and try again.','error')}finally{setSaving('')}}
   async function logout(){await signOutAndClearSessions();window.location.assign(ADMIN_LOGIN_PATH)}
   if(loading&&!data)return <PageLoader label="Loading billing and subscriptions..." />
   return <AdminLayout activeSection="billing-overview" darkMode={false} notificationsCount={data?.metrics.past_due??0} onLogout={()=>void logout()} onSearchChange={setSearch} onToggleTheme={()=>undefined} searchQuery={search} sections={sections} title="Billing & Subscriptions" userName={viewer}>

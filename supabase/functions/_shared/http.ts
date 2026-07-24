@@ -5,11 +5,20 @@ const BANNED_ACCOUNT_MESSAGE = 'This user is banned. Contact: support@healthiden
 export class HttpError extends Error {
   status: number
   details?: unknown
+  code?: string
+  headers?: HeadersInit
 
-  constructor(status: number, message: string, details?: unknown) {
+  constructor(
+    status: number,
+    message: string,
+    details?: unknown,
+    options: { code?: string; headers?: HeadersInit } = {},
+  ) {
     super(message)
     this.status = status
     this.details = details
+    this.code = options.code
+    this.headers = options.headers
   }
 }
 
@@ -42,13 +51,37 @@ function appendHeaders(target: Headers, source?: HeadersInit) {
   })
 }
 
-function withCorsHeaders(response: Response, req: Request) {
+function resolveRequestId(req: Request) {
+  const provided = req.headers.get('x-request-id')?.trim() ?? ''
+  if (/^[a-zA-Z0-9._:-]{8,128}$/.test(provided)) return provided
+  return `hid_${crypto.randomUUID()}`
+}
+
+function responseTimeMs(startedAt: number) {
+  return Math.max(0, Math.round((performance.now() - startedAt) * 10) / 10)
+}
+
+function withResponseMetadata(response: Response, req: Request, requestId: string, startedAt: number) {
   const headers = new Headers(response.headers)
   const corsHeaders = resolveCorsHeaders(req.headers.get('Origin'))
+  const durationMs = responseTimeMs(startedAt)
 
   Object.entries(corsHeaders).forEach(([key, value]) => {
     headers.set(key, value)
   })
+
+  headers.set('X-Request-ID', requestId)
+  headers.set('X-Response-Time-Ms', `${durationMs}`)
+  headers.set('Server-Timing', `app;dur=${durationMs}`)
+  headers.set('X-Content-Type-Options', 'nosniff')
+  headers.set('Referrer-Policy', 'no-referrer')
+
+  if (!headers.has('Cache-Control')) {
+    headers.set('Cache-Control', 'no-store, max-age=0')
+  }
+  if (headers.get('Cache-Control')?.includes('no-store')) {
+    headers.set('Pragma', 'no-cache')
+  }
 
   return new Response(response.body, {
     status: response.status,
@@ -57,9 +90,9 @@ function withCorsHeaders(response: Response, req: Request) {
   })
 }
 
-export function handleOptions(req: Request) {
+export function handleOptions(req: Request, requestId = resolveRequestId(req), startedAt = performance.now()) {
   if (req.method === 'OPTIONS') {
-    return new Response('ok', { headers: resolveCorsHeaders(req.headers.get('Origin')) })
+    return withResponseMetadata(new Response(null, { status: 204 }), req, requestId, startedAt)
   }
 
   return null
@@ -68,7 +101,8 @@ export function handleOptions(req: Request) {
 export function json(data: unknown, status = 200, headersOverride?: HeadersInit) {
   const headers = new Headers({
     ...resolveCorsHeaders(null),
-    'Content-Type': 'application/json',
+    'Content-Type': 'application/json; charset=utf-8',
+    'X-Content-Type-Options': 'nosniff',
   })
   appendHeaders(headers, headersOverride)
 
@@ -100,46 +134,133 @@ export function buildCacheHeaders(options: CacheHeaderOptions, headersOverride?:
 }
 
 export async function readJson<T>(req: Request): Promise<T> {
+  const contentLength = Number(req.headers.get('content-length') ?? 0)
+  if (Number.isFinite(contentLength) && contentLength > 1_048_576) {
+    throw new HttpError(413, 'Request body is too large.', null, { code: 'PAYLOAD_TOO_LARGE' })
+  }
+
+  const contentType = req.headers.get('content-type')?.toLowerCase() ?? ''
+  if (contentType && !contentType.includes('application/json')) {
+    throw new HttpError(415, 'Request body must use JSON.', null, { code: 'UNSUPPORTED_MEDIA_TYPE' })
+  }
+
   try {
     return await req.json() as T
   } catch {
-    throw new HttpError(400, 'Request body must be valid JSON.')
+    throw new HttpError(400, 'Request body must be valid JSON.', null, { code: 'INVALID_JSON' })
   }
 }
 
 export async function withErrorHandling(req: Request, handler: () => Promise<Response> | Response) {
-  const preflight = handleOptions(req)
+  const startedAt = performance.now()
+  const requestId = resolveRequestId(req)
+  const preflight = handleOptions(req, requestId, startedAt)
   if (preflight) return preflight
 
   const requestUrl = new URL(req.url)
 
   try {
     const response = await handler()
-    return withCorsHeaders(response, req)
+    return withResponseMetadata(response, req, requestId, startedAt)
   } catch (error) {
     if (error instanceof HttpError) {
-      const safeMessage = sanitizeErrorMessage(error.message, error.status)
+      const status = normalizeErrorStatus(error.status, error.details)
+      const safeMessage = sanitizeErrorMessage(error.message, status)
+      const code = error.code ?? errorCodeForStatus(status)
+      const retryable = isRetryableStatus(status)
+      const headers = new Headers(error.headers)
+      if (retryable && !headers.has('Retry-After')) {
+        headers.set('Retry-After', status === 429 ? '30' : '15')
+      }
       console.error(JSON.stringify({
-        level: error.status >= 500 ? 'error' : 'warn',
+        code,
+        duration_ms: responseTimeMs(startedAt),
+        level: status >= 500 ? 'error' : 'warn',
         method: req.method,
         message: error.message,
         path: requestUrl.pathname,
-        status: error.status,
+        request_id: requestId,
+        status,
       }))
-      return json({ error: safeMessage, details: null }, error.status, resolveCorsHeaders(req.headers.get('Origin')))
+      return withResponseMetadata(json({
+        code,
+        details: null,
+        error: safeMessage,
+        message: safeMessage,
+        requestId,
+        retryable,
+        status,
+      }, status, headers), req, requestId, startedAt)
     }
 
     const message = error instanceof Error ? error.message : 'Unexpected server error.'
     const safeMessage = sanitizeErrorMessage(message, 500)
     console.error(JSON.stringify({
+      code: 'INTERNAL_ERROR',
+      duration_ms: responseTimeMs(startedAt),
       level: 'error',
       method: req.method,
       message,
       path: requestUrl.pathname,
+      request_id: requestId,
       stack: error instanceof Error ? error.stack : null,
     }))
-    return json({ error: safeMessage, details: null }, 500, resolveCorsHeaders(req.headers.get('Origin')))
+    return withResponseMetadata(json({
+      code: 'INTERNAL_ERROR',
+      details: null,
+      error: safeMessage,
+      message: safeMessage,
+      requestId,
+      retryable: true,
+      status: 500,
+    }, 500, { 'Retry-After': '15' }), req, requestId, startedAt)
   }
+}
+
+function errorCodeFromDetails(details: unknown) {
+  if (!details || typeof details !== 'object') return null
+  const candidate = details as Record<string, unknown>
+  if (typeof candidate.code === 'string') return candidate.code.toUpperCase()
+  if (candidate.error && typeof candidate.error === 'object') {
+    const nestedCode = (candidate.error as Record<string, unknown>).code
+    if (typeof nestedCode === 'string') return nestedCode.toUpperCase()
+  }
+  return null
+}
+
+function normalizeErrorStatus(status: number, details: unknown) {
+  const detailCode = errorCodeFromDetails(details)
+  if (!detailCode || status !== 400) return status
+
+  if (['23503', '23505', '23P01'].includes(detailCode)) return 409
+  if (['22P02', '22001', '23502', '23514'].includes(detailCode)) return 422
+  if (detailCode === '42501') return 403
+  if (detailCode === '57014') return 408
+  if (detailCode === 'PGRST116') return 404
+  return status
+}
+
+function errorCodeForStatus(status: number) {
+  if (status === 400) return 'INVALID_REQUEST'
+  if (status === 401) return 'AUTH_REQUIRED'
+  if (status === 403) return 'FORBIDDEN'
+  if (status === 404) return 'NOT_FOUND'
+  if (status === 405) return 'METHOD_NOT_ALLOWED'
+  if (status === 408) return 'REQUEST_TIMEOUT'
+  if (status === 409) return 'CONFLICT'
+  if (status === 413) return 'PAYLOAD_TOO_LARGE'
+  if (status === 415) return 'UNSUPPORTED_MEDIA_TYPE'
+  if (status === 422) return 'VALIDATION_ERROR'
+  if (status === 429) return 'RATE_LIMITED'
+  if (status === 502) return 'UPSTREAM_ERROR'
+  if (status === 503) return 'SERVICE_UNAVAILABLE'
+  if (status === 504) return 'UPSTREAM_TIMEOUT'
+  if (status >= 500) return 'INTERNAL_ERROR'
+  return 'REQUEST_FAILED'
+}
+
+function isRetryableStatus(status: number) {
+  return status === 408 || status === 425 || status === 429 || status >= 500
 }
 
 function fallbackErrorMessageForStatus(status: number) {
@@ -147,8 +268,11 @@ function fallbackErrorMessageForStatus(status: number) {
   if (status === 401) return 'Please sign in to continue.'
   if (status === 403) return 'This account is not allowed to do that right now.'
   if (status === 404) return 'We could not find the information you requested.'
+  if (status === 405) return 'That request method is not supported.'
   if (status === 408) return 'The request took too long to finish. Please try again.'
   if (status === 409) return 'This action conflicts with existing information. Review the details and try again.'
+  if (status === 413) return 'The information sent is too large. Reduce it and try again.'
+  if (status === 415) return 'The request format is not supported.'
   if (status === 429) return 'Too many requests were made too quickly. Please wait a moment and try again.'
   if (status >= 500) return 'This service is temporarily unavailable right now. Please try again shortly.'
   return 'That action could not be completed right now. Please try again.'

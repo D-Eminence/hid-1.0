@@ -20,6 +20,7 @@ import type {
   HidStaffSearchResult,
 } from '../types/hid'
 import type { UploadDraft } from './medicalRecordUtils'
+import { createApiRequestId, parseApiPayload, readApiErrorInfo, unwrapApiData } from './apiResponse'
 import { clearAllPortalSessions } from './auth'
 import { pruneExpiredMapEntries, setBoundedMapEntry } from './cacheBudget'
 import { registerCacheResetter } from './cacheReset'
@@ -51,10 +52,6 @@ type EdgeRequestOptions = {
   body?: unknown
   query?: Record<string, string | number | undefined | null>
   requireAuth?: boolean
-}
-
-type EdgeEnvelope<T> = {
-  data: T
 }
 
 type SignedUploadResponse = {
@@ -254,11 +251,22 @@ registerCacheResetter(clearHidApiCaches)
 export class HidApiError extends Error {
   status: number
   details?: unknown
+  code: string | null
+  requestId: string | null
+  retryable: boolean
 
-  constructor(status: number, message: string, details?: unknown) {
+  constructor(
+    status: number,
+    message: string,
+    details?: unknown,
+    metadata: { code?: string | null; requestId?: string | null; retryable?: boolean } = {},
+  ) {
     super(message)
     this.status = status
     this.details = details
+    this.code = metadata.code ?? null
+    this.requestId = metadata.requestId ?? null
+    this.retryable = metadata.retryable ?? (status === 408 || status === 425 || status === 429 || status >= 500)
   }
 }
 
@@ -524,7 +532,9 @@ async function edgeRequest<T>(functionName: string, options: EdgeRequestOptions 
   })
 
   const headers: Record<string, string> = {
+    Accept: 'application/json',
     apikey: requireSupabaseAnonKey(),
+    'X-Request-ID': createApiRequestId(),
   }
 
   if (options.requireAuth !== false) {
@@ -560,26 +570,21 @@ async function edgeRequest<T>(functionName: string, options: EdgeRequestOptions 
       response = await fetchWithTimeout(url.toString(), requestInit)
     } catch (error) {
       if (isAbortError(error) || (error instanceof Error && error.message.toLowerCase().includes('took too long'))) {
-        throw new HidApiError(408, NETWORK_TIMEOUT_MESSAGE, error)
+        throw new HidApiError(408, NETWORK_TIMEOUT_MESSAGE, error, {
+          code: 'REQUEST_TIMEOUT',
+          requestId: headers['X-Request-ID'],
+          retryable: true,
+        })
       }
-      throw error
+      throw new HidApiError(503, 'We could not reach the service right now. Check your connection and try again.', error, {
+        code: 'NETWORK_ERROR',
+        requestId: headers['X-Request-ID'],
+        retryable: true,
+      })
     }
 
     const rawBody = await response.text()
-    let parsedPayload = null as
-      | (EdgeEnvelope<T> & { error?: string; details?: unknown })
-      | { error?: string; details?: unknown }
-      | null
-
-    if (rawBody) {
-      try {
-        parsedPayload = JSON.parse(rawBody) as
-          | (EdgeEnvelope<T> & { error?: string; details?: unknown })
-          | { error?: string; details?: unknown }
-      } catch {
-        parsedPayload = null
-      }
-    }
+    const parsedPayload = parseApiPayload(rawBody)
 
     const fallbackMessage = rawBody
       .replace(/<[^>]+>/g, ' ')
@@ -587,10 +592,12 @@ async function edgeRequest<T>(functionName: string, options: EdgeRequestOptions 
       .trim()
 
     if (!response.ok) {
-      const rawResponseMessage =
-        parsedPayload && typeof parsedPayload === 'object' && 'error' in parsedPayload && typeof parsedPayload.error === 'string'
-          ? parsedPayload.error
-          : fallbackMessage || response.statusText || ''
+      const errorInfo = readApiErrorInfo(parsedPayload, {
+        fallbackMessage: fallbackMessage || response.statusText || fallbackErrorMessageForStatus(response.status),
+        fallbackStatus: response.status,
+        response,
+      })
+      const rawResponseMessage = errorInfo.message
       const normalizedAccountStateMessage = formatDeletedAccountMessage(rawResponseMessage) ?? formatLockedAccountMessage(rawResponseMessage)
       const technicalMessage = formatTechnicalApiMessage(rawResponseMessage, response.status)
       const responseMessage = isBannedAuthMessage(rawResponseMessage)
@@ -617,12 +624,18 @@ async function edgeRequest<T>(functionName: string, options: EdgeRequestOptions 
       throw new HidApiError(
         response.status,
         responseMessage,
-        parsedPayload && typeof parsedPayload === 'object' && 'details' in parsedPayload ? parsedPayload.details : rawBody || parsedPayload
+        errorInfo.details,
+        {
+          code: errorInfo.code,
+          requestId: errorInfo.requestId ?? headers['X-Request-ID'],
+          retryable: errorInfo.retryable,
+        },
       )
     }
 
-    if (parsedPayload && typeof parsedPayload === 'object' && 'data' in parsedPayload) {
-      return parsedPayload.data
+    const unwrapped = unwrapApiData<T>(parsedPayload)
+    if (unwrapped.found) {
+      return unwrapped.value as T
     }
 
     return (parsedPayload ?? rawBody) as T

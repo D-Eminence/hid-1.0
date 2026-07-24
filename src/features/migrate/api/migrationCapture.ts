@@ -1,9 +1,13 @@
+import { invokeApiFunction } from '../../../lib/functionApi'
 import { supabase } from '../../../lib/supabase'
 
 async function command<T>(action:string,payload:Record<string,unknown>):Promise<T>{
-  const result=await supabase.functions.invoke('migration-capture',{method:'POST',body:{action,...payload}})
-  if(result.error)throw new Error(result.error.message||'Capture operation failed.')
-  return (result.data as {data:T}).data
+  const result=await invokeApiFunction<{data:T}>(
+    'migration-capture',
+    {method:'POST',body:{action,...payload}},
+    'The capture operation could not be completed right now.',
+  )
+  return result.data
 }
 
 export async function sha256Hex(file:File){
@@ -24,7 +28,7 @@ export async function uploadCapturePage(project_id:string,folderId:string,docume
   const upload=await supabase.storage.from('migration-source-files').uploadToSignedUrl(signed.path,signed.token,file,{
     contentType:file.type,upsert:false,
   })
-  if(upload.error)throw new Error(upload.error.message)
+  if(upload.error)throw new Error('The captured file could not be uploaded right now. Please try again.')
   return command<{id:string;status:string}>('complete_upload',{project_id,asset_id:signed.asset.id})
 }
 

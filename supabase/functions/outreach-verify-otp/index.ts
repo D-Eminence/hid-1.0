@@ -1,16 +1,10 @@
-// Self-contained — no _shared imports needed. Deploy this single file via Dashboard.
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.49.8'
+import { HttpError, json, readJson, withErrorHandling } from '../_shared/http.ts'
 
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
 const SUPABASE_ANON_KEY = Deno.env.get('SUPABASE_ANON_KEY')!
 const OTP_PEPPER = Deno.env.get('HID_OTP_PEPPER') ?? 'hid-dev-otp-pepper'
-
-const CORS = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
-  'Access-Control-Allow-Methods': 'POST, OPTIONS',
-}
 
 const OUTREACH_OTP_COLUMNS = 'id, email, auth_user_id, otp_hash, expires_at, consumed_at, attempt_count, max_attempts, metadata'
 const OUTREACH_CAMPAIGN_COLUMNS = 'id, name, org, location, status, starts_at, ends_at, services, created_at'
@@ -20,14 +14,6 @@ function adminClient() {
   return createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, {
     auth: { autoRefreshToken: false, persistSession: false },
   })
-}
-
-function ok(data: unknown) {
-  return new Response(JSON.stringify({ data }), { status: 200, headers: { ...CORS, 'Content-Type': 'application/json' } })
-}
-
-function err(status: number, message: string) {
-  return new Response(JSON.stringify({ error: message }), { status, headers: { ...CORS, 'Content-Type': 'application/json' } })
 }
 
 function toHex(b: Uint8Array) {
@@ -43,18 +29,16 @@ async function hashOtp(code: string) {
   return sha256(`${OTP_PEPPER}:outreach_signup:${code}`)
 }
 
-Deno.serve(async (req) => {
-  if (req.method === 'OPTIONS') return new Response('ok', { headers: CORS })
-  if (req.method !== 'POST') return err(405, 'Method not allowed.')
+Deno.serve(req => withErrorHandling(req, async () => {
+  if (req.method !== 'POST') throw new HttpError(405, 'Method not allowed.')
 
-  let body: Record<string, unknown>
-  try { body = await req.json() } catch { return err(400, 'Invalid request body.') }
+  const body = await readJson<Record<string, unknown>>(req)
 
   const otpId = (typeof body.otpId === 'string' ? body.otpId.trim() : '')
   const code = (typeof body.code === 'string' ? body.code.trim().replace(/\s/g, '') : '')
 
-  if (!otpId) return err(400, 'Verification session is missing. Please start your registration again.')
-  if (!code || code.length !== 6) return err(400, 'Please enter the full 6-digit code.')
+  if (!otpId) throw new HttpError(422, 'Verification session is missing. Please start your registration again.')
+  if (!code || code.length !== 6) throw new HttpError(422, 'Please enter the full 6-digit code.')
 
   try {
     const db = adminClient()
@@ -65,11 +49,11 @@ Deno.serve(async (req) => {
       .eq('id', otpId)
       .single()
 
-    if (fetchErr || !otp) return err(400, 'This verification session could not be found. Please start your registration again.')
-    if (otp.consumed_at) return err(400, 'This verification session has already been used. Please sign in to access your workspace.')
-    if (new Date(otp.expires_at as string) <= new Date()) return err(400, 'This verification code has expired. Go back and request a new one.')
+    if (fetchErr || !otp) throw new HttpError(404, 'This verification session could not be found. Please start your registration again.', fetchErr)
+    if (otp.consumed_at) throw new HttpError(409, 'This verification session has already been used. Please sign in to access your workspace.')
+    if (new Date(otp.expires_at as string) <= new Date()) throw new HttpError(410, 'This verification code has expired. Go back and request a new one.')
     if ((otp.attempt_count as number) >= (otp.max_attempts as number)) {
-      return err(429, 'Too many incorrect attempts. Please go back and request a new verification code.')
+      throw new HttpError(429, 'Too many incorrect attempts. Please go back and request a new verification code.')
     }
 
     const incomingHash = await hashOtp(code)
@@ -79,7 +63,7 @@ Deno.serve(async (req) => {
       const hint = remaining > 0
         ? ` You have ${remaining} attempt${remaining === 1 ? '' : 's'} remaining.`
         : ' No attempts remaining — please request a new code.'
-      return err(400, `That code doesn't match.${hint}`)
+      throw new HttpError(422, `That code doesn't match.${hint}`)
     }
 
     // Mark as verified
@@ -100,14 +84,14 @@ Deno.serve(async (req) => {
       realPassword = atob(meta.ep ?? '')
       if (!realPassword) throw new Error('empty')
     } catch {
-      return err(500, 'Your session data is invalid. Please register again.')
+      throw new HttpError(500, 'Your session data is invalid. Please register again.')
     }
 
     // Set real password on the auth user
     const { error: pwErr } = await db.auth.admin.updateUserById(authUserId, { password: realPassword })
     if (pwErr) {
       console.error(JSON.stringify({ event: 'set_password_failed', otp_id: otpId, error: pwErr.message }))
-      return err(500, "We couldn't complete your account setup right now. Please try again.")
+      throw new HttpError(500, "We couldn't complete your account setup right now. Please try again.", pwErr)
     }
 
     // Sign in to get a live session
@@ -119,7 +103,7 @@ Deno.serve(async (req) => {
     const authData = await authRes.json().catch(() => null)
     if (!authRes.ok || !authData?.access_token) {
       console.error(JSON.stringify({ event: 'sign_in_after_verify_failed', otp_id: otpId }))
-      return err(500, "Account verified but we couldn't sign you in automatically. Please sign in manually.")
+      throw new HttpError(502, "Account verified but we couldn't sign you in automatically. Please sign in manually.", authData)
     }
 
     // Create campaign
@@ -130,7 +114,7 @@ Deno.serve(async (req) => {
 
     if (campaignErr || !campaign) {
       console.error(JSON.stringify({ event: 'create_campaign_failed', otp_id: otpId, error: campaignErr?.message }))
-      return err(500, "Your account is ready but we couldn't create the campaign. Please sign in and try setting it up again.")
+      throw new HttpError(500, "Your account is ready but we couldn't create the campaign. Please sign in and try setting it up again.", campaignErr)
     }
 
     // Create worker (admin role)
@@ -141,7 +125,7 @@ Deno.serve(async (req) => {
 
     if (workerErr || !worker) {
       console.error(JSON.stringify({ event: 'create_worker_failed', otp_id: otpId, error: workerErr?.message }))
-      return err(500, "Campaign created but we couldn't link your account. Please sign in and contact support.")
+      throw new HttpError(500, "Campaign created but we couldn't link your account. Please sign in and contact support.", workerErr)
     }
 
     // Consume OTP and remove sensitive metadata
@@ -157,18 +141,21 @@ Deno.serve(async (req) => {
       worker_id: worker.id, campaign_id: campaign.id, metadata: { otp_id: otpId },
     }).then(() => undefined).catch(() => undefined)
 
-    return ok({
-      session: {
-        access_token: authData.access_token,
-        refresh_token: authData.refresh_token,
-        expires_in: authData.expires_in,
-        token_type: authData.token_type ?? 'bearer',
+    return json({
+      data: {
+        session: {
+          access_token: authData.access_token,
+          refresh_token: authData.refresh_token,
+          expires_in: authData.expires_in,
+          token_type: authData.token_type ?? 'bearer',
+        },
+        worker,
+        campaign,
       },
-      worker,
-      campaign,
     })
   } catch (e) {
+    if (e instanceof HttpError) throw e
     console.error(JSON.stringify({ event: 'unhandled_error', error: String(e) }))
-    return err(500, 'Something went wrong. Please try again in a moment.')
+    throw new HttpError(500, 'Something went wrong. Please try again in a moment.', e)
   }
-})
+}))

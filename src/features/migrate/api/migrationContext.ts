@@ -1,25 +1,12 @@
-import { supabase } from '../../../lib/supabase'
+import { invokeApiFunction } from '../../../lib/functionApi'
 import type { MigrationAccessContext } from '../domain'
 
-function getErrorMessage(error: unknown) {
-  if (!error || typeof error !== 'object' || !('message' in error)) {
-    return 'HID Migrate could not verify your access right now.'
-  }
-
-  const raw = String((error as { message: unknown }).message ?? '')
-  try {
-    const parsed = JSON.parse(raw) as { error?: string; message?: string }
-    return parsed.error ?? parsed.message ?? raw
-  } catch {
-    return raw || 'HID Migrate could not verify your access right now.'
-  }
-}
-
 export async function fetchMigrationContext(): Promise<MigrationAccessContext> {
-  const result = await supabase.functions.invoke('migration-context', { method: 'GET' })
-  if (result.error) throw new Error(getErrorMessage(result.error))
-
-  const envelope = result.data as { data?: MigrationAccessContext } | MigrationAccessContext | null
+  const envelope = await invokeApiFunction<{ data?: MigrationAccessContext } | MigrationAccessContext | null>(
+    'migration-context',
+    { method: 'GET' },
+    'HID Migrate could not verify your access right now.',
+  )
   const context = envelope && 'projects' in envelope
     ? envelope
     : envelope?.data

@@ -1,5 +1,5 @@
-// Self-contained — no _shared imports needed. Deploy this single file via Dashboard.
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.49.8'
+import { HttpError, json, readJson, withErrorHandling } from '../_shared/http.ts'
 
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
@@ -10,24 +10,10 @@ const BREVO_FROM = Deno.env.get('BREVO_FROM_EMAIL') ?? 'Health Identity Director
 const OTP_TTL_MINUTES = 15
 const MAX_RESENDS = 3
 
-const CORS = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
-  'Access-Control-Allow-Methods': 'POST, OPTIONS',
-}
-
 function adminClient() {
   return createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, {
     auth: { autoRefreshToken: false, persistSession: false },
   })
-}
-
-function ok(data: unknown) {
-  return new Response(JSON.stringify({ data }), { status: 200, headers: { ...CORS, 'Content-Type': 'application/json' } })
-}
-
-function err(status: number, message: string) {
-  return new Response(JSON.stringify({ error: message }), { status, headers: { ...CORS, 'Content-Type': 'application/json' } })
 }
 
 function toHex(b: Uint8Array) {
@@ -107,21 +93,17 @@ async function assertOutreachSignupEnabled(db: ReturnType<typeof adminClient>) {
     .eq('id', true)
     .maybeSingle()
 
-  if (error) throw new Error(error.message)
-  if (data?.maintenance_mode) return err(503, 'HID is under scheduled maintenance right now. Please try again shortly.')
+  if (error) throw new HttpError(400, error.message, error)
+  if (data?.maintenance_mode) throw new HttpError(503, 'HID is under scheduled maintenance right now. Please try again shortly.')
   if (data && data.outreach_signup_enabled === false) {
-    return err(403, 'Outreach onboarding is temporarily disabled right now.')
+    throw new HttpError(403, 'Outreach onboarding is temporarily disabled right now.')
   }
-  return null
 }
 
-Deno.serve(async (req) => {
-  if (req.method === 'OPTIONS') return new Response('ok', { headers: CORS })
+Deno.serve(req => withErrorHandling(req, async () => {
+  if (req.method !== 'POST') throw new HttpError(405, 'Method not allowed.')
 
-  if (req.method !== 'POST') return err(405, 'Method not allowed.')
-
-  let body: Record<string, unknown>
-  try { body = await req.json() } catch { return err(400, 'Invalid request body.') }
+  const body = await readJson<Record<string, unknown>>(req)
 
   const email = (typeof body.email === 'string' ? body.email.trim().toLowerCase() : '')
   const password = (typeof body.password === 'string' ? body.password.trim() : '')
@@ -131,18 +113,17 @@ Deno.serve(async (req) => {
   const location = (typeof body.location === 'string' ? body.location.trim() : '')
   const startsAt = (typeof body.startsAt === 'string' ? body.startsAt.trim() : '')
 
-  if (!email || !/\S+@\S+\.\S+/.test(email)) return err(400, 'Please enter a valid email address.')
-  if (!password || password.length < 8) return err(400, 'Password must be at least 8 characters.')
-  if (!displayName) return err(400, 'Your name is required.')
-  if (!campaignName) return err(400, 'Campaign name is required.')
-  if (!org) return err(400, 'Organization name is required.')
-  if (!location) return err(400, 'Location is required.')
-  if (!startsAt) return err(400, 'Start date is required.')
+  if (!email || !/\S+@\S+\.\S+/.test(email)) throw new HttpError(422, 'Please enter a valid email address.')
+  if (!password || password.length < 8) throw new HttpError(422, 'Password must be at least 8 characters.')
+  if (!displayName) throw new HttpError(422, 'Your name is required.')
+  if (!campaignName) throw new HttpError(422, 'Campaign name is required.')
+  if (!org) throw new HttpError(422, 'Organization name is required.')
+  if (!location) throw new HttpError(422, 'Location is required.')
+  if (!startsAt) throw new HttpError(422, 'Start date is required.')
 
   try {
     const db = adminClient()
-    const controlError = await assertOutreachSignupEnabled(db)
-    if (controlError) return controlError
+    await assertOutreachSignupEnabled(db)
 
     // Check for an active unexpired OTP for this email
     const { data: existingOtp } = await db
@@ -161,7 +142,7 @@ Deno.serve(async (req) => {
 
     if (existingOtp) {
       if ((existingOtp.resend_count ?? 0) >= MAX_RESENDS) {
-        return err(429, 'Too many verification codes requested. Please wait a few minutes before trying again.')
+        throw new HttpError(429, 'Too many verification codes requested. Please wait a few minutes before trying again.')
       }
       authUserId = existingOtp.auth_user_id as string
       otpId = existingOtp.id as string
@@ -176,13 +157,13 @@ Deno.serve(async (req) => {
 
       if (createError) {
         if (createError.status === 422 || createError.message?.toLowerCase().includes('already been registered')) {
-          return err(409, 'An account with this email already exists. If you have an outreach account, please sign in instead.')
+          throw new HttpError(409, 'An account with this email already exists. If you have an outreach account, please sign in instead.')
         }
         console.error(JSON.stringify({ event: 'create_user_failed', email, error: createError.message }))
-        return err(500, "We couldn't create your account right now. Please try again in a moment.")
+        throw new HttpError(500, "We couldn't create your account right now. Please try again in a moment.", createError)
       }
 
-      if (!created?.user?.id) return err(500, "We couldn't create your account right now. Please try again.")
+      if (!created?.user?.id) throw new HttpError(500, "We couldn't create your account right now. Please try again.")
 
       authUserId = created.user.id
       otpId = crypto.randomUUID()
@@ -199,13 +180,13 @@ Deno.serve(async (req) => {
         resend_count: ((existingOtp as any).resend_count ?? 0) + 1,
         last_resend_at: new Date().toISOString(),
       }).eq('id', otpId)
-      if (updateErr) return err(500, 'Unable to refresh your verification code. Please try again.')
+      if (updateErr) throw new HttpError(500, 'Unable to refresh your verification code. Please try again.', updateErr)
     } else {
       const { error: insertErr } = await db.from('hid_outreach_otp').insert({
         id: otpId, email, auth_user_id: authUserId, otp_hash: otpHash,
         metadata, expires_at: expiresAt, max_attempts: 5, max_resends: MAX_RESENDS,
       })
-      if (insertErr) return err(500, 'Unable to set up your verification. Please try again.')
+      if (insertErr) throw new HttpError(500, 'Unable to set up your verification. Please try again.', insertErr)
     }
 
     // Send real email — only succeed if Brevo accepts it
@@ -213,7 +194,7 @@ Deno.serve(async (req) => {
       await sendEmail(email, 'Your HID Outreach verification code', emailHtml(code, displayName))
     } catch (emailErr) {
       console.error(JSON.stringify({ event: 'email_failed', email, otp_id: otpId, error: String(emailErr) }))
-      return err(500, "We couldn't send the verification email. Please check the address and try again.")
+      throw new HttpError(502, "We couldn't send the verification email. Please check the address and try again.", emailErr)
     }
 
     console.log(JSON.stringify({ event: isResend ? 'otp_resent' : 'otp_sent', email, otp_id: otpId }))
@@ -224,9 +205,10 @@ Deno.serve(async (req) => {
       metadata: { otp_id: otpId, campaign_name: campaignName },
     }).then(() => undefined).catch(() => undefined)
 
-    return ok({ otpId, maskedEmail: maskEmail(email), expiresAt, expiresInMinutes: OTP_TTL_MINUTES })
+    return json({ data: { otpId, maskedEmail: maskEmail(email), expiresAt, expiresInMinutes: OTP_TTL_MINUTES } })
   } catch (e) {
+    if (e instanceof HttpError) throw e
     console.error(JSON.stringify({ event: 'unhandled_error', error: String(e) }))
-    return err(500, 'Something went wrong. Please try again in a moment.')
+    throw new HttpError(500, 'Something went wrong. Please try again in a moment.', e)
   }
-})
+}))

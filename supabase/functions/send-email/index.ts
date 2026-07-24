@@ -31,11 +31,20 @@ const hookSecrets = Array.from(new Set([
 ]))
 const supabaseUrl = optionalEnv('SUPABASE_URL', 'https://ekcuyqrwrzvwhmbnkold.supabase.co').replace(/\/+$/, '')
 
-function json(data: unknown, status = 200) {
+function resolveRequestId(req: Request) {
+  const provided = req.headers.get('x-request-id')?.trim() ?? ''
+  if (/^[a-zA-Z0-9._:-]{8,128}$/.test(provided)) return provided
+  return `hid_email_${crypto.randomUUID()}`
+}
+
+function json(data: unknown, status = 200, requestId?: string) {
   return new Response(JSON.stringify(data), {
     status,
     headers: {
-      'Content-Type': 'application/json',
+      'Cache-Control': 'no-store, max-age=0',
+      'Content-Type': 'application/json; charset=utf-8',
+      'X-Content-Type-Options': 'nosniff',
+      ...(requestId ? { 'X-Request-ID': requestId } : {}),
     },
   })
 }
@@ -198,8 +207,17 @@ async function sendEmail(to: string, subject: string, html: string) {
 }
 
 Deno.serve(async req => {
+  const requestId = resolveRequestId(req)
   if (req.method !== 'POST') {
-    return json({ error: 'Method not allowed.' }, 405)
+    const message = 'Method not allowed.'
+    return json({
+      code: 'METHOD_NOT_ALLOWED',
+      error: { message },
+      message,
+      requestId,
+      retryable: false,
+      status: 405,
+    }, 405, requestId)
   }
 
   const payloadText = await req.text()
@@ -241,7 +259,15 @@ Deno.serve(async req => {
     const primaryEmail = user.email?.trim()
 
     if (!primaryEmail) {
-      return json({ error: 'Missing user email.' }, 400)
+      const message = 'Missing user email.'
+      return json({
+        code: 'INVALID_REQUEST',
+        error: { message },
+        message,
+        requestId,
+        retryable: false,
+        status: 400,
+      }, 400, requestId)
     }
 
     const deliveries: Array<Promise<void>> = []
@@ -271,16 +297,29 @@ Deno.serve(async req => {
     return new Response('{}', {
       status: 200,
       headers: {
-        'Content-Type': 'application/json',
+        'Cache-Control': 'no-store, max-age=0',
+        'Content-Type': 'application/json; charset=utf-8',
+        'X-Content-Type-Options': 'nosniff',
+        'X-Request-ID': requestId,
       },
     })
   } catch (error) {
-    const message = error instanceof Error ? error.message : 'Unable to send auth email.'
-    console.error('send-email hook failed', message)
+    const internalMessage = error instanceof Error ? error.message : 'Unable to send auth email.'
+    const message = 'We could not send the verification email right now. Please try again.'
+    console.error(JSON.stringify({
+      event: 'send_email_hook_failed',
+      message: internalMessage,
+      request_id: requestId,
+    }))
     return json({
+      code: 'EMAIL_DELIVERY_FAILED',
       error: {
         message,
       },
-    }, 401)
+      message,
+      requestId,
+      retryable: true,
+      status: 502,
+    }, 502, requestId)
   }
 })

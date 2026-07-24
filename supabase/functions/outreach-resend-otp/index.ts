@@ -1,5 +1,5 @@
-// Self-contained — no _shared imports needed. Deploy this single file via Dashboard.
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.49.8'
+import { HttpError, json, readJson, withErrorHandling } from '../_shared/http.ts'
 
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
@@ -9,26 +9,12 @@ const BREVO_FROM = Deno.env.get('BREVO_FROM_EMAIL') ?? 'Health Identity Director
 const OTP_TTL_MINUTES = 15
 const RESEND_COOLDOWN_SECONDS = 60
 
-const CORS = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
-  'Access-Control-Allow-Methods': 'POST, OPTIONS',
-}
-
 const OUTREACH_OTP_COLUMNS = 'id, email, auth_user_id, consumed_at, resend_count, max_resends, last_resend_at, metadata'
 
 function adminClient() {
   return createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, {
     auth: { autoRefreshToken: false, persistSession: false },
   })
-}
-
-function ok(data: unknown) {
-  return new Response(JSON.stringify({ data }), { status: 200, headers: { ...CORS, 'Content-Type': 'application/json' } })
-}
-
-function err(status: number, message: string) {
-  return new Response(JSON.stringify({ error: message }), { status, headers: { ...CORS, 'Content-Type': 'application/json' } })
 }
 
 function toHex(b: Uint8Array) {
@@ -100,31 +86,31 @@ function emailHtml(code: string, name: string) {
 </div></body></html>`
 }
 
-Deno.serve(async (req) => {
-  if (req.method === 'OPTIONS') return new Response('ok', { headers: CORS })
-  if (req.method !== 'POST') return err(405, 'Method not allowed.')
+Deno.serve(req => withErrorHandling(req, async () => {
+  if (req.method !== 'POST') throw new HttpError(405, 'Method not allowed.')
 
-  let body: Record<string, unknown>
-  try { body = await req.json() } catch { return err(400, 'Invalid request body.') }
+  const body = await readJson<Record<string, unknown>>(req)
 
   const otpId = (typeof body.otpId === 'string' ? body.otpId.trim() : '')
-  if (!otpId) return err(400, 'Verification session is missing.')
+  if (!otpId) throw new HttpError(422, 'Verification session is missing.')
 
   try {
     const db = adminClient()
 
     const { data: otp, error: fetchErr } = await db.from('hid_outreach_otp').select(OUTREACH_OTP_COLUMNS).eq('id', otpId).single()
-    if (fetchErr || !otp) return err(400, 'This verification session could not be found. Please start your registration again.')
-    if (otp.consumed_at) return err(400, 'This verification has already been completed.')
+    if (fetchErr || !otp) throw new HttpError(404, 'This verification session could not be found. Please start your registration again.', fetchErr)
+    if (otp.consumed_at) throw new HttpError(409, 'This verification has already been completed.')
     if ((otp.resend_count as number) >= (otp.max_resends as number)) {
-      return err(429, "You've requested too many codes. Please wait a few minutes before trying again.")
+      throw new HttpError(429, "You've requested too many codes. Please wait a few minutes before trying again.")
     }
 
     if (otp.last_resend_at) {
       const elapsed = (Date.now() - new Date(otp.last_resend_at as string).getTime()) / 1000
       if (elapsed < RESEND_COOLDOWN_SECONDS) {
         const wait = Math.ceil(RESEND_COOLDOWN_SECONDS - elapsed)
-        return err(429, `Please wait ${wait} seconds before requesting another code.`)
+        throw new HttpError(429, `Please wait ${wait} seconds before requesting another code.`, null, {
+          headers: { 'Retry-After': `${wait}` },
+        })
       }
     }
 
@@ -140,13 +126,13 @@ Deno.serve(async (req) => {
       last_resend_at: new Date().toISOString(),
     }).eq('id', otpId)
 
-    if (updateErr) return err(500, 'Unable to generate a new code. Please try again.')
+    if (updateErr) throw new HttpError(500, 'Unable to generate a new code. Please try again.', updateErr)
 
     try {
       await sendEmail(otp.email as string, 'Your new HID Outreach verification code', emailHtml(code, displayName))
     } catch (emailErr) {
       console.error(JSON.stringify({ event: 'resend_email_failed', otp_id: otpId, error: String(emailErr) }))
-      return err(500, "We couldn't send a new code right now. Please try again in a moment.")
+      throw new HttpError(502, "We couldn't send a new code right now. Please try again in a moment.", emailErr)
     }
 
     console.log(JSON.stringify({ event: 'otp_resent', otp_id: otpId, email: otp.email }))
@@ -155,14 +141,17 @@ Deno.serve(async (req) => {
       event: 'otp_resent', email: otp.email, auth_user_id: otp.auth_user_id, metadata: { otp_id: otpId },
     }).then(() => undefined).catch(() => undefined)
 
-    return ok({
-      maskedEmail: maskEmail(otp.email as string),
-      expiresAt,
-      expiresInMinutes: OTP_TTL_MINUTES,
-      resendsRemaining: (otp.max_resends as number) - (otp.resend_count as number) - 1,
+    return json({
+      data: {
+        maskedEmail: maskEmail(otp.email as string),
+        expiresAt,
+        expiresInMinutes: OTP_TTL_MINUTES,
+        resendsRemaining: (otp.max_resends as number) - (otp.resend_count as number) - 1,
+      },
     })
   } catch (e) {
+    if (e instanceof HttpError) throw e
     console.error(JSON.stringify({ event: 'unhandled_error', error: String(e) }))
-    return err(500, 'Something went wrong. Please try again in a moment.')
+    throw new HttpError(500, 'Something went wrong. Please try again in a moment.', e)
   }
-})
+}))

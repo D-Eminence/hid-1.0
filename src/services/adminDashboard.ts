@@ -18,14 +18,11 @@ import type {
   AdminUserDirectoryResponse,
   AdminUserManagementAction,
 } from '../types/admin'
+import { createApiRequestId, parseApiPayload, readApiErrorInfo, unwrapApiData } from '../lib/apiResponse'
 import { HidApiError } from '../lib/hidApi'
 import { clearAllPortalSessions } from '../lib/auth'
 import { BANNED_ACCOUNT_MESSAGE, isBannedAuthMessage } from '../lib/securityMessages'
 import { NETWORK_TIMEOUT_MESSAGE, fetchWithTimeout, getSafeSession, safeSignOut } from '../lib/supabase'
-
-type EdgeEnvelope<T> = {
-  data: T
-}
 
 const inflightOverviewRequests = new Map<string, Promise<AdminDashboardOverview>>()
 const overviewCache = new Map<string, { expiresAt: number; value: AdminDashboardOverview }>()
@@ -57,22 +54,6 @@ function fallbackErrorMessage(raw: string, status: number, fallbackMessage = 'Th
   if (status === 429) return 'The admin dashboard is being rate-limited right now. Please wait a moment and try again.'
   if (status >= 500) return 'The admin dashboard is temporarily unavailable right now. Please try again shortly.'
   return fallbackMessage
-}
-
-function isLowSignalErrorMessage(message: string) {
-  const lower = message.toLowerCase()
-  return (
-    lower === 'request failed' ||
-    lower === 'failed' ||
-    lower === 'error' ||
-    lower === 'internal server error' ||
-    lower === 'bad request' ||
-    lower === 'forbidden' ||
-    lower === 'unauthorized' ||
-    lower === 'not found' ||
-    lower === 'service unavailable' ||
-    lower === 'gateway timeout'
-  )
 }
 
 function sanitizeAdminDashboardMessage(raw: string, status: number, fallbackMessage?: string) {
@@ -342,8 +323,12 @@ function getCachedUserSearch(query: string) {
 
 function buildAdminRequestInit(init: RequestInit, accessToken: string): RequestInit {
   const headers = new Headers(init.headers ?? undefined)
+  headers.set('Accept', 'application/json')
   headers.set('Authorization', `Bearer ${accessToken}`)
   headers.set('apikey', requireSupabaseAnonKey())
+  if (!headers.has('X-Request-ID')) {
+    headers.set('X-Request-ID', createApiRequestId())
+  }
   if (init.body && !headers.has('Content-Type')) {
     headers.set('Content-Type', 'application/json')
   }
@@ -396,43 +381,50 @@ async function callAdminUserManagement<T>(path: string, init: RequestInit, statu
     throw new HidApiError(401, 'Please sign in to continue.')
   }
 
+  const requestInit = buildAdminRequestInit(init, accessToken)
+  const requestId = new Headers(requestInit.headers).get('x-request-id')
   let response: Response
   try {
-    response = await fetchWithTimeout(path, buildAdminRequestInit(init, accessToken))
+    response = await fetchWithTimeout(path, requestInit)
   } catch (error) {
     if (path.includes('admin-user-export')) {
       if (error instanceof Error && (error.name === 'AbortError' || error.message.toLowerCase().includes('too long') || error.message.toLowerCase().includes('timed out'))) {
-        throw new HidApiError(408, 'The export request took too long. Please try again.', error)
+        throw new HidApiError(408, 'The export request took too long. Please try again.', error, {
+          code: 'REQUEST_TIMEOUT',
+          requestId,
+          retryable: true,
+        })
       }
-      throw new HidApiError(statusFallback, getAdminExportNetworkMessage(), error)
+      throw new HidApiError(statusFallback, getAdminExportNetworkMessage(), error, {
+        code: 'NETWORK_ERROR',
+        requestId,
+        retryable: true,
+      })
     }
     if (error instanceof Error && error.message.toLowerCase().includes('too long')) {
-      throw new HidApiError(408, NETWORK_TIMEOUT_MESSAGE, error)
+      throw new HidApiError(408, NETWORK_TIMEOUT_MESSAGE, error, {
+        code: 'REQUEST_TIMEOUT',
+        requestId,
+        retryable: true,
+      })
     }
-    throw error
+    throw new HidApiError(503, 'The admin service could not be reached right now. Please try again.', error, {
+      code: 'NETWORK_ERROR',
+      requestId,
+      retryable: true,
+    })
   }
 
   const rawBody = await response.text()
-  let parsedPayload = null as
-    | (EdgeEnvelope<T> & { error?: string; details?: unknown })
-    | { error?: string; details?: unknown }
-    | null
-
-  if (rawBody) {
-    try {
-      parsedPayload = JSON.parse(rawBody) as
-        | (EdgeEnvelope<T> & { error?: string; details?: unknown })
-        | { error?: string; details?: unknown }
-    } catch {
-      parsedPayload = null
-    }
-  }
+  const parsedPayload = parseApiPayload(rawBody)
 
   if (!response.ok) {
-    const rawMessage =
-      parsedPayload && typeof parsedPayload === 'object' && 'error' in parsedPayload && typeof parsedPayload.error === 'string'
-        ? parsedPayload.error
-        : rawBody || response.statusText || ''
+    const errorInfo = readApiErrorInfo(parsedPayload, {
+      fallbackMessage: rawBody || response.statusText || '',
+      fallbackStatus: response.status || statusFallback,
+      response,
+    })
+    const rawMessage = errorInfo.message
     const fallbackMessage = getAdminEndpointFallbackMessage(path, init, response.status || statusFallback)
     const message = sanitizeAdminDashboardMessage(rawMessage || fallbackErrorMessage('', statusFallback, fallbackMessage), response.status || statusFallback, fallbackMessage)
 
@@ -448,12 +440,18 @@ async function callAdminUserManagement<T>(path: string, init: RequestInit, statu
     throw new HidApiError(
       response.status || statusFallback,
       message,
-      parsedPayload && typeof parsedPayload === 'object' && 'details' in parsedPayload ? parsedPayload.details : rawBody || parsedPayload
+      errorInfo.details,
+      {
+        code: errorInfo.code,
+        requestId: errorInfo.requestId ?? requestId,
+        retryable: errorInfo.retryable,
+      },
     )
   }
 
-  if (parsedPayload && typeof parsedPayload === 'object' && 'data' in parsedPayload) {
-    return parsedPayload.data
+  const unwrapped = unwrapApiData<T>(parsedPayload)
+  if (unwrapped.found) {
+    return unwrapped.value as T
   }
 
   throw new HidApiError(statusFallback, 'Admin controls returned an unexpected response.')
@@ -487,45 +485,43 @@ export async function fetchAdminDashboardOverview(window: AdminOverviewWindow = 
     }
 
     let response: Response
+    const requestId = createApiRequestId()
     try {
       response = await fetchWithTimeout(url.toString(), {
         cache: 'no-store',
         headers: {
+          Accept: 'application/json',
           Authorization: `Bearer ${accessToken}`,
           apikey: requireSupabaseAnonKey(),
+          'X-Request-ID': requestId,
         },
       })
     } catch (error) {
       if (error instanceof Error && error.message.toLowerCase().includes('too long')) {
-        throw new HidApiError(408, NETWORK_TIMEOUT_MESSAGE, error)
+        throw new HidApiError(408, NETWORK_TIMEOUT_MESSAGE, error, {
+          code: 'REQUEST_TIMEOUT',
+          requestId,
+          retryable: true,
+        })
       }
-      throw error
+      throw new HidApiError(503, 'The admin dashboard could not be reached right now. Please try again.', error, {
+        code: 'NETWORK_ERROR',
+        requestId,
+        retryable: true,
+      })
     }
 
     const rawBody = await response.text()
-    let parsedPayload = null as
-      | (EdgeEnvelope<AdminDashboardOverview> & { error?: string; details?: unknown })
-      | { error?: string; details?: unknown }
-      | null
-
-    if (rawBody) {
-      try {
-        parsedPayload = JSON.parse(rawBody) as
-          | (EdgeEnvelope<AdminDashboardOverview> & { error?: string; details?: unknown })
-          | { error?: string; details?: unknown }
-      } catch {
-        parsedPayload = null
-      }
-    }
+    const parsedPayload = parseApiPayload(rawBody)
 
     if (!response.ok) {
-      const rawMessage =
-        parsedPayload && typeof parsedPayload === 'object' && 'error' in parsedPayload && typeof parsedPayload.error === 'string'
-          ? parsedPayload.error
-          : rawBody || response.statusText || ''
-      const message = rawMessage && !isLowSignalErrorMessage(rawMessage)
-        ? sanitizeAdminDashboardMessage(rawMessage, response.status)
-        : sanitizeAdminDashboardMessage(rawMessage, response.status)
+      const errorInfo = readApiErrorInfo(parsedPayload, {
+        fallbackMessage: rawBody || response.statusText || '',
+        fallbackStatus: response.status,
+        response,
+      })
+      const rawMessage = errorInfo.message
+      const message = sanitizeAdminDashboardMessage(rawMessage, response.status)
 
       if (response.status === 401 || message.toLowerCase().includes('please sign in again')) {
         try {
@@ -539,16 +535,22 @@ export async function fetchAdminDashboardOverview(window: AdminOverviewWindow = 
       throw new HidApiError(
         response.status,
         message,
-        parsedPayload && typeof parsedPayload === 'object' && 'details' in parsedPayload ? parsedPayload.details : rawBody || parsedPayload
+        errorInfo.details,
+        {
+          code: errorInfo.code,
+          requestId: errorInfo.requestId ?? requestId,
+          retryable: errorInfo.retryable,
+        },
       )
     }
 
-    if (parsedPayload && typeof parsedPayload === 'object' && 'data' in parsedPayload) {
+    const unwrapped = unwrapApiData<AdminDashboardOverview>(parsedPayload)
+    if (unwrapped.found && unwrapped.value) {
       overviewCache.set(cacheKey, {
         expiresAt: Date.now() + OVERVIEW_CACHE_TTL_MS,
-        value: parsedPayload.data,
+        value: unwrapped.value,
       })
-      return parsedPayload.data
+      return unwrapped.value
     }
 
     throw new HidApiError(500, 'Admin dashboard returned an unexpected response.')
@@ -571,26 +573,56 @@ async function callAdminUserExport(path: string, init: RequestInit, statusFallba
     throw new HidApiError(401, 'Please sign in to continue.')
   }
 
+  const requestInit = buildAdminRequestInit(init, accessToken)
+  const requestId = new Headers(requestInit.headers).get('x-request-id')
   let response: Response
   try {
-    response = await fetchWithTimeoutMs(path, buildAdminRequestInit(init, accessToken))
+    response = await fetchWithTimeoutMs(path, requestInit)
   } catch (error) {
     if (path.includes('admin-user-export')) {
       if (error instanceof Error && (error.name === 'AbortError' || error.message.toLowerCase().includes('too long') || error.message.toLowerCase().includes('timed out'))) {
-        throw new HidApiError(408, 'The export request took too long. Please try again.', error)
+        throw new HidApiError(408, 'The export request took too long. Please try again.', error, {
+          code: 'REQUEST_TIMEOUT',
+          requestId,
+          retryable: true,
+        })
       }
-      throw new HidApiError(statusFallback, getAdminExportNetworkMessage(), error)
+      throw new HidApiError(statusFallback, getAdminExportNetworkMessage(), error, {
+        code: 'NETWORK_ERROR',
+        requestId,
+        retryable: true,
+      })
     }
     const rawMessage = error instanceof Error ? error.message : 'The export request could not be completed right now.'
-    throw new HidApiError(statusFallback, sanitizeAdminDashboardMessage(rawMessage, statusFallback, getAdminEndpointFallbackMessage(path, init, statusFallback)), error)
+    throw new HidApiError(
+      statusFallback,
+      sanitizeAdminDashboardMessage(rawMessage, statusFallback, getAdminEndpointFallbackMessage(path, init, statusFallback)),
+      error,
+      {
+        code: 'NETWORK_ERROR',
+        requestId,
+        retryable: true,
+      },
+    )
   }
 
   if (!response.ok) {
-    const payload = await response.json().catch(() => null)
-    const rawMessage = payload && typeof payload === 'object' && 'error' in payload
-      ? String((payload as { error?: unknown }).error ?? '')
-      : response.statusText || 'Request failed.'
-    throw new HidApiError(response.status, sanitizeAdminDashboardMessage(rawMessage, response.status, getAdminEndpointFallbackMessage(path, init, response.status)), payload)
+    const payload = parseApiPayload(await response.text())
+    const errorInfo = readApiErrorInfo(payload, {
+      fallbackMessage: response.statusText || 'Request failed.',
+      fallbackStatus: response.status,
+      response,
+    })
+    throw new HidApiError(
+      response.status,
+      sanitizeAdminDashboardMessage(errorInfo.message, response.status, getAdminEndpointFallbackMessage(path, init, response.status)),
+      errorInfo.details,
+      {
+        code: errorInfo.code,
+        requestId: errorInfo.requestId ?? requestId,
+        retryable: errorInfo.retryable,
+      },
+    )
   }
 
   return response
