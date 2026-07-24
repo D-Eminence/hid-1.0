@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { AuthLegalConsent } from '../../components/AuthLegalConsent'
 import { AuthShell } from '../../components/AuthShell'
+import { GoogleIdentityButton } from '../../components/GoogleIdentityButton'
 import { OtpInputs } from '../../components/OtpInputs'
 import { TurnstileWidget } from '../../components/TurnstileWidget'
 import { Button, Input, Select, showToast } from '../../components/ui'
@@ -23,7 +24,7 @@ import {
   verifyStaffPasswordResetOtp,
   verifyStaffSignupOtp,
 } from '../../lib/hidApi'
-import { prefillWithGoogleIdentity } from '../../lib/googleIdentity'
+import type { GoogleIdentitySelection } from '../../lib/googleIdentity'
 import { trackEvent } from '../../lib/observabilityBridge'
 import { getSafeUser, safeSignOut, supabase } from '../../lib/supabase'
 import { COUNTRIES, PASSWORD_REQUIREMENTS_TEXT, STATES_BY_COUNTRY, isStrongPassword, maskEmailAddress } from '../../lib/utils'
@@ -271,10 +272,9 @@ export default function DoctorAuth() {
     runWithCaptcha(token => void performLogin(token))
   }
 
-  async function signInHospitalWithGoogle() {
+  async function signInHospitalWithGoogle(identity: GoogleIdentitySelection) {
     setLoading(true)
     try {
-      const identity = await prefillWithGoogleIdentity()
       await signInWithGoogleIdToken('hospital', identity.credential, identity.email)
     } catch (error) {
       showToast(error instanceof Error ? error.message : 'Unable to continue with Google.', 'error')
@@ -283,10 +283,9 @@ export default function DoctorAuth() {
     }
   }
 
-  async function prefillHospitalSignupWithGoogle() {
+  async function prefillHospitalSignupWithGoogle(identity: GoogleIdentitySelection) {
     setLoading(true)
     try {
-      const identity = await prefillWithGoogleIdentity()
       setSignupForm(current => ({ ...current, email: identity.email }))
       showToast('Google email added. Complete the form to continue sign-up.', 'success')
     } catch (error) {
@@ -711,7 +710,7 @@ export default function DoctorAuth() {
             <Button disabled={!canSubmitLogin} loading={loading} onClick={submitLogin} style={actionButtonStyle(canSubmitLogin)}>
               Sign in
             </Button>
-            <button type="button" disabled={loading} onClick={() => void signInHospitalWithGoogle()} style={{ marginTop: 12, minHeight: 42, border: '1px solid #d7dde6', borderRadius: 8, background: '#fff', color: '#374151', fontWeight: 600 }}>Sign in with Google</button>
+            <GoogleIdentityButton disabled={loading} onIdentity={signInHospitalWithGoogle} text="signin_with" />
             <p style={{ marginTop: 14, color: '#7d8797', fontSize: 11, lineHeight: 1.7 }}>
               Sign in with your hospital name, email address, and password.
             </p>
@@ -757,7 +756,7 @@ export default function DoctorAuth() {
             <Button disabled={!canSubmitSignup} loading={loading} onClick={submitHospitalSignup} style={actionButtonStyle(canSubmitSignup)}>
               Create hospital account
             </Button>
-            <button type="button" disabled={loading} onClick={() => void prefillHospitalSignupWithGoogle()} style={{ marginTop: 12, minHeight: 42, border: '1px solid #d7dde6', borderRadius: 8, background: '#fff', color: '#374151', fontWeight: 600 }}>Continue with Google</button>
+            <GoogleIdentityButton disabled={loading} onIdentity={prefillHospitalSignupWithGoogle} text="continue_with" />
             <p style={{ marginTop: 14, color: '#7d8797', fontSize: 11, lineHeight: 1.7 }}>
               Create the first hospital admin account with your hospital name, email, state, country, and password.
             </p>

@@ -7,18 +7,29 @@ export type GoogleIdentitySelection = {
   lastName: string
 }
 
-type GooglePromptNotification = {
-  isNotDisplayed?: () => boolean
-  isSkippedMoment?: () => boolean
-  getNotDisplayedReason?: () => string
+export type GoogleIdentityButtonText = 'signin_with' | 'signup_with' | 'continue_with'
+
+type GoogleIdentityButtonConfiguration = {
+  type: 'standard'
+  theme: 'outline'
+  size: 'large'
+  text: GoogleIdentityButtonText
+  shape: 'rectangular'
+  logo_alignment: 'left'
+  width: string
 }
 
 type GoogleIdentityApi = {
   accounts: {
     id: {
-      initialize: (options: { client_id: string; callback: (response: GoogleCredentialResponse) => void }) => void
-      prompt: (listener?: (notification: GooglePromptNotification) => void) => void
-      cancel: () => void
+      initialize: (options: {
+        auto_select: false
+        button_auto_select: false
+        client_id: string
+        callback: (response: GoogleCredentialResponse) => void
+        ux_mode: 'popup'
+      }) => void
+      renderButton: (parent: HTMLElement, options: GoogleIdentityButtonConfiguration) => void
     }
   }
 }
@@ -28,6 +39,9 @@ declare global {
 }
 
 let googleScriptPromise: Promise<void> | null = null
+let initializedClientId = ''
+let currentCredentialHandler: ((selection: GoogleIdentitySelection) => void) | null = null
+let currentCredentialErrorHandler: ((error: Error) => void) | null = null
 
 function loadGoogleIdentityScript() {
   if (typeof window === 'undefined') return Promise.reject(new Error('Google sign-in is only available in a browser.'))
@@ -72,42 +86,54 @@ function decodeGoogleCredential(credential: string) {
   }
 }
 
-export async function prefillWithGoogleIdentity() {
+export async function renderGoogleIdentityButton(
+  parent: HTMLElement,
+  options: {
+    onError: (error: Error) => void
+    onIdentity: (selection: GoogleIdentitySelection) => void
+    text: GoogleIdentityButtonText
+    width: number
+  },
+) {
   const clientId = `${import.meta.env.VITE_GOOGLE_CLIENT_ID ?? ''}`.trim()
   if (!clientId) throw new Error('Google sign-in is not configured yet. Add the Google Web Client ID to the production app settings.')
   await loadGoogleIdentityScript()
   if (!window.google?.accounts?.id) throw new Error('The Google account chooser is unavailable right now.')
   const googleIdentity = window.google
+  currentCredentialHandler = options.onIdentity
+  currentCredentialErrorHandler = options.onError
 
-  return new Promise<GoogleIdentitySelection>((resolve, reject) => {
-    let settled = false
-    const finish = (callback: () => void) => {
-      if (settled) return
-      settled = true
-      callback()
-      googleIdentity.accounts.id.cancel()
-    }
+  if (initializedClientId !== clientId) {
     googleIdentity.accounts.id.initialize({
+      auto_select: false,
+      button_auto_select: false,
       client_id: clientId,
       callback: response => {
         if (!response.credential) {
-          finish(() => reject(new Error('Google did not return an identity.')))
+          currentCredentialErrorHandler?.(new Error('Google did not return an identity. Please try again.'))
           return
         }
         try {
           const credential = response.credential
           const identity = decodeGoogleCredential(credential)
-          finish(() => resolve({ ...identity, credential }))
+          currentCredentialHandler?.({ ...identity, credential })
         } catch (error) {
-          finish(() => reject(error instanceof Error ? error : new Error('Unable to read the Google identity.')))
+          currentCredentialErrorHandler?.(error instanceof Error ? error : new Error('Unable to read the Google identity.'))
         }
       },
+      ux_mode: 'popup',
     })
-    googleIdentity.accounts.id.prompt(notification => {
-      if (notification.isNotDisplayed?.() || notification.isSkippedMoment?.()) {
-        const reason = notification.getNotDisplayedReason?.()
-        finish(() => reject(new Error(reason ? `Google account chooser could not open (${reason}).` : 'Google account selection was cancelled.')))
-      }
-    })
+    initializedClientId = clientId
+  }
+
+  parent.replaceChildren()
+  googleIdentity.accounts.id.renderButton(parent, {
+    type: 'standard',
+    theme: 'outline',
+    size: 'large',
+    text: options.text,
+    shape: 'rectangular',
+    logo_alignment: 'left',
+    width: `${Math.max(100, Math.min(400, Math.floor(options.width)))}`,
   })
 }

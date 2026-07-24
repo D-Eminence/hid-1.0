@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import { AuthLegalConsent } from '../../components/AuthLegalConsent'
 import { AuthShell } from '../../components/AuthShell'
 import { FacilityPicker } from '../../components/FacilityPicker'
+import { GoogleIdentityButton } from '../../components/GoogleIdentityButton'
 import { OtpInputs } from '../../components/OtpInputs'
 import { TurnstileWidget } from '../../components/TurnstileWidget'
 import { Button, Input, Select, showToast } from '../../components/ui'
@@ -20,7 +21,7 @@ import {
   signInWithGoogleIdToken,
 } from '../../lib/hidApi'
 import { trackEvent } from '../../lib/observabilityBridge'
-import { prefillWithGoogleIdentity } from '../../lib/googleIdentity'
+import type { GoogleIdentitySelection } from '../../lib/googleIdentity'
 import { getSafeUser, safeSignOut, supabase } from '../../lib/supabase'
 import { PASSWORD_REQUIREMENTS_TEXT, isStrongPassword, maskEmailAddress } from '../../lib/utils'
 
@@ -226,10 +227,9 @@ export default function PatientAuth() {
     setStep('password')
   }
 
-  async function continueWithGoogleSignIn() {
+  async function continueWithGoogleSignIn(identity: GoogleIdentitySelection) {
     setLoading(true)
     try {
-      const identity = await prefillWithGoogleIdentity()
       await signInWithGoogleIdToken('patient', identity.credential, identity.email)
     } catch (error) {
       showToast(error instanceof Error ? error.message : 'Unable to continue with Google.', 'error')
@@ -238,10 +238,9 @@ export default function PatientAuth() {
     }
   }
 
-  async function prefillSignupWithGoogle() {
+  async function prefillSignupWithGoogle(identity: GoogleIdentitySelection) {
     setLoading(true)
     try {
-      const identity = await prefillWithGoogleIdentity()
       setSignup(current => ({
         ...current,
         email: identity.email,
@@ -567,7 +566,7 @@ export default function PatientAuth() {
         </div>
         <AuthLegalConsent checked={signupAccepted} onChange={setSignupAccepted} />
         <Button disabled={!canStartSignup || loading} onClick={goToSignUpPassword} style={actionButtonStyle(canStartSignup && !loading)}>Continue</Button>
-        <button type="button" disabled={loading} onClick={() => void prefillSignupWithGoogle()} style={{ marginTop: 12, minHeight: 42, border: '1px solid #d7dde6', borderRadius: 8, background: '#fff', color: '#374151', fontWeight: 600 }}>Continue with Google</button>
+        <GoogleIdentityButton disabled={loading} onIdentity={prefillSignupWithGoogle} text="continue_with" />
       </AuthShell>
     )
   }
@@ -673,7 +672,7 @@ export default function PatientAuth() {
           visible={captchaVisible}
         />
         <Button loading={loading} onClick={signIn} style={actionButtonStyle(canSignIn)}>Sign in</Button>
-        <button type="button" disabled={loading} onClick={() => void continueWithGoogleSignIn()} style={{ marginTop: 12, minHeight: 42, border: '1px solid #d7dde6', borderRadius: 8, background: '#fff', color: '#374151', fontWeight: 600 }}>Sign in with Google</button>
+        <GoogleIdentityButton disabled={loading} onIdentity={continueWithGoogleSignIn} text="signin_with" />
         <p style={{ marginTop: 14, color: '#7d8797', fontSize: 11, lineHeight: 1.7 }}>
           Sign in with your HID code or your email address together with your password.
         </p>
