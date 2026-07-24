@@ -104,6 +104,7 @@ export default function PatientAuth() {
   const [step, setStep] = useState<Step>('signup')
   const [loading, setLoading] = useState(false)
   const [generatedHid, setGeneratedHid] = useState('')
+  const [hidCopied, setHidCopied] = useState(false)
   const [signupAccepted, setSignupAccepted] = useState(false)
   const [signup, setSignup] = useState({
     email: '',
@@ -123,6 +124,7 @@ export default function PatientAuth() {
   const [forgotOtpVerified, setForgotOtpVerified] = useState(false)
   const [signupVerification, setSignupVerification] = useState({ challengeId: '', email: '', password: '', code: '' })
   const signupVerifyInFlightRef = useRef(false)
+  const awaitingHidAcknowledgementRef = useRef(false)
   const {
     captchaNotice,
     captchaResetKey,
@@ -156,9 +158,16 @@ export default function PatientAuth() {
           phone: patient.phone ?? '',
           fullName: patient.full_name,
         })
+        if (awaitingHidAcknowledgementRef.current) {
+          setGeneratedHid(patient.hid_code)
+          setHidCopied(false)
+          setStep('success')
+          return
+        }
         navigate('/patient/profile', { replace: true })
       } catch {
         if (!active) return
+        if (awaitingHidAcknowledgementRef.current) return
         clearPatientSession()
         const user = await getSafeUser()
         if (!active) return
@@ -272,6 +281,7 @@ export default function PatientAuth() {
   }
 
   async function performSignup(captchaTokenOverride: string | null = captchaToken) {
+    awaitingHidAcknowledgementRef.current = true
     setLoading(true)
     try {
       const result = await patientSignUpWithPassword({
@@ -286,6 +296,7 @@ export default function PatientAuth() {
       })
 
       if (!result.profile) {
+        awaitingHidAcknowledgementRef.current = false
         trackEvent('patient_signup_pending_verification')
         setSignupVerification({
           challengeId: result.challengeId,
@@ -300,14 +311,16 @@ export default function PatientAuth() {
 
       trackEvent('patient_signup_completed')
       setGeneratedHid(result.profile.patient.hid_code)
+      setHidCopied(false)
       setPatientSession({
         hidCode: result.profile.patient.hid_code,
         phone: result.profile.patient.phone_e164 ?? '',
         fullName: result.profile.patient.full_name,
       })
-      showToast('Your HID is ready and has been sent to your email.', 'success')
-      navigate('/patient/profile', { replace: true })
+      showToast('Your HID is ready. Copy or save it before continuing.', 'success')
+      setStep('success')
     } catch (error) {
+      awaitingHidAcknowledgementRef.current = false
       const message = error instanceof Error ? error.message : 'Unable to create the account right now.'
       showToast(message, 'error')
     } finally {
@@ -358,19 +371,22 @@ export default function PatientAuth() {
     }
 
     signupVerifyInFlightRef.current = true
+    awaitingHidAcknowledgementRef.current = true
     setLoading(true)
     try {
       const profile = await verifyPatientSignupOtp(signupVerification.challengeId, signupVerification.email, signupVerification.password, nextCode.trim())
       trackEvent('patient_signup_completed')
       setGeneratedHid(profile.patient.hid_code)
+      setHidCopied(false)
       setPatientSession({
         hidCode: profile.patient.hid_code,
         phone: profile.patient.phone_e164 ?? '',
         fullName: profile.patient.full_name,
       })
-      showToast('Email verified. Your HID is ready and has been sent to your email.', 'success')
-      navigate('/patient/profile', { replace: true })
+      showToast('Email verified. Copy or save your HID before continuing.', 'success')
+      setStep('success')
     } catch (error) {
+      awaitingHidAcknowledgementRef.current = false
       const message = error instanceof Error ? error.message : 'The verification code is not correct.'
       showToast(message, 'error')
     } finally {
@@ -525,10 +541,35 @@ export default function PatientAuth() {
     }
   }
 
-  function copyCode() {
+  async function copyCode() {
     if (!generatedHid) return
-    navigator.clipboard.writeText(generatedHid)
+
+    try {
+      if (!navigator.clipboard?.writeText) throw new Error('Clipboard API is unavailable')
+      await navigator.clipboard.writeText(generatedHid)
+    } catch {
+      const copyTarget = document.createElement('textarea')
+      copyTarget.value = generatedHid
+      copyTarget.setAttribute('readonly', '')
+      copyTarget.style.position = 'fixed'
+      copyTarget.style.opacity = '0'
+      document.body.appendChild(copyTarget)
+      copyTarget.select()
+      const copied = document.execCommand('copy')
+      document.body.removeChild(copyTarget)
+      if (!copied) {
+        showToast('Copy was blocked. Press and hold the HID code to copy it manually.', 'error')
+        return
+      }
+    }
+
+    setHidCopied(true)
     showToast('HID code copied', 'success')
+  }
+
+  function proceedAfterSignup() {
+    awaitingHidAcknowledgementRef.current = false
+    navigate('/patient/profile', { replace: true })
   }
 
   const introBlock = (
@@ -610,12 +651,15 @@ export default function PatientAuth() {
           <p style={{ color: '#7d8797', marginTop: 10, fontSize: 12, lineHeight: 1.6 }}>
             Save this code. Use your HID code together with your password whenever you sign in.
           </p>
-          <div style={{ marginTop: 24, borderRadius: 18, border: '1px dashed #afd4ff', background: '#f6fbff', padding: '20px 18px', fontFamily: 'monospace', fontSize: 28, fontWeight: 700, color: '#1f8cff', overflowWrap: 'anywhere', wordBreak: 'break-word' }}>
+          <div
+            aria-label={`Your Health ID is ${generatedHid}`}
+            style={{ marginTop: 24, borderRadius: 18, border: '1px dashed #afd4ff', background: '#f6fbff', padding: '20px 18px', fontFamily: 'monospace', fontSize: 28, fontWeight: 700, color: '#1f8cff', overflowWrap: 'anywhere', wordBreak: 'break-word', userSelect: 'all' }}
+          >
             {generatedHid}
           </div>
           <div style={{ display: 'flex', gap: 12, marginTop: 18, flexWrap: 'wrap' }}>
-            <Button variant="outline" onClick={copyCode} style={{ flex: 1 }}>Copy HID</Button>
-            <Button onClick={() => navigate('/patient/profile')} style={{ flex: 1 }}>Proceed</Button>
+            <Button variant="outline" onClick={() => void copyCode()} style={{ flex: 1 }}>{hidCopied ? 'Copied' : 'Copy HID'}</Button>
+            <Button onClick={proceedAfterSignup} style={{ flex: 1 }}>Proceed to profile</Button>
           </div>
         </div>
       </AuthShell>
