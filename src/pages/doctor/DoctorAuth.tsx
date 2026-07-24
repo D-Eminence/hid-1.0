@@ -11,19 +11,21 @@ import { HOSPITAL_AUTH_PATH, HOSPITAL_DASHBOARD_PATH } from '../../lib/hospitalR
 import {
   enrollPrivilegedTotp,
   fetchMyStaffAccount,
+  finalizeGoogleSignIn,
   getPrivilegedMfaRequirement,
   isTotpEnrollmentUnavailableError,
   providerSignUp,
   providerSignIn,
   sendStaffPasswordReset,
+  signInWithGoogleIdToken,
   updateCurrentUserPassword,
   verifyPrivilegedTotp,
   verifyStaffPasswordResetOtp,
   verifyStaffSignupOtp,
-  signInWithGoogle,
 } from '../../lib/hidApi'
+import { prefillWithGoogleIdentity } from '../../lib/googleIdentity'
 import { trackEvent } from '../../lib/observabilityBridge'
-import { supabase } from '../../lib/supabase'
+import { getSafeUser, safeSignOut, supabase } from '../../lib/supabase'
 import { COUNTRIES, PASSWORD_REQUIREMENTS_TEXT, STATES_BY_COUNTRY, isStrongPassword, maskEmailAddress } from '../../lib/utils'
 
 type DoctorStep = 'login' | 'signup' | 'verify' | 'forgot' | 'reset' | 'mfa-enroll' | 'mfa-verify'
@@ -138,6 +140,28 @@ export default function DoctorAuth() {
       } catch {
         if (!active) return
         clearStaffSession()
+        const user = await getSafeUser()
+        if (!active) return
+        const isGoogleUser = Boolean(
+          user?.identities?.some(identity => identity.provider === 'google') ||
+          user?.app_metadata?.provider === 'google',
+        )
+        if (user && isGoogleUser) {
+          try {
+            const result = await finalizeGoogleSignIn('hospital')
+            if (!result.registered) {
+              await safeSignOut().catch(() => undefined)
+              if (!active) return
+              clearStaffSession()
+              setStep('login')
+              showToast('This Google account is not registered on the HID hospital portal. Use Sign Up first.', 'error')
+            }
+          } catch (error) {
+            if (!active) return
+            showToast(error instanceof Error ? error.message : 'Unable to verify this Google account.', 'error')
+            setStep('login')
+          }
+        }
       }
     }
 
@@ -247,8 +271,29 @@ export default function DoctorAuth() {
     runWithCaptcha(token => void performLogin(token))
   }
 
-  async function continueWithGoogle() {
-    try { await signInWithGoogle('hospital') } catch (error) { showToast(error instanceof Error ? error.message : 'Unable to continue with Google.', 'error') }
+  async function signInHospitalWithGoogle() {
+    setLoading(true)
+    try {
+      const identity = await prefillWithGoogleIdentity()
+      await signInWithGoogleIdToken('hospital', identity.credential, identity.email)
+    } catch (error) {
+      showToast(error instanceof Error ? error.message : 'Unable to continue with Google.', 'error')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  async function prefillHospitalSignupWithGoogle() {
+    setLoading(true)
+    try {
+      const identity = await prefillWithGoogleIdentity()
+      setSignupForm(current => ({ ...current, email: identity.email }))
+      showToast('Google email added. Complete the form to continue sign-up.', 'success')
+    } catch (error) {
+      showToast(error instanceof Error ? error.message : 'Unable to read your Google details.', 'error')
+    } finally {
+      setLoading(false)
+    }
   }
 
   async function performLogin(captchaTokenOverride: string | null = captchaToken) {
@@ -666,7 +711,7 @@ export default function DoctorAuth() {
             <Button disabled={!canSubmitLogin} loading={loading} onClick={submitLogin} style={actionButtonStyle(canSubmitLogin)}>
               Sign in
             </Button>
-            <button type="button" onClick={() => void continueWithGoogle()} style={{ marginTop: 12, minHeight: 42, border: '1px solid #d7dde6', borderRadius: 8, background: '#fff', color: '#374151', fontWeight: 600 }}>Sign in with Google</button>
+            <button type="button" disabled={loading} onClick={() => void signInHospitalWithGoogle()} style={{ marginTop: 12, minHeight: 42, border: '1px solid #d7dde6', borderRadius: 8, background: '#fff', color: '#374151', fontWeight: 600 }}>Sign in with Google</button>
             <p style={{ marginTop: 14, color: '#7d8797', fontSize: 11, lineHeight: 1.7 }}>
               Sign in with your hospital name, email address, and password.
             </p>
@@ -712,7 +757,7 @@ export default function DoctorAuth() {
             <Button disabled={!canSubmitSignup} loading={loading} onClick={submitHospitalSignup} style={actionButtonStyle(canSubmitSignup)}>
               Create hospital account
             </Button>
-            <button type="button" onClick={() => void continueWithGoogle()} style={{ marginTop: 12, minHeight: 42, border: '1px solid #d7dde6', borderRadius: 8, background: '#fff', color: '#374151', fontWeight: 600 }}>Continue with Google</button>
+            <button type="button" disabled={loading} onClick={() => void prefillHospitalSignupWithGoogle()} style={{ marginTop: 12, minHeight: 42, border: '1px solid #d7dde6', borderRadius: 8, background: '#fff', color: '#374151', fontWeight: 600 }}>Continue with Google</button>
             <p style={{ marginTop: 14, color: '#7d8797', fontSize: 11, lineHeight: 1.7 }}>
               Create the first hospital admin account with your hospital name, email, state, country, and password.
             </p>

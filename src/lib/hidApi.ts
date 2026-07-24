@@ -667,28 +667,6 @@ function authRedirectUrl(path: 'patient' | 'hospital') {
   return `${window.location.origin}/patient`
 }
 
-export async function signInWithGoogle(path: 'patient' | 'hospital', email?: string | null) {
-  const loginHint = normalizeOptionalText(email?.trim().toLowerCase())
-  const { error } = await supabase.auth.signInWithOAuth({
-    provider: 'google',
-    options: {
-      redirectTo: authRedirectUrl(path),
-      queryParams: {
-        access_type: 'offline',
-        prompt: 'select_account',
-        ...(loginHint ? { login_hint: loginHint } : {}),
-      },
-    },
-  })
-  if (error) {
-    const message = error.message.toLowerCase()
-    if (message.includes('unsupported provider') || message.includes('provider is not enabled')) {
-      throw new HidApiError(503, 'Google sign-in is not enabled for HID yet. Enable Google under Supabase Auth → Providers, then try again.', error)
-    }
-    throw new HidApiError(400, error.message, error)
-  }
-}
-
 export async function assertGoogleSignInEligibility(path: 'patient' | 'hospital', email: string) {
   const normalizedEmail = email.trim().toLowerCase()
   if (!looksLikeEmailIdentifier(normalizedEmail)) {
@@ -703,6 +681,33 @@ export async function assertGoogleSignInEligibility(path: 'patient' | 'hospital'
   if (!result.registered) {
     throw new HidApiError(404, 'This Google email is not registered on HID. Use Sign Up first.')
   }
+}
+
+export async function signInWithGoogleIdToken(path: 'patient' | 'hospital', credential: string, email: string) {
+  const normalizedEmail = email.trim().toLowerCase()
+  await assertGoogleSignInEligibility(path, normalizedEmail)
+  await clearConflictingAuthSession(normalizedEmail)
+
+  const { data, error } = await supabase.auth.signInWithIdToken({
+    provider: 'google',
+    token: credential,
+  })
+  if (error) {
+    const message = error.message.toLowerCase()
+    if (message.includes('audience') || message.includes('client') || message.includes('id token') || message.includes('jwt')) {
+      throw new HidApiError(503, 'Google sign-in is not configured correctly right now. Please contact HID support.', error)
+    }
+    throw new HidApiError(401, 'Google could not sign you in. Choose the Google account already registered on HID and try again.', error)
+  }
+
+  const authenticatedEmail = data.user?.email?.trim().toLowerCase()
+  if (!authenticatedEmail || authenticatedEmail !== normalizedEmail) {
+    await safeSignOut().catch(() => undefined)
+    clearAllPortalSessions()
+    throw new HidApiError(401, 'Google returned a different account than the one selected. Please try again.')
+  }
+
+  return data
 }
 
 export async function finalizeGoogleSignIn(path: 'patient' | 'hospital') {

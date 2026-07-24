@@ -10,7 +10,6 @@ import { useCaptchaGate } from '../../hooks/useCaptchaGate'
 import { clearPatientSession, getPatientSession, setPatientSession } from '../../lib/auth'
 import {
   completePatientPasswordReset,
-  assertGoogleSignInEligibility,
   fetchMyPatient,
   finalizeGoogleSignIn,
   patientSignIn,
@@ -18,7 +17,7 @@ import {
   startPatientPasswordReset,
   verifyPatientSignupOtp,
   verifyPatientPasswordResetCode,
-  signInWithGoogle,
+  signInWithGoogleIdToken,
 } from '../../lib/hidApi'
 import { trackEvent } from '../../lib/observabilityBridge'
 import { prefillWithGoogleIdentity } from '../../lib/googleIdentity'
@@ -228,11 +227,14 @@ export default function PatientAuth() {
   }
 
   async function continueWithGoogleSignIn() {
+    setLoading(true)
     try {
-      await assertGoogleSignInEligibility('patient', signin.identifier)
-      await signInWithGoogle('patient', signin.identifier)
+      const identity = await prefillWithGoogleIdentity()
+      await signInWithGoogleIdToken('patient', identity.credential, identity.email)
     } catch (error) {
       showToast(error instanceof Error ? error.message : 'Unable to continue with Google.', 'error')
+    } finally {
+      setLoading(false)
     }
   }
 
@@ -671,7 +673,7 @@ export default function PatientAuth() {
           visible={captchaVisible}
         />
         <Button loading={loading} onClick={signIn} style={actionButtonStyle(canSignIn)}>Sign in</Button>
-        <button type="button" onClick={() => void continueWithGoogleSignIn()} style={{ marginTop: 12, minHeight: 42, border: '1px solid #d7dde6', borderRadius: 8, background: '#fff', color: '#374151', fontWeight: 600 }}>Sign in with Google</button>
+        <button type="button" disabled={loading} onClick={() => void continueWithGoogleSignIn()} style={{ marginTop: 12, minHeight: 42, border: '1px solid #d7dde6', borderRadius: 8, background: '#fff', color: '#374151', fontWeight: 600 }}>Sign in with Google</button>
         <p style={{ marginTop: 14, color: '#7d8797', fontSize: 11, lineHeight: 1.7 }}>
           Sign in with your HID code or your email address together with your password.
         </p>

@@ -1,5 +1,12 @@
 type GoogleCredentialResponse = { credential?: string }
 
+export type GoogleIdentitySelection = {
+  credential: string
+  email: string
+  firstName: string
+  lastName: string
+}
+
 type GooglePromptNotification = {
   isNotDisplayed?: () => boolean
   isSkippedMoment?: () => boolean
@@ -23,7 +30,7 @@ declare global {
 let googleScriptPromise: Promise<void> | null = null
 
 function loadGoogleIdentityScript() {
-  if (typeof window === 'undefined') return Promise.reject(new Error('Google sign-up is only available in a browser.'))
+  if (typeof window === 'undefined') return Promise.reject(new Error('Google sign-in is only available in a browser.'))
   if (window.google?.accounts?.id) return Promise.resolve()
   if (googleScriptPromise) return googleScriptPromise
 
@@ -31,7 +38,7 @@ function loadGoogleIdentityScript() {
     const existing = document.querySelector<HTMLScriptElement>('script[data-hid-google-identity]')
     if (existing) {
       existing.addEventListener('load', () => resolve(), { once: true })
-      existing.addEventListener('error', () => reject(new Error('Unable to load Google sign-up right now.')), { once: true })
+      existing.addEventListener('error', () => reject(new Error('Unable to load the Google account chooser right now.')), { once: true })
       return
     }
     const script = document.createElement('script')
@@ -40,7 +47,7 @@ function loadGoogleIdentityScript() {
     script.defer = true
     script.dataset.hidGoogleIdentity = 'true'
     script.onload = () => resolve()
-    script.onerror = () => reject(new Error('Unable to load Google sign-up right now.'))
+    script.onerror = () => reject(new Error('Unable to load the Google account chooser right now.'))
     document.head.appendChild(script)
   }).catch(error => {
     googleScriptPromise = null
@@ -67,12 +74,12 @@ function decodeGoogleCredential(credential: string) {
 
 export async function prefillWithGoogleIdentity() {
   const clientId = `${import.meta.env.VITE_GOOGLE_CLIENT_ID ?? ''}`.trim()
-  if (!clientId) throw new Error('Google prefill is not configured yet. Add the Google Web Client ID to the production app settings.')
+  if (!clientId) throw new Error('Google sign-in is not configured yet. Add the Google Web Client ID to the production app settings.')
   await loadGoogleIdentityScript()
-  if (!window.google?.accounts?.id) throw new Error('Google sign-up is unavailable right now.')
+  if (!window.google?.accounts?.id) throw new Error('The Google account chooser is unavailable right now.')
   const googleIdentity = window.google
 
-  return new Promise<ReturnType<typeof decodeGoogleCredential>>((resolve, reject) => {
+  return new Promise<GoogleIdentitySelection>((resolve, reject) => {
     let settled = false
     const finish = (callback: () => void) => {
       if (settled) return
@@ -88,7 +95,9 @@ export async function prefillWithGoogleIdentity() {
           return
         }
         try {
-          finish(() => resolve(decodeGoogleCredential(response.credential as string)))
+          const credential = response.credential
+          const identity = decodeGoogleCredential(credential)
+          finish(() => resolve({ ...identity, credential }))
         } catch (error) {
           finish(() => reject(error instanceof Error ? error : new Error('Unable to read the Google identity.')))
         }
@@ -97,7 +106,7 @@ export async function prefillWithGoogleIdentity() {
     googleIdentity.accounts.id.prompt(notification => {
       if (notification.isNotDisplayed?.() || notification.isSkippedMoment?.()) {
         const reason = notification.getNotDisplayedReason?.()
-        finish(() => reject(new Error(reason ? `Google sign-up could not open (${reason}).` : 'Google sign-up was cancelled.')))
+        finish(() => reject(new Error(reason ? `Google account chooser could not open (${reason}).` : 'Google account selection was cancelled.')))
       }
     })
   })
